@@ -1,0 +1,189 @@
+---
+title: LearnFlow RAG Ingestion
+status: approved
+owner: architecture-and-ai
+last_updated: 2026-07-28
+related:
+  - ../00-project-context.md
+  - overview.md
+  - embeddings.md
+  - ../architecture/provider-pattern.md
+  - ../database/schema.md
+---
+
+# LearnFlow RAG Ingestion
+
+## Purpose
+
+Define how eligible learner-owned resources become searchable knowledge while preserving source files, ownership, traceability, and honest failure states.
+
+## Ingestion Scope
+
+The MVP supports text extraction and indexing for eligible text-based study resources such as PDF notes, PYQ PDFs, short notes, and formula sheets.
+
+Video transcription, unrestricted website ingestion, and fully automated OCR for scanned PDFs are not MVP requirements.
+
+## Ingestion Lifecycle
+
+```text
+Register resource
+       ↓
+Validate ownership, type, size, and storage reference
+       ↓
+Store original file / resource metadata
+       ↓
+Create ingestion record: queued
+       ↓
+Extract text and source-location metadata
+       ↓
+Normalize and validate extracted content
+       ↓
+Split into retrievable chunks
+       ↓
+Create embeddings
+       ↓
+Index chunks with source metadata
+       ↓
+Mark ingestion completed or failed
+```
+
+Ingestion is asynchronous when it may take longer than an ordinary API request. The learner can see `queued`, `processing`, `completed`, or `failed` status.
+
+## Step 1 — Register and Validate Resource
+
+Before extraction, LearnFlow must:
+
+- Confirm the resource belongs to or is accessible by the effective learner.
+- Record resource type, title, source label, storage reference, and topic links.
+- Validate configured file-type and file-size limits.
+- Store the original source file through the configured storage provider before treating it as indexed knowledge.
+- Reject unsupported or unsafe inputs with a clear user-facing error.
+
+The application must not treat an absolute local filesystem path as a frontend-facing resource identifier.
+
+## Step 2 — Extract Text
+
+For a supported text-based PDF, the extraction provider should produce:
+
+- Extracted text.
+- Page/section location information when available.
+- Basic document metadata when available.
+- Extraction warnings or failure details.
+
+If a PDF is scanned/image-only and no usable text can be extracted, the resource remains registered but its ingestion is marked failed or unsupported. LearnFlow must not pretend that it indexed the document.
+
+## Step 3 — Normalize Content
+
+Normalize extracted content before chunking while preserving source traceability.
+
+Typical normalization includes:
+
+- Removing repeated whitespace and obvious extraction noise.
+- Preserving meaningful headings, page boundaries, lists, and formula context where possible.
+- Removing empty or unusable sections.
+- Maintaining page/section references for later citations.
+
+Do not aggressively rewrite the learner's source material during ingestion. Normalization must improve retrieval, not alter meaning.
+
+## Step 4 — Chunk Content
+
+Split usable text into chunks that are small enough for retrieval and large enough to preserve concept context.
+
+### Chunking rules
+
+- Prefer semantic boundaries such as headings, paragraphs, and page sections over arbitrary character cuts.
+- Use controlled overlap only when necessary to avoid losing context at boundaries.
+- Keep the chunking policy configurable and versioned.
+- Preserve a stable sequence number and page/section reference for every chunk.
+- Avoid indexing empty, duplicate, or extraction-garbage chunks.
+
+Exact chunk size and overlap values are implementation configuration, to be evaluated with real GATE CSE notes before being finalized.
+
+## Step 5 — Create Embeddings and Index
+
+For each accepted chunk:
+
+1. Request an embedding from the configured embedding provider.
+2. Store/index the vector through the retrieval provider.
+3. Include enough metadata to filter and cite the result later.
+
+Required retrieval metadata includes, where applicable:
+
+```text
+resource_id
+learner_id or ownership scope
+resource_type
+resource title/source label
+curriculum version
+subject/topic IDs
+page/section reference
+chunk sequence
+document/content fingerprint
+extraction version
+embedding model/version
+```
+
+The vector index is derived data. The resource file and PostgreSQL metadata remain the source of truth.
+
+## Duplicate and Re-Ingestion Handling
+
+- Compute/store a content fingerprint when practical.
+- Detect when the same resource content has already been indexed with the same extraction and embedding configuration.
+- Avoid duplicate vector entries from repeated ingestion requests.
+- Re-ingest when the resource changes, extraction improves, chunking policy changes, or the embedding model changes.
+- Keep a history of ingestion attempts so failures and rebuilds are understandable.
+
+## Failure and Retry Behavior
+
+| Failure type | Required behavior |
+| --- | --- |
+| Unsupported file | Keep resource metadata; mark ingestion failed/unsupported with a clear explanation. |
+| Text extraction failure | Keep original resource; mark failed and allow retry after correction/provider change. |
+| Embedding/provider failure | Do not mark indexed; record safe error details and allow retry. |
+| Vector-index failure | Do not claim resource is searchable; preserve original file and ingestion record. |
+| Partial indexing failure | Mark attempt failed or incomplete according to implementation policy; clean/reconcile partial derived vectors before retry. |
+
+Retries must not silently produce duplicate chunks or leave an apparently successful resource in a partially indexed state.
+
+## Resource Deletion and Reindexing
+
+- Deleting a resource requires coordinated removal of derived vectors/chunks and associated storage content according to the resource lifecycle policy.
+- Deleting derived vectors does not delete the original resource unless the learner explicitly removes the resource.
+- Changing embedding models or vector providers requires planned re-indexing; it must not affect learner progress, plans, or assessments.
+
+## Privacy and Access Rules
+
+- Index only resources the learner explicitly registered or uploaded.
+- Store ownership scope in both structured metadata and retrieval filters.
+- Retrieval must filter by the effective learner once multi-user support exists.
+- Do not send full original documents to the AI provider as a shortcut; retrieve only selected chunks.
+- Do not index secrets, configuration files, or arbitrary computer files outside configured LearnFlow resource storage.
+
+## MVP Limitations
+
+- No guarantee of perfect PDF extraction.
+- No automatic video transcription/indexing.
+- No automatic acceptance of scanned PDFs as searchable content without a supported OCR path.
+- No external test-platform scraping or import.
+- No claim that indexing a resource makes every mentor answer correct; retrieval quality is evaluated separately.
+
+## Verification Checklist
+
+Before marking an ingestion implementation ready:
+
+- [ ] A supported GATE CSE PDF can be registered and indexed.
+- [ ] Indexed chunks retain resource and page/section traceability.
+- [ ] The learner can see processing/completed/failed status.
+- [ ] A failed ingestion preserves the original resource and gives a useful retry path.
+- [ ] Repeated ingestion does not create duplicate searchable content.
+- [ ] Deleting/re-indexing a resource handles derived vectors safely.
+- [ ] Retrieval can filter by topic and resource ownership.
+
+## Related Documents
+
+- [RAG overview](overview.md)
+- [Embeddings](embeddings.md)
+- [RAG retrieval](retrieval.md)
+- [Provider pattern](../architecture/provider-pattern.md)
+- [Database schema](../database/schema.md)
+- [Non-functional requirements](../requirements/non-functional.md)

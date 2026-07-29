@@ -1,0 +1,100 @@
+---
+title: LearnFlow Project Context
+status: draft
+audience: all-contributors-and-ai-assistants
+read_before: any-design-or-implementation-task
+---
+
+# LearnFlow Project Context
+
+## Purpose
+
+This is the mandatory entry point for LearnFlow. It gives a human or AI assistant enough orientation to locate authoritative decisions without relying on chat history.
+
+LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science is its first learning program, not a hard-coded product boundary. The platform is intended to support structured learning journeys such as examinations, courses, certifications, and interview preparation.
+
+## Current project state
+
+- Stage: documentation and architecture foundation.
+- Implementation status: backend environment may exist, but no application architecture should be inferred from it.
+- Decision status: use the documents in this repository and ADRs as the source of truth. Placeholders are intentionally not decisions.
+- Immediate objective: replace relevant placeholders with approved project decisions before implementing the affected area.
+
+## Non-negotiable engineering direction
+
+- Keep business rules independent from infrastructure.
+- Use focused modules with clear responsibilities.
+- Put external systems behind interfaces or adapters where replacement is realistic: AI providers, storage, vector search, embeddings, and persistence.
+- Treat documentation and ADRs as part of the deliverable.
+- Prefer simple, predictable workflows over premature autonomous or multi-agent complexity.
+
+## Required reading by task
+
+| If working on… | Read first |
+| --- | --- |
+| Product scope | [vision/vision.md](vision/vision.md), [requirements/mvp.md](requirements/mvp.md) |
+| Architecture | [architecture/overview.md](architecture/overview.md), [architecture/dependency-rules.md](architecture/dependency-rules.md), relevant ADRs |
+| Domain or database | [domain/domain-model.md](domain/domain-model.md), [database/schema.md](database/schema.md) |
+| HTTP APIs | [api/conventions.md](api/conventions.md), [api/endpoints.md](api/endpoints.md) |
+| RAG or AI | [rag/overview.md](rag/overview.md), [ai/learnflow-agents.md](ai/learnflow-agents.md) |
+| Development practices | [development/tech-stack.md](development/tech-stack.md), [development/coding-standards.md](development/coding-standards.md) |
+| Containers or release | [deployment/docker.md](deployment/docker.md), [deployment/environments.md](deployment/environments.md) |
+
+## Master index
+
+### Product
+
+- [Vision](vision/vision.md)
+- [Functional requirements](requirements/functional.md)
+- [Non-functional requirements](requirements/non-functional.md)
+- [MVP scope](requirements/mvp.md)
+
+### Design and implementation
+
+- [Architecture overview](architecture/overview.md)
+- [Clean Architecture](architecture/clean-architecture.md)
+- [Provider pattern](architecture/provider-pattern.md)
+- [Dependency rules](architecture/dependency-rules.md)
+- [Domain model](domain/domain-model.md)
+- [Entities](domain/entities.md)
+- [Terminology](domain/terminology.md)
+- [Database overview](database/overview.md)
+- [Schema](database/schema.md)
+- [Migrations](database/migrations.md)
+- [API conventions](api/conventions.md)
+- [Endpoints](api/endpoints.md)
+- [API versioning](api/versioning.md)
+- [RAG overview](rag/overview.md)
+- [Ingestion](rag/ingestion.md)
+- [Retrieval](rag/retrieval.md)
+- [Embeddings](rag/embeddings.md)
+- [LearnFlow product agents](ai/learnflow-agents.md)
+- [Engineering AI workflow](ai/engineering-ai.md)
+- [AI prompts](ai/prompts.md)
+- [Technology stack](development/tech-stack.md)
+- [Folder structure](development/folder-structure.md)
+- [Coding standards](development/coding-standards.md)
+- [Git workflow](development/git-workflow.md)
+- [Documentation standards](development/documentation-standards.md)
+- [Docker](deployment/docker.md)
+- [Environments](deployment/environments.md)
+- [CI/CD](deployment/ci-cd.md)
+- [Roadmap](roadmap/roadmap.md)
+- [Milestones](roadmap/milestones.md)
+- [Deferred ideas](roadmap/future-ideas.md)
+- [ADR directory](adr/)
+
+## Workflow for AI assistants
+
+1. Read this file and all documents named in the “Required reading by task” table.
+2. Do not invent an architectural decision merely because a placeholder exists.
+3. State conflicts, missing decisions, or broad scope changes before implementation.
+4. Keep edits narrowly scoped to the assigned task.
+5. Update linked documentation when implementation changes an approved behavior.
+6. Do not overwrite a document marked `approved` without explicit direction and an ADR when needed.
+
+## Related documents
+
+- [Documentation home](README.md)
+- [Documentation standards](development/documentation-standards.md)
+- [ADR template](adr/ADR-000-template.md)
