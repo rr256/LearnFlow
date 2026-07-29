@@ -7,6 +7,7 @@ related:
   - ../00-project-context.md
   - folder-structure.md
   - ../architecture/dependency-rules.md
+  - ../domain/terminology.md
   - git-workflow.md
 ---
 
@@ -163,6 +164,7 @@ Before adding a dependency:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [Domain terminology](../domain/terminology.md) — the canonical vocabulary this document requires
 - [Folder structure](folder-structure.md)
 - [Dependency rules](../architecture/dependency-rules.md)
 - [API conventions](../api/conventions.md)

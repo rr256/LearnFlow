@@ -1,5 +1,5 @@
 ---
-title: ADR-003: Use PostgreSQL for Structured Persistence
+title: "ADR-003: Use PostgreSQL for Structured Persistence"
 status: accepted
 owner: architecture-and-data
 last_updated: 2026-07-29

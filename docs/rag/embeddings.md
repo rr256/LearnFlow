@@ -2,7 +2,7 @@
 title: LearnFlow Embeddings
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - overview.md
@@ -21,7 +21,9 @@ An embedding model is separate from the AI chat/generation model. The embedding 
 
 ## Initial Direction
 
-LearnFlow starts with a local embedding provider configured for the local-first workflow. The specific embedding model name is configuration, not a hardcoded domain decision.
+LearnFlow starts with Ollama as the initial `EmbeddingProvider` implementation, serving an embedding model on the learner's host machine. This is the same runtime used for generation, but it is reached through a separate port; see [ADR-004](../adr/ADR-004-ollama-local-ai-provider.md).
+
+The specific embedding model name is configuration, not a hardcoded domain decision, and it is configured independently of the generation model.
 
 ```text
 Resource chunks ──► Embedding provider ──► ChromaDB index
@@ -54,7 +56,7 @@ Choose the initial embedding model based on:
 - Suitability for English technical/educational text, including GATE CSE terminology.
 - Retrieval quality on representative learner notes and PYQs.
 - Ability to run acceptably on the target local machine.
-- Compatibility with the selected local provider/runtime.
+- Availability as an embedding model on the configured Ollama runtime.
 - Stable model identification/versioning.
 - License and redistribution suitability for the project.
 

@@ -168,6 +168,8 @@ The application must not silently create schema changes at startup outside the A
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the decision this document implements
+- [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — why Ollama stays on the host rather than in Compose
 - [Environments](environments.md)
 - [Technology stack](../development/tech-stack.md)
 - [Database migrations](../database/migrations.md)

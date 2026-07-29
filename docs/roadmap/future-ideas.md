@@ -90,6 +90,7 @@ Suggested milestone:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-006: Start with a custom product-agent orchestrator](../adr/ADR-006-custom-agent-orchestration.md) — records the agent-framework deferral and its re-evaluation triggers
 - [Roadmap](roadmap.md)
 - [Delivery milestones](milestones.md)
 - [MVP scope](../requirements/mvp.md)

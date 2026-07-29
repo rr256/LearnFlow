@@ -2,7 +2,7 @@
 title: LearnFlow API Conventions
 status: approved
 owner: architecture-and-api
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - endpoints.md
@@ -36,9 +36,21 @@ POST /api/v1/mentor/questions
 
 Detailed compatibility and deprecation policy belongs in `versioning.md`.
 
+### Operational Endpoints Are Unversioned
+
+Operational endpoints sit outside `/api/v1` by design:
+
+```text
+GET /health
+```
+
+They report process readiness for local environment checks, container health probes, and future deployment tooling. That tooling must not have to track the application API version, so these paths stay stable across API major versions.
+
+Operational endpoints return no learner data, no curriculum content, and no provider configuration or secrets. Any endpoint that returns learner-facing data is an application endpoint and belongs under `/api/v1`, regardless of how simple it is.
+
 ## Resource Naming
 
-- Use plural, lowercase, hyphen-free resource names: `/study-plans`, `/resources`, `/quiz-attempts`.
+- Use plural, lowercase, kebab-case resource names: `/study-plans`, `/resources`, `/quiz-attempts`. Separate words with hyphens; do not use underscores or camelCase in a path segment.
 - Use nouns for resources and explicit action names only where a workflow is a command rather than CRUD.
 - Use nested paths only when the child has meaning only under its parent.
 

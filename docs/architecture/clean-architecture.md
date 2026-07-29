@@ -2,7 +2,7 @@
 title: LearnFlow Clean Architecture
 status: approved
 owner: architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - overview.md
@@ -40,7 +40,7 @@ The domain layer contains the stable concepts and rules of learning.
 
 **Contains:**
 
-- Entities and value objects: learner, topic, study goal, plan item, topic progress, revision record, quiz attempt, and test-performance evidence.
+- Entities and value objects: learner, topic, study goal, plan item, topic progress, revision record, quiz attempt, and topic performance evidence.
 - Domain rules and invariants.
 - Domain-level calculations that do not require external I/O.
 - Domain exceptions that express business conditions.
@@ -208,6 +208,9 @@ The MVP should not create abstractions that have no expected use. Provider inter
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-001: Adopt Clean Architecture](../adr/ADR-001-clean-architecture.md) — the decision this document implements
+- [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md)
+- [ADR-006: Start with a custom product-agent orchestrator](../adr/ADR-006-custom-agent-orchestration.md)
 - [Architecture overview](overview.md)
 - [Dependency rules](dependency-rules.md)
 - [Provider pattern](provider-pattern.md)

@@ -2,7 +2,7 @@
 title: LearnFlow RAG Overview
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - ingestion.md
@@ -134,7 +134,7 @@ Citation display should not expose internal vector IDs, raw storage paths, or im
 ## Initial Technology Direction
 
 - **File storage:** local storage provider.
-- **Embeddings:** local embedding provider selected through configuration.
+- **Embeddings:** Ollama through an embedding-provider adapter, with the embedding model selected through configuration.
 - **Vector search:** ChromaDB through a retrieval-provider adapter.
 - **Generation:** Ollama through an AI-provider adapter.
 
@@ -149,6 +149,8 @@ Detailed chunking, embedding, retrieval-ranking, and evaluation rules belong in 
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the generation and embedding choice behind this pipeline
+- [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why retrieval and embeddings stay replaceable
 - [RAG ingestion](ingestion.md)
 - [RAG retrieval](retrieval.md)
 - [Embeddings](embeddings.md)

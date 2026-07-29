@@ -1,8 +1,15 @@
 ---
 title: LearnFlow Project Context
-status: draft
+status: approved
+owner: project-governance
+last_updated: 2026-07-29
 audience: all-contributors-and-ai-assistants
 read_before: any-design-or-implementation-task
+related:
+  - README.md
+  - development/documentation-standards.md
+  - architecture/decisions.md
+  - adr/README.md
 ---
 
 # LearnFlow Project Context
@@ -49,6 +56,23 @@ LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science 
 - [Non-functional requirements](requirements/non-functional.md)
 - [MVP scope](requirements/mvp.md)
 
+### Decisions
+
+- [Architecture decision register](architecture/decisions.md) — index of approved and deferred decisions
+- [ADR directory](adr/README.md) — durable rationale for consequential decisions
+- [ADR template](adr/ADR-000-template.md)
+
+Accepted ADRs:
+
+- [ADR-001 — Adopt Clean Architecture](adr/ADR-001-clean-architecture.md)
+- [ADR-002 — Use provider interfaces for external capabilities](adr/ADR-002-provider-pattern.md)
+- [ADR-003 — Use PostgreSQL for structured persistence](adr/ADR-003-postgresql-persistence.md)
+- [ADR-004 — Use Ollama as the initial local AI provider](adr/ADR-004-ollama-local-ai-provider.md)
+- [ADR-005 — Use Docker Compose for local development](adr/ADR-005-docker-compose-local-development.md)
+- [ADR-006 — Start with a custom product-agent orchestrator](adr/ADR-006-custom-agent-orchestration.md)
+- [ADR-007 — Use repository documentation and ADRs as shared project memory](adr/ADR-007-documentation-and-adr-policy.md)
+- [ADR-008 — Model assessment topics and mistake evidence sources explicitly](adr/ADR-008-assessment-and-mistake-evidence-model.md)
+
 ### Design and implementation
 
 - [Architecture overview](architecture/overview.md)
@@ -82,7 +106,6 @@ LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science 
 - [Roadmap](roadmap/roadmap.md)
 - [Milestones](roadmap/milestones.md)
 - [Deferred ideas](roadmap/future-ideas.md)
-- [ADR directory](adr/)
 
 ## Workflow for AI assistants
 
@@ -93,7 +116,7 @@ LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science 
 5. Update linked documentation when implementation changes an approved behavior.
 6. Do not overwrite a document marked `approved` without explicit direction and an ADR when needed.
 
-## Related documents
+## Related Documents
 
 - [Documentation home](README.md)
 - [Documentation standards](development/documentation-standards.md)

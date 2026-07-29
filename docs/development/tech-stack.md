@@ -28,7 +28,7 @@ Versions are pinned in implementation dependency files after compatibility is te
 | ORM / persistence mapping | SQLAlchemy | Maps infrastructure persistence models to PostgreSQL. | Mature Python ecosystem and supports repository implementation. | Implementation detail behind repositories. |
 | Database migrations | Alembic | Versioned PostgreSQL schema changes. | Standard SQLAlchemy migration workflow. | Expected to remain with SQLAlchemy unless persistence strategy changes. |
 | Local AI generation | Ollama | Mentor explanations, grounded answers, and supported practice generation. | Local-first, low recurring cost, learner privacy. | Replaceable through `AIProvider` adapter. |
-| Embeddings | Local embedding provider | Converts resource chunks/queries to vectors. | Keeps the initial RAG workflow local. | Replaceable through `EmbeddingProvider`. |
+| Embeddings | Ollama embedding model | Converts resource chunks/queries to vectors. | Keeps the initial RAG workflow local and reuses the runtime already installed for generation. | Replaceable through `EmbeddingProvider`, independently of the generation provider. |
 | Vector search | ChromaDB | Stores/searches derived embeddings and source metadata. | Suitable initial local RAG implementation. | Replaceable through `RetrievalProvider`. |
 | Source-file storage | Local filesystem storage | Stores learner PDFs and private attachments. | Simple local-first setup. | Replaceable through `StorageProvider`; Azure Blob Storage is a future option. |
 | Containers | Docker + Docker Compose | Reproducible local services and environment. | Lets contributors run the same backend/database/vector setup without separate database installation. | Deployment mechanism can evolve later. |
@@ -112,6 +112,9 @@ Do not add a framework only because it is popular or because an AI assistant sug
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why these choices stay replaceable
+- [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the generation and embedding choice
+- [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the container choice
 - [Architecture overview](../architecture/overview.md)
 - [Provider pattern](../architecture/provider-pattern.md)
 - [Docker strategy](../deployment/docker.md)

@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - overview.md
@@ -43,6 +43,7 @@ Resources and RAG metadata
   resources ↔ resource_topic_links → resource_ingestions
 
 Assessment
+  checkpoint_quizzes ↔ checkpoint_quiz_topics → topics
   checkpoint_quizzes ↔ questions → quiz_attempts → quiz_attempt_answers
 
 External evidence
@@ -319,6 +320,22 @@ Stores a topic-focused practice set.
 | `status` | text | `draft`, `ready`, `archived`. |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. |
 
+### `checkpoint_quiz_topics`
+
+Links a checkpoint quiz to the topics it covers. A quiz covers one or more topics.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `checkpoint_quiz_id` | uuid FK | References `checkpoint_quizzes.id`. |
+| `topic_id` | uuid FK | References `topics.id`. |
+| `created_at` | timestamptz | Creation timestamp. |
+
+**Primary key:** `(checkpoint_quiz_id, topic_id)`.
+
+**Constraints:** unique `(checkpoint_quiz_id, topic_id)`.
+
+The application requires at least one linked topic per quiz. A simple database constraint cannot express "at least one row in a child table", so that rule is enforced in the application use case that creates or selects a quiz. Do not add a `topic_id` column to `checkpoint_quizzes`; this table is the only quiz-to-topic link. See [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md).
+
 ### `questions`
 
 Stores reusable assessment items.
@@ -434,7 +451,7 @@ Stores optional subject-level performance from an external test.
 
 ### `external_test_topic_performance`
 
-Stores optional topic-level performance when the learner's test report provides it.
+Stores optional topic-level performance when the learner's test report provides it. This table is the only home for topic performance evidence; checkpoint quiz outcomes are never written here. See [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md).
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -456,14 +473,18 @@ Stores a learner error or learning gap linked to usable evidence.
 | `id` | uuid PK | Mistake identifier. |
 | `learner_id` | uuid FK | References `learners.id`. |
 | `topic_id` | uuid FK nullable | References `topics.id`. |
-| `quiz_attempt_answer_id` | uuid FK nullable | References `quiz_attempt_answers.id`. |
-| `external_test_result_id` | uuid FK nullable | References `external_test_results.id`. |
+| `quiz_attempt_answer_id` | uuid FK nullable | Discovery source: references `quiz_attempt_answers.id`. |
+| `external_test_result_id` | uuid FK nullable | Discovery source: references `external_test_results.id`. |
+| `revision_record_id` | uuid FK nullable | Discovery source: references `revision_records.id`. |
+| `study_activity_id` | uuid FK nullable | Discovery source: references `study_activities.id`. |
 | `mistake_category` | text | `concept_gap`, `calculation_error`, `careless_error`, or `time_management`. |
 | `notes` | text nullable | Learner/system note. |
 | `resolved_at` | timestamptz nullable | Optional resolution timestamp. |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. |
 
-**Constraints:** at least one evidence source (`quiz_attempt_answer_id` or `external_test_result_id`) must be present. Topic may be null only when a source has no available topic mapping.
+**Constraints:** exactly one discovery source must be present — precisely one of `quiz_attempt_answer_id`, `external_test_result_id`, `revision_record_id`, or `study_activity_id` is non-null. Topic may be null only when the source has no available topic mapping.
+
+Use named nullable foreign keys rather than a generic polymorphic `source_type`/`source_id` pair, so every source keeps real referential integrity and the exactly-one rule stays enforceable in the database. See [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md).
 
 ## Required Indexes
 
@@ -478,6 +499,7 @@ Create indexes in addition to primary/unique keys for likely MVP access patterns
 - `resource_topic_links(topic_id, resource_id)`
 - `resources(owner_learner_id, status)`
 - `resource_ingestions(resource_id, status)`
+- `checkpoint_quiz_topics(topic_id, checkpoint_quiz_id)`
 - `quiz_attempts(learner_id, checkpoint_quiz_id, created_at desc)`
 - `external_test_results(learner_id, taken_on desc)`
 - `external_test_topic_performance(topic_id, external_test_result_id)`
@@ -506,6 +528,8 @@ Any material change must update this document and be implemented through an Alem
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md) — the decision this schema implements
+- [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — the quiz-topic, mistake-source, and evidence-boundary rules
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Domain model](../domain/domain-model.md)

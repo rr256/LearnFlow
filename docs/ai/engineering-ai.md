@@ -2,7 +2,7 @@
 title: LearnFlow Engineering AI Workflow
 status: approved
 owner: project-governance
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - prompts.md
@@ -185,6 +185,7 @@ The assistant must stop for direction when:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-007: Use repository documentation and ADRs as shared project memory](../adr/ADR-007-documentation-and-adr-policy.md) — why assistants work from `docs/` rather than chat history
 - [AI prompt library](prompts.md)
 - [Documentation standards](../development/documentation-standards.md)
 - [Git workflow](../development/git-workflow.md)

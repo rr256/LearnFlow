@@ -2,7 +2,7 @@
 title: LearnFlow Non-Functional Requirements
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - functional.md
@@ -28,7 +28,7 @@ Learner-owned study data must remain local by default.
 
 ### Requirements
 
-- Local PDFs, notes, progress, quiz attempts, and manually entered test performance must not be uploaded to third parties by default.
+- Local PDFs, notes, progress, quiz attempts, and manually entered external test results must not be uploaded to third parties by default.
 - The MVP must not collect or request credentials for Testbook, Made Easy, or other external test-series platforms.
 - If a future cloud AI or storage provider is enabled, the application must make the provider and data-sharing implications clear before use.
 - Attached test-result screenshots and PDFs are private learner resources, not public content.
@@ -41,7 +41,7 @@ Learner progress is valuable and must not be silently lost or corrupted.
 
 ### Requirements
 
-- Progress updates, quiz attempts, plans, revisions, and test-performance entries must be stored consistently.
+- Progress updates, quiz attempts, plans, revisions, and external test result entries must be stored consistently.
 - Failed operations must show a clear error and must not appear successful when data was not saved.
 - The system must keep enough timestamps and history to explain when important learner data changed.
 - The local deployment must have a documented backup and restore approach before regular daily use is recommended.

@@ -2,7 +2,7 @@
 title: LearnFlow RAG Retrieval
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - overview.md
@@ -176,6 +176,9 @@ Keep an evaluation set of learner-authorized or synthetic queries; do not depend
 
 ## Related Documents
 
+- [Project context](../00-project-context.md)
+- [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why vector search stays behind a retrieval port
+- [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the embedding implementation used for query vectors
 - [RAG overview](overview.md)
 - [RAG ingestion](ingestion.md)
 - [Embeddings](embeddings.md)

@@ -2,11 +2,12 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - ../architecture/overview.md
   - ../architecture/clean-architecture.md
+  - ../domain/terminology.md
   - ../rag/overview.md
 ---
 
@@ -113,7 +114,7 @@ Interpret learner evidence into an understandable progress summary and supportiv
 - Material-completion state.
 - Learner-selected learning stage.
 - Study activities.
-- Quiz attempts, external test performance, mistakes, and revision history.
+- Quiz attempts, external test results, mistakes, and revision history.
 
 ### Outputs
 
@@ -264,8 +265,10 @@ Potential future needs include long-running workflow checkpoints, multi-agent ha
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-006: Start with a custom product-agent orchestrator](../adr/ADR-006-custom-agent-orchestration.md) — the decision this document implements, including the re-evaluation triggers for adopting a framework
 - [Architecture overview](../architecture/overview.md)
 - [Clean Architecture](../architecture/clean-architecture.md)
+- [Domain terminology](../domain/terminology.md) — the canonical vocabulary for stages, evidence, and focus areas used here
 - [RAG overview](../rag/overview.md)
 - [Functional requirements](../requirements/functional.md)
 - [Engineering AI workflow](engineering-ai.md)

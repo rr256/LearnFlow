@@ -163,6 +163,7 @@ Example: if `AI_PROVIDER=ollama`, the backend requires an Ollama endpoint and co
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the decision this configuration serves
 - [Docker strategy](docker.md)
 - [CI/CD](ci-cd.md)
 - [Technology stack](../development/tech-stack.md)

@@ -1,5 +1,5 @@
 ---
-title: ADR-002: Use Provider Interfaces for External Capabilities
+title: "ADR-002: Use Provider Interfaces for External Capabilities"
 status: accepted
 owner: architecture
 last_updated: 2026-07-29
@@ -17,7 +17,7 @@ Accepted — 2026-07-29
 
 ## Context
 
-LearnFlow begins with local technology choices: Ollama for AI generation, a local embedding model, ChromaDB for vector search, and local filesystem storage. The product is intended to evolve to optional cloud AI, Azure Blob Storage, alternate vector databases, and different embedding models when real needs justify them.
+LearnFlow begins with local technology choices: Ollama for AI generation and for embeddings, ChromaDB for vector search, and local filesystem storage. The product is intended to evolve to optional cloud AI, Azure Blob Storage, alternate vector databases, and different embedding models when real needs justify them.
 
 Direct calls to vendor SDKs from mentor, planner, resource, or progress logic would make these changes expensive and hard to test. At the same time, creating generic abstractions for every utility would over-engineer the MVP.
 
@@ -37,11 +37,13 @@ Concrete adapters implement these ports in infrastructure:
 
 ```text
 OllamaProvider
-LocalEmbeddingProvider
+OllamaEmbeddingProvider
 ChromaRetrievalProvider
 LocalStorageProvider
 LocalPdfExtractionProvider
 ```
+
+`AIProvider` and `EmbeddingProvider` stay separate ports even though Ollama initially implements both. The two capabilities have different contracts, different failure behavior, and different replacement pressure.
 
 Provider selection is configuration-driven and wired only in the composition root.
 

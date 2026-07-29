@@ -64,6 +64,12 @@ related:
 
 ## Document Statuses
 
+LearnFlow uses two separate status vocabularies. Ordinary documents under `docs/` use the normal-document statuses. Files under `docs/adr/` use the ADR statuses, because an ADR records a decision rather than describing current direction.
+
+### Normal Document Statuses
+
+Applies to every maintained document except ADRs.
+
 | Status | Meaning |
 | --- | --- |
 | `draft` | Initial placeholder or work in progress; not a final decision. |
@@ -72,7 +78,22 @@ related:
 | `superseded` | Retained for history; do not implement from it. Link to replacement. |
 | `template` | Reusable starting format, not project-specific guidance. |
 
-Only mark a document or decision `approved` after the project owner confirms the direction.
+### ADR Statuses
+
+Applies to files under `docs/adr/`.
+
+| Status | Meaning |
+| --- | --- |
+| `proposed` | Decision drafted and ready for review; not yet agreed. |
+| `accepted` | Agreed decision; implement in line with it until it is superseded. |
+| `superseded` | Replaced by a later ADR. Retained for history; link to the replacement. |
+| `rejected` | Considered and deliberately not adopted. Retained so the reasoning is not revisited blindly. |
+
+`ADR-000-template.md` is the one file under `docs/adr/` that uses the normal-document status `template`, because it is a reusable format rather than a decision.
+
+Do not use `draft` or `approved` on an ADR, and do not use `accepted` or `rejected` on a normal document.
+
+Only mark a document or decision `approved`/`accepted` after the project owner confirms the direction.
 
 ## Document Structure
 
@@ -104,7 +125,7 @@ Not every document needs every heading, but every document must state its purpos
 - State uncertainty explicitly instead of hiding it behind vague wording.
 - Do not include secrets, personal file paths, learner content, credentials, or private test results.
 - Do not use provider-specific implementation details in high-level product/domain documents unless they are relevant to the decision.
-- Preserve privacy language: external test performance is learner-entered; the MVP has no scraping/integration with test-series providers.
+- Preserve privacy language: an external test result is learner-entered; the MVP has no scraping/integration with test-series providers.
 
 ## Linking Rules
 
@@ -176,6 +197,7 @@ Before committing a meaningful documentation change:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-007: Use repository documentation and ADRs as shared project memory](../adr/ADR-007-documentation-and-adr-policy.md) — the decision these standards implement
 - [Architecture decision register](../architecture/decisions.md)
 - [ADR template](../adr/ADR-000-template.md)
 - [Git workflow](git-workflow.md)

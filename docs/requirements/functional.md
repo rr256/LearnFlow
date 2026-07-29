@@ -2,7 +2,7 @@
 title: LearnFlow Functional Requirements
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - mvp.md
@@ -141,14 +141,14 @@ LearnFlow must allow a learner to test their understanding after studying a topi
 
 ### Acceptance criteria
 
-- The learner can request a short topic-focused checkpoint quiz.
+- The learner can request a short topic-focused checkpoint quiz covering one or more topics; every quiz covers at least one topic.
 - The quiz can use relevant notes/PYQs as context when available.
 - The learner can submit answers and receive basic feedback.
 - Objective answers can be scored automatically.
 - The product stores the attempt, answers, score, and identified mistakes.
 - Quiz results inform learning-stage, practice, and revision recommendations but do not alone prove mastery.
 
-## FR-010 — External Test Performance Tracking
+## FR-010 — External Test Result Tracking
 
 **Priority:** MVP
 
@@ -161,7 +161,7 @@ LearnFlow must allow learners to bring their own results from external test-seri
 - The learner can add subject-wise and topic-wise performance when their test report provides it.
 - The learner can record mistake reasons such as concept gap, calculation error, careless error, or time-management issue.
 - The learner may attach a screenshot or PDF as a private reference for the entered result.
-- LearnFlow uses entered evidence to update recommendations and identify priority topics.
+- LearnFlow uses entered evidence to update recommendations and identify priority focus areas.
 - LearnFlow does not scrape, sign in to, or directly integrate with Testbook, Made Easy, or other test-series websites in the MVP.
 
 ## FR-011 — Progress Overview
@@ -175,7 +175,7 @@ LearnFlow must give the learner a clear, non-judgmental overview of their study 
 - The learner can view progress by subject and topic.
 - The learner can view upcoming study tasks and revisions due.
 - The learner can view priority focus areas based on the available evidence.
-- The learner can view recent quiz and manually entered test-performance history.
+- The learner can view recent quiz history and manually entered external test results.
 
 ## Out of Scope for This Document's MVP
 

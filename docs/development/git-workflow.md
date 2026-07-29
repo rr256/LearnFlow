@@ -78,7 +78,7 @@ Use concise Conventional Commit-style messages:
 ```text
 feat(planner): generate daily plan items
 fix(progress): preserve manual learning stage updates
-docs(domain): define external test performance evidence
+docs(domain): define topic performance evidence
 test(rag): cover failed ingestion retry
 refactor(api): move mentor request mapping to presentation layer
 chore(docker): add local postgres health check

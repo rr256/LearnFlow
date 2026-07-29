@@ -1,5 +1,5 @@
 ---
-title: ADR-005: Use Docker Compose for Local Development
+title: "ADR-005: Use Docker Compose for Local Development"
 status: accepted
 owner: development-and-operations
 last_updated: 2026-07-29

@@ -1,5 +1,5 @@
 ---
-title: ADR-004: Use Ollama as the Initial Local AI Provider
+title: "ADR-004: Use Ollama as the Initial Local AI Provider"
 status: accepted
 owner: architecture-and-ai
 last_updated: 2026-07-29
@@ -24,9 +24,16 @@ The product needs an AI capability for grounded explanations, doubt resolution, 
 
 ## Decision
 
-Use Ollama running on the learner's host machine as the initial AI provider for local generation and compatible local embedding workflows.
+Use Ollama running on the learner's host machine as the initial implementation for two separate capabilities:
 
-Access Ollama only through an `AIProvider` adapter and configuration. The backend connects through a configured endpoint; it does not embed Ollama calls in routes, domain code, or planner logic.
+- **Generation** — the initial `AIProvider` implementation.
+- **Embeddings** — the initial `EmbeddingProvider` implementation, using an Ollama-served embedding model.
+
+These remain two distinct application ports with independent contracts, even though one runtime serves both today. A later change may replace either one without the other.
+
+Access Ollama only through those adapters and configuration. The backend connects through a configured endpoint; it does not embed Ollama calls in routes, domain code, or planner logic.
+
+The generation model and the embedding model are configured separately and are not required to be the same model.
 
 ## Consequences
 
@@ -76,6 +83,7 @@ Build only plans, progress, and resource tracking.
 ## Implementation Notes
 
 - Configure `AI_PROVIDER`, Ollama endpoint, chat model, and embedding model through environment variables.
+- Keep the embedding configuration independent of the generation configuration so either can change alone. Changing the embedding model can require re-indexing; changing the generation model does not.
 - Do not send entire resource collections or arbitrary local files to Ollama; use controlled retrieval context.
 - AI responses do not silently update progress, plans, revisions, or assessments.
 - Distinguish grounded answers from general AI answers when retrieval is unavailable.

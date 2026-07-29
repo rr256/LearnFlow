@@ -1,7 +1,13 @@
 ---
 title: LearnFlow Documentation
-status: draft
+status: approved
+owner: project-governance
+last_updated: 2026-07-29
 audience: contributors-and-ai-assistants
+related:
+  - 00-project-context.md
+  - development/documentation-standards.md
+  - architecture/decisions.md
 ---
 
 # LearnFlow Documentation
@@ -26,10 +32,12 @@ This directory is the authoritative documentation for LearnFlow. Start with [00-
 
 ## Status language
 
-- **Draft**: under discussion; do not treat as a final decision.
-- **Proposed**: ready for review, but not yet approved.
-- **Approved**: authoritative until replaced by a newer ADR or document revision.
-- **Superseded**: retained for history; do not implement from it.
+Normal documents and ADRs use separate status vocabularies:
+
+- **Normal documents**: `draft`, `proposed`, `approved`, `superseded`, `template`.
+- **ADRs**: `proposed`, `accepted`, `superseded`, `rejected`.
+
+[Documentation standards](development/documentation-standards.md) defines what each status means and is the authoritative source.
 
 ## Documentation workflow
 
@@ -39,7 +47,7 @@ This directory is the authoritative documentation for LearnFlow. Start with [00-
 4. Create an ADR for a significant, durable architectural decision.
 5. Keep documents concise, factual, and aligned with the current approved direction.
 
-## Related documents
+## Related Documents
 
 - [Project context](00-project-context.md)
 - [Documentation standards](development/documentation-standards.md)

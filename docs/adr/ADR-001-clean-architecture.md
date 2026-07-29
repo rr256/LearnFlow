@@ -1,5 +1,5 @@
 ---
-title: ADR-001: Adopt Clean Architecture
+title: "ADR-001: Adopt Clean Architecture"
 status: accepted
 owner: architecture
 last_updated: 2026-07-29
