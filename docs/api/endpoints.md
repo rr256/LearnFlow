@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - conventions.md
@@ -26,7 +26,7 @@ The MVP has one local learner. Learner-owned endpoints resolve the effective lea
 
 | ID | Method and path | Purpose | Notes |
 | --- | --- | --- | --- |
-| OPS-001 | `GET /health` | Report API readiness for local environment checks. | Operational endpoint; does not expose learner data or provider secrets. |
+| OPS-001 | `GET /health` | Report API readiness for local environment checks. | Operational endpoint; intentionally outside `/api/v1` so health probes stay stable across API major versions. Does not expose learner data or provider secrets. |
 
 ## Curriculum Endpoints
 
@@ -125,7 +125,7 @@ Supports **FR-009 — Topic Checkpoint Practice**.
 
 | ID | Method and path | Purpose | Primary request/result |
 | --- | --- | --- | --- |
-| QZ-001 | `POST /api/v1/checkpoint-quizzes/generate` | Generate/select a topic-focused checkpoint quiz. | Quiz record; may return `202` if generation is asynchronous. |
+| QZ-001 | `POST /api/v1/checkpoint-quizzes/generate` | Generate/select a checkpoint quiz for one or more topics. | Quiz record with its linked topics; may return `202` if generation is asynchronous. Reject a request carrying no topic. |
 | QZ-002 | `GET /api/v1/checkpoint-quizzes/{quiz_id}` | Read quiz instructions and learner-safe questions. | Quiz content without expected answers. |
 | QZ-003 | `POST /api/v1/checkpoint-quizzes/{quiz_id}/attempts` | Start an attempt. | Attempt record. |
 | QZ-004 | `PATCH /api/v1/quiz-attempts/{attempt_id}/answers/{question_id}` | Save/update one submitted answer before final submission. | Saved answer state. |
@@ -133,9 +133,9 @@ Supports **FR-009 — Topic Checkpoint Practice**.
 | QZ-006 | `GET /api/v1/quiz-attempts` | List learner quiz-attempt history. | Attempt collection. |
 | QZ-007 | `GET /api/v1/quiz-attempts/{attempt_id}` | Read a completed/in-progress attempt with permitted feedback. | Attempt details. |
 
-## External Test-Performance Endpoints
+## External Test Result Endpoints
 
-Supports **FR-010 — External Test Performance Tracking**.
+Supports **FR-010 — External Test Result Tracking**.
 
 | ID | Method and path | Purpose | Primary request/result |
 | --- | --- | --- | --- |
@@ -159,7 +159,7 @@ Implement in an order that enables one working learner flow:
 6. Resource registration and ingestion status.
 7. Mentor questions and grounded retrieval.
 8. Checkpoint quizzes and attempts.
-9. External test-performance entry and analysis.
+9. External test result entry and analysis.
 
 ## Related Documents
 

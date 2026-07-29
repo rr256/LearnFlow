@@ -70,7 +70,7 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 
 ### Definition of Done
 
-- [ ] Learner can generate roadmap, weekly, and daily plan views.
+- [ ] Learner can generate roadmap, monthly, weekly, and daily plan views.
 - [ ] Plan items link to topics and supported actions.
 - [ ] Learner can complete, skip, or postpone plan items.
 - [ ] Learner can request plan adaptation after missed work or availability changes.

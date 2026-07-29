@@ -2,7 +2,7 @@
 title: LearnFlow MVP Scope
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - functional.md
@@ -46,7 +46,7 @@ The MVP must be useful for daily study. It must also preserve clear extension po
 - Record topic confidence, study activity, and basic mistakes or learning notes.
 - Show progress by subject and across the learning program.
 - Schedule and display topics due for revision.
-- Identify basic weak areas from completion state, confidence, and assessment outcomes.
+- Identify basic priority focus areas from completion state, confidence, and assessment outcomes.
 
 ### Learning resources and grounded AI help
 
@@ -60,6 +60,7 @@ The MVP must be useful for daily study. It must also preserve clear extension po
 
 - Generate topic-focused practice questions.
 - Record answers and basic correctness/feedback.
+- Manually record results from tests taken outside LearnFlow, including subject-wise and topic-wise detail when the learner's report provides it.
 - Use outcomes to update progress signals and future revision recommendations.
 
 ### Foundation and local operation
@@ -75,7 +76,7 @@ The following are future features. They are intentionally not part of the MVP, b
 
 | Future capability | Design room created in the MVP |
 | --- | --- |
-| Multiple learner accounts | Associate learner-owned data with a `user_id` from the start, even while only one local user exists. |
+| Multiple learner accounts | Associate learner-owned data with a `learner_id` from the start, even while only one local learner exists. |
 | Authentication and roles | Keep identity and authorization boundaries separate from learning business rules. |
 | Cloud storage, including Azure Blob Storage | Access files through a storage-provider interface; start with a local storage adapter. |
 | Cloud AI providers | Access language models through an AI-provider interface; start with an Ollama adapter. |
@@ -102,12 +103,13 @@ The following are future features. They are intentionally not part of the MVP, b
 The MVP is complete when one learner can:
 
 1. Set a GATE CSE goal, target date, and available study time.
-2. See a realistic roadmap and daily/weekly study guidance.
+2. See a realistic roadmap and monthly, weekly, and daily study guidance.
 3. Track topic completion, confidence, and revision needs.
 4. Add and search relevant local study material.
 5. Ask the mentor a question and receive a grounded, useful response from Ollama.
 6. Practise topic-focused questions and retain basic feedback.
-7. Continue using the system locally through a reproducible setup.
+7. Manually record an external test result and see it inform recommendations.
+8. Continue using the system locally through a reproducible setup.
 
 ## Change Control
 

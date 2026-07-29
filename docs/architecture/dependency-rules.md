@@ -2,7 +2,7 @@
 title: LearnFlow Dependency Rules
 status: approved
 owner: architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - clean-architecture.md
@@ -169,6 +169,7 @@ Initially, enforce these rules through repository structure, code review, tests,
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-001: Adopt Clean Architecture](../adr/ADR-001-clean-architecture.md) — the decision these rules enforce
 - [Clean Architecture](clean-architecture.md)
 - [Provider pattern](provider-pattern.md)
 - [Coding standards](../development/coding-standards.md)

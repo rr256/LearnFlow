@@ -2,7 +2,7 @@
 title: LearnFlow Provider Pattern
 status: approved
 owner: architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - overview.md
@@ -49,7 +49,7 @@ OpenAIProvider / GeminiProvider / ClaudeProvider later
 | Capability | Application-facing responsibility | Initial implementation | Future examples |
 | --- | --- | --- | --- |
 | AI generation | Generate explanations, grounded answers, practice content, and structured outputs. | Ollama on the host machine | OpenAI, Azure OpenAI, Gemini, Claude |
-| Embeddings | Convert eligible text into vectors for retrieval. | Local embedding model through an adapter | Cloud embedding services, alternate local models |
+| Embeddings | Convert eligible text into vectors for retrieval. | Ollama embedding model through an adapter | Cloud embedding services, alternate local models |
 | Retrieval/vector search | Index, filter, and search resource representations. | ChromaDB | Qdrant, Pinecone, Azure AI Search |
 | File storage | Save, open, delete, and locate learner-owned source files. | Local filesystem storage | Azure Blob Storage, Amazon S3 |
 | Structured persistence | Store curriculum, progress, plans, assessments, and metadata. | PostgreSQL through repositories | Another relational database only if justified |
@@ -61,7 +61,7 @@ The initial MVP deployment is local-first:
 
 ```text
 AI provider:             Ollama
-Embedding provider:      local model adapter
+Embedding provider:      Ollama embedding model adapter
 Vector search provider:  ChromaDB
 File storage provider:   local filesystem
 Structured persistence:  PostgreSQL
@@ -93,6 +93,8 @@ The following interfaces are expected at the application boundary. Exact method 
 
 - Convert approved text inputs into vector representations.
 - Identify the model/version used so indexes can be managed safely.
+
+Ollama is the initial implementation. Keep this port separate from `AIProvider` even while one runtime serves both, so the embedding model can change without touching generation and the reverse.
 
 **Must not:**
 
@@ -210,6 +212,10 @@ Repository interfaces limit coupling, but database migrations and SQL-specific f
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — the decision this document implements
+- [ADR-001: Adopt Clean Architecture](../adr/ADR-001-clean-architecture.md)
+- [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md)
+- [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md)
 - [Architecture overview](overview.md)
 - [Clean Architecture](clean-architecture.md)
 - [RAG overview](../rag/overview.md)

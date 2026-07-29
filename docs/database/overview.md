@@ -2,7 +2,7 @@
 title: LearnFlow Database Overview
 status: approved
 owner: architecture-and-data
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - schema.md
@@ -81,7 +81,7 @@ Although the MVP has one local learner, learner-owned records must be associated
 
 Stores study goals, study plans, plan items, topic progress, learning-stage evidence, and revision records.
 
-Progress remains evidence-based. Do not collapse manual completion, learning stage, quiz score, external test performance, and revision history into one irreversible database field.
+Progress remains evidence-based. Do not collapse manual completion, learning stage, quiz score, external test results, and revision history into one irreversible database field.
 
 ### Assessment Data
 
@@ -158,6 +158,7 @@ Those decisions belong in `schema.md`, `migrations.md`, and implementation-speci
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md) — the decision this document implements
 - [Domain model](../domain/domain-model.md)
 - [Domain entities](../domain/entities.md)
 - [Database schema](schema.md)

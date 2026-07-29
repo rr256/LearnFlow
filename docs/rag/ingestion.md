@@ -2,7 +2,7 @@
 title: LearnFlow RAG Ingestion
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - overview.md
@@ -181,6 +181,9 @@ Before marking an ingestion implementation ready:
 
 ## Related Documents
 
+- [Project context](../00-project-context.md)
+- [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why extraction, embedding, and storage stay replaceable
+- [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the embedding implementation this pipeline calls
 - [RAG overview](overview.md)
 - [Embeddings](embeddings.md)
 - [RAG retrieval](retrieval.md)

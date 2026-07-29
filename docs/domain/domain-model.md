@@ -2,7 +2,7 @@
 title: LearnFlow Domain Model
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - entities.md
@@ -29,7 +29,7 @@ Learning Program
             ├── Learner Topic Progress
             ├── Revision Record
             ├── Checkpoint Quiz and Quiz Attempts
-            └── External Test Performance Evidence
+            └── Topic Performance Evidence
 
 Learner
   ├── Study Goal and Availability
@@ -37,7 +37,7 @@ Learner
   │    └── Plan Items
   ├── Topic Progress
   ├── Quiz Attempts
-  ├── External Test Performance
+  ├── External Test Result
   └── Revision Records
 ```
 
@@ -63,7 +63,7 @@ A major curriculum area within a learning program, such as Operating Systems, DB
 
 A teachable and trackable curriculum unit. A topic may contain nested subtopics when the syllabus needs finer granularity.
 
-Topics are the shared anchor for planning, resources, quizzes, revision, learner progress, and test-performance evidence. Each topic must have a stable identifier.
+Topics are the shared anchor for planning, resources, quizzes, revision, learner progress, and topic performance evidence. Each topic must have a stable identifier.
 
 ### Learning Resource
 
@@ -99,7 +99,7 @@ Topic progress is evidence-based rather than a single permanent mastery score. I
 - Current learner-visible learning stage.
 - Study activity.
 - Checkpoint-quiz outcomes.
-- External test-performance evidence.
+- Topic performance evidence from external test results.
 - Mistakes and learning notes.
 - Revision history.
 
@@ -125,11 +125,15 @@ Revision records preserve the history needed to make future revision recommendat
 
 A topic-focused practice set used to gather learning evidence after study or revision. Questions may be generated with grounded context or drawn from verified sources when available.
 
+A checkpoint quiz covers one or more topics and must cover at least one. The interface may begin with single-topic quizzes, but the model supports a checkpoint spanning several related topics.
+
 ### Quiz Attempt
 
 The learner's response to a checkpoint quiz. It records answers, score, feedback, mistakes, and topic links. Quiz attempts influence recommendations but do not independently prove mastery.
 
-### External Test Performance
+A quiz attempt informs learner topic progress through its answers and the topic links on the questions answered. Quiz outcomes are not topic performance evidence, which records only what a learner transcribed from an external test report.
+
+### External Test Result
 
 A learner-entered record of an assessment completed on an external test-series platform or elsewhere.
 
@@ -139,7 +143,9 @@ LearnFlow does not require access to an external test-series platform. It uses t
 
 ### Mistake Evidence
 
-A reusable record of an error or learning gap discovered through a quiz, revision, or external test result. Initial mistake categories include concept gap, calculation error, careless error, and time-management issue.
+A reusable record of an error or learning gap. Initial mistake categories include concept gap, calculation error, careless error, and time-management issue.
+
+Every mistake has exactly one discovery source — a quiz-attempt answer, an external test result, a revision record, or a study activity. Recording exactly one source keeps the origin of each mistake traceable and prevents the same error being counted twice from different directions.
 
 Mistake evidence may be attached to a topic and used to recommend focused study, practice, or revision.
 
@@ -159,12 +165,13 @@ Topic 1 ── * Learner Topic Progress
 
 Topic * ── * Learning Resource
 Topic 1 ── * Revision Record
-Topic 1 ── * Checkpoint Quiz
+Checkpoint Quiz * ── * Topic (at least one topic per quiz)
 Checkpoint Quiz 1 ── * Quiz Attempt
 Learner 1 ── * Quiz Attempt
 
-Learner 1 ── * External Test Performance
-External Test Performance * ── * Topic Performance Evidence
+Learner 1 ── * External Test Result
+External Test Result 1 ── * Topic Performance Evidence
+Topic 1 ── * Topic Performance Evidence
 ```
 
 ## Domain Rules and Invariants
@@ -175,9 +182,12 @@ External Test Performance * ── * Topic Performance Evidence
 4. A plan item records whether planned work happened; it does not automatically mean the topic is mastered or completed.
 5. AI-generated content or advice must not silently change learner progress, learning stage, or assessment evidence.
 6. Topic-level performance can be updated only from evidence that is actually linked to that topic. A total test score alone cannot reliably create topic-level conclusions.
-7. External test performance is learner-entered private data; LearnFlow does not rely on provider integration or scraping.
-8. The GATE CSE curriculum is curated and verified. Future AI-extracted syllabus structures must remain draft until reviewed and approved by a learner or authorized curator.
-9. A learning stage should lead to a supportive next action, not a negative label or irreversible judgement.
+7. Topic performance evidence comes only from an external test result. Checkpoint quiz outcomes reach topic progress through quiz attempts and question topic links, not through topic performance evidence.
+8. A mistake record has exactly one discovery source: a quiz-attempt answer, an external test result, a revision record, or a study activity.
+9. A checkpoint quiz covers at least one topic.
+10. An external test result is learner-entered private data; LearnFlow does not rely on provider integration or scraping.
+11. The GATE CSE curriculum is curated and verified. Future AI-extracted syllabus structures must remain draft until reviewed and approved by a learner or authorized curator.
+12. A learning stage should lead to a supportive next action, not a negative label or irreversible judgement.
 
 ## Future-Ready Boundaries
 
@@ -185,7 +195,7 @@ External Test Performance * ── * Topic Performance Evidence
 - Syllabus-PDF extraction can propose a draft learning program later; it is not an MVP feature.
 - Multi-user support adds authentication and authorization around existing learner-owned records.
 - Additional AI, storage, embedding, and vector providers must not change the core domain concepts.
-- Advanced mock analytics can build on quiz attempts, external test performance, mistake evidence, and topic links.
+- Advanced mock analytics can build on quiz attempts, external test results, mistake evidence, and topic links.
 
 ## Not Defined Here
 
@@ -194,6 +204,7 @@ This document intentionally does not define database fields, table names, API en
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — quiz-topic cardinality, mistake sources, and evidence boundaries
 - [Functional requirements](../requirements/functional.md)
 - [Domain entities](entities.md)
 - [Terminology](terminology.md)

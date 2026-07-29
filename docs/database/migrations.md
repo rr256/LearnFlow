@@ -2,7 +2,7 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - overview.md
@@ -184,6 +184,8 @@ An AI assistant may propose or generate a migration, but it must not:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md) — establishes Alembic as the migration workflow
+- [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — requires migrations to stay an explicit step, not a startup side effect
 - [Database overview](overview.md)
 - [Database schema](schema.md)
 - [Git workflow](../development/git-workflow.md)

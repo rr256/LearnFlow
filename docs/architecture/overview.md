@@ -2,7 +2,7 @@
 title: LearnFlow Architecture Overview
 status: approved
 owner: architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - clean-architecture.md
@@ -67,7 +67,7 @@ The web application is the learner-facing interface.
 **Responsibilities:**
 
 - Display curriculum, study plan, progress, revisions, resources, mentor interactions, and assessment history.
-- Collect learner input, including study availability, progress updates, quiz answers, and external test performance.
+- Collect learner input, including study availability, progress updates, quiz answers, and external test results.
 - Present supportive guidance and clear next actions.
 - Render data returned by the backend; it must not hardcode GATE CSE subjects or topics.
 
@@ -95,10 +95,10 @@ Core service areas include:
 
 - **Curriculum service:** exposes the curated GATE CSE program and future program data.
 - **Resource service:** registers resources and links them to subjects/topics.
-- **Planning service:** creates and adapts roadmap, weekly, and daily plans.
+- **Planning service:** creates and adapts roadmap, monthly, weekly, and daily plans.
 - **Progress service:** records evidence and derives supportive next actions.
 - **Revision service:** identifies and tracks revision work.
-- **Assessment service:** manages checkpoint quizzes, attempts, mistakes, and external test-performance entries.
+- **Assessment service:** manages checkpoint quizzes, attempts, mistakes, and external test result entries.
 - **Mentor service:** retrieves relevant knowledge and asks the configured AI provider for an explanation or practice content.
 
 Services use domain concepts and application interfaces; they must not depend directly on specific infrastructure libraries.
@@ -129,7 +129,7 @@ Application code accesses it through a storage-provider interface so a later ada
 
 The retrieval system turns eligible learning resources into searchable knowledge.
 
-**Initial direction:** ChromaDB as the vector-search implementation and a local embedding model compatible with the local AI workflow.
+**Initial direction:** ChromaDB as the vector-search implementation and an Ollama-served embedding model behind the `EmbeddingProvider` interface.
 
 The rest of the application communicates through retrieval/embedding interfaces, not directly through ChromaDB-specific calls.
 
@@ -241,6 +241,10 @@ The backend must receive the Ollama endpoint through configuration. Containerize
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-001: Adopt Clean Architecture](../adr/ADR-001-clean-architecture.md) — the layering this overview describes
+- [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why external systems sit behind ports
+- [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md) — the structured-data choice
+- [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the generation and embedding choice
 - [Clean Architecture](clean-architecture.md)
 - [Provider pattern](provider-pattern.md)
 - [Dependency rules](dependency-rules.md)

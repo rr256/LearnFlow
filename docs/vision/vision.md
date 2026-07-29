@@ -2,7 +2,7 @@
 title: LearnFlow Product Vision
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - ../requirements/mvp.md
@@ -17,7 +17,7 @@ related:
 
 LearnFlow is an AI-powered personal learning mentor. It helps learners turn scattered study materials, goals, and available time into a clear, adaptable learning journey.
 
-It is designed to do more than answer questions. LearnFlow should understand a learner's goal, create a realistic study timeline, guide daily work, track progress, identify weaknesses, schedule revisions, and continuously adapt the plan as the learner progresses.
+It is designed to do more than answer questions. LearnFlow should understand a learner's goal, create a realistic study timeline, guide daily work, track progress, identify priority focus areas, schedule revisions, and continuously adapt the plan as the learner progresses.
 
 ## Problem Statement
 
@@ -42,7 +42,7 @@ Create a realistic long-term study timeline
         ↓
 Guide daily and weekly study work
         ↓
-Track progress, performance, and weak areas
+Track progress, performance, and priority focus areas
         ↓
 Schedule revision and focused practice
         ↓
@@ -61,7 +61,7 @@ LearnFlow turns a target, syllabus, available study time, and progress into a pr
 
 ### Progress Coach
 
-LearnFlow records completed topics, study activity, assessments, mistakes, confidence, and revision needs. It uses these signals to show what is going well, identify weak areas, and recommend the most valuable next action.
+LearnFlow records completed topics, study activity, assessments, mistakes, confidence, and revision needs. It uses these signals to show what is going well, identify priority focus areas, and recommend the most valuable next action.
 
 ## Target Users
 

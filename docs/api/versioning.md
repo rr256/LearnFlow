@@ -2,7 +2,7 @@
 title: LearnFlow API Versioning
 status: approved
 owner: architecture-and-api
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - conventions.md
@@ -25,6 +25,8 @@ Public application endpoints use a path-based major version:
 ```
 
 The initial API is version 1. A new major version is introduced only for intentional breaking changes.
+
+Operational endpoints are deliberately excluded from this scheme. `GET /health` is served outside `/api/v1` so that container health probes and environment checks keep working unchanged when a new API major version is introduced. See the operational-endpoint rule in `conventions.md`.
 
 ## Compatible Changes Within a Major Version
 
@@ -64,6 +66,7 @@ For the initial local MVP, the transition period may be short because the fronte
 ## Version Boundaries
 
 - API versioning applies to HTTP contracts, not database schemas.
+- Unversioned operational endpoints stay stable across major versions; do not create `/api/v2/health`.
 - Database schema changes use Alembic migrations.
 - Internal application interfaces can evolve through normal code review and tests; do not expose them as public API contracts.
 - Provider interfaces are internal architecture contracts, not versioned HTTP endpoints.

@@ -1,5 +1,5 @@
 ---
-title: ADR-007: Use Repository Documentation and ADRs as Shared Project Memory
+title: "ADR-007: Use Repository Documentation and ADRs as Shared Project Memory"
 status: accepted
 owner: project-governance
 last_updated: 2026-07-29

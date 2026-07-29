@@ -1,5 +1,5 @@
 ---
-title: ADR-006: Start with a Custom Product-Agent Orchestrator
+title: "ADR-006: Start with a Custom Product-Agent Orchestrator"
 status: accepted
 owner: architecture-and-ai
 last_updated: 2026-07-29

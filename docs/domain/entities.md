@@ -2,7 +2,7 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -98,7 +98,7 @@ Represents one recommended action in a study plan.
 
 **Key relationships:** belongs to a study plan; usually links to a topic and may result in a study activity or revision record.
 
-### Study Activity / Study Session
+### Study Activity
 
 Represents actual learner work performed at a particular time.
 
@@ -112,7 +112,7 @@ Represents the learner-specific evidence and current state for one topic.
 
 **Responsible for:** combining material completion, current learning stage, study history, assessment evidence, mistakes, and revisions into a usable picture of progress.
 
-**Key relationships:** belongs to one learner and one topic; is informed by activities, quiz attempts, external performance, mistakes, and revisions.
+**Key relationships:** belongs to one learner and one topic; is informed by activities, quiz attempts, topic performance evidence, mistakes, and revisions.
 
 ### Revision Record
 
@@ -128,7 +128,7 @@ Represents a topic-focused practice set created or selected for learning evidenc
 
 **Responsible for:** grouping questions and defining the purpose/context of a checkpoint assessment.
 
-**Key relationships:** links to one or more topics; contains assessment items; has learner quiz attempts.
+**Key relationships:** links to one or more topics and must link to at least one; contains assessment items; has learner quiz attempts.
 
 ### Question / Assessment Item
 
@@ -150,9 +150,9 @@ Represents one learner's attempt at a checkpoint quiz.
 
 Represents a reusable record of a learning error or gap.
 
-**Responsible for:** recording the mistake category, topic relevance, source assessment/activity, and any follow-up action.
+**Responsible for:** recording the mistake category, topic relevance, its single discovery source, and any follow-up action.
 
-**Key relationships:** belongs to a learner; may link to a topic, question, quiz attempt, external test result, revision record, or study activity.
+**Key relationships:** belongs to a learner; may link to a topic; has exactly one discovery source — a quiz-attempt answer, an external test result, a revision record, or a study activity.
 
 ### External Test Result
 
@@ -164,11 +164,13 @@ Represents a learner-entered outcome from a test completed outside LearnFlow, su
 
 ### Topic Performance Evidence
 
-Represents performance evidence for a particular topic from an external test result or assessment.
+Represents performance evidence for a particular topic from an external test result.
 
-**Responsible for:** recording topic-level correct/incorrect/unattempted counts, marks, and confidence or mistake information when it is actually available.
+**Responsible for:** recording topic-level correct/incorrect/unattempted counts, marks, and mistake information when it is actually available.
 
-**Key relationships:** belongs to an external test result and topic; informs learner topic progress.
+**Key relationships:** belongs to exactly one external test result and one topic; informs learner topic progress.
+
+Checkpoint quiz outcomes are not topic performance evidence. A quiz reaches topic progress through its quiz attempt and the topic links on the questions answered.
 
 ## Learner-Visible Learning Stages
 
@@ -204,6 +206,8 @@ Learner
  ├── Quiz Attempt ── Checkpoint Quiz ── Question
  └── External Test Result ── Topic Performance Evidence ── Topic
 
+Checkpoint Quiz ── Topic (one or more)
+
 Learning Program ── Curriculum Version ── Subject ── Topic
 Topic ── Topic Relationship ── Topic
 Topic ── Learning Resource
@@ -212,6 +216,7 @@ Topic ── Learning Resource
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — quiz-topic cardinality, mistake sources, and evidence boundaries
 - [Domain model](domain-model.md)
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)

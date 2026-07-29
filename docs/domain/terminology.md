@@ -2,7 +2,7 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-28
+last_updated: 2026-07-29
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -48,8 +48,8 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Checkpoint quiz** | A short, topic-focused practice assessment. | Used to gather evidence after study or revision. |
 | **Question / assessment item** | One answerable prompt within a quiz or question bank. | May be AI-generated or from a verified source. |
 | **Quiz attempt** | A learner's submitted response to a checkpoint quiz. | Records answers, score, feedback, and mistakes. |
-| **External test result** | A learner-entered result from an assessment completed outside LearnFlow. | May reference Testbook, Made Easy, or another provider; it is not an integration. |
-| **Topic performance evidence** | Topic-specific marks, attempts, or mistakes from an assessment. | Only create it when the source actually provides topic-level information. |
+| **External test result** | A learner-entered result from an assessment completed outside LearnFlow. | Canonical term for the whole recorded result. May reference Testbook, Made Easy, or another provider; it is not an integration. |
+| **Topic performance evidence** | Topic-specific marks, attempts, or mistakes recorded from an external test result. | Canonical term for the topic-level detail inside an external test result; it belongs to one external test result and one topic. Checkpoint quiz outcomes are never topic performance evidence. Only create it when the external test report actually provides topic-level information. |
 | **Mistake evidence** | A recorded error or learning gap. | Initial categories: concept gap, calculation error, careless error, time-management issue. |
 | **Priority focus area** | A topic or action currently likely to benefit the learner most. | Prefer this in the UI over “weak topic.” |
 | **Mentor** | LearnFlow's AI-assisted guidance role. | Explains, plans, recommends, and reflects; it does not replace learner judgement. |
@@ -62,11 +62,12 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 
 | Avoid / use carefully | Preferred wording | Reason |
 | --- | --- | --- |
-| Weak topic | Priority focus area; Building foundation | More constructive and action-oriented. |
+| Weak topic; weak area; weakness | Priority focus area; Building foundation | More constructive and action-oriented. Applies to learner-facing copy and to the product documentation that defines it. |
+| External test performance | External test result; Topic performance evidence | Use `External test result` for the recorded result and `Topic performance evidence` for topic-level detail. “Performance” alone is ambiguous between the two. |
 | Failed topic | Topic needing focused practice | A topic is not a pass/fail judgement. |
 | Mastered | Strong understanding | Mastery is difficult to prove and should not be inferred from one signal. |
 | Complete | Material completed; plan item completed | Clarify whether material or a planned task was completed. |
-| Test integration | Manual external test-performance entry | The MVP does not connect to third-party test platforms. |
+| Test integration | Manual external test result entry | The MVP does not connect to third-party test platforms. |
 | AI memory | Learner progress, resource retrieval, or conversation context | Store durable facts in the application/database, not in model memory. |
 | GATE topic | Topic in the GATE CSE learning program | Keeps platform-core language reusable. |
 
@@ -74,6 +75,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 
 - Use singular, clear domain names in code and documentation: `Topic`, `StudyPlan`, `QuizAttempt`.
 - Use `learner` for product/domain language and reserve `user` for authentication or technical identity when needed.
+- Use `learner_id` as the sole identifier for learner-owned records in domain models, database columns, and API contracts. Do not introduce `user_id` as an alternative name for the same relationship; if a distinct authentication identity is added later, it is a separate concept with its own name.
 - Use `resource` for a study item; use `document` only when referring specifically to a file format or ingestion process.
 - Use `evidence` for observed learning signals; use `stage` for the learner-visible interpretation of that evidence.
 - Use `recommendation` for system guidance; avoid wording that makes a recommendation sound mandatory.
