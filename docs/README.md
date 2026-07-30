@@ -2,7 +2,7 @@
 title: LearnFlow Documentation
 status: approved
 owner: project-governance
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 audience: contributors-and-ai-assistants
 related:
   - 00-project-context.md
@@ -26,7 +26,7 @@ This directory is the authoritative documentation for LearnFlow. Start with [00-
 - [RAG](rag/) — knowledge ingestion and retrieval
 - [AI](ai/) — product agents and engineering AI workflow
 - [Development](development/) — stack, repository, code, Git, and docs practices
-- [Deployment](deployment/) — containers and environments
+- [Deployment](deployment/) — containers, environments, and [CI/CD](deployment/ci-cd.md)
 - [Roadmap](roadmap/) — milestones and deferred ideas
 - [Architecture Decision Records](adr/) — approved decisions and their rationale
 
@@ -35,9 +35,9 @@ This directory is the authoritative documentation for LearnFlow. Start with [00-
 Normal documents and ADRs use separate status vocabularies:
 
 - **Normal documents**: `draft`, `proposed`, `approved`, `superseded`, `template`.
-- **ADRs**: `proposed`, `accepted`, `superseded`, `rejected`.
+- **ADRs** — files named `ADR-NNN-<short-title>.md` under [adr/](adr/): `proposed`, `accepted`, `superseded`, `rejected`.
 
-[Documentation standards](development/documentation-standards.md) defines what each status means and is the authoritative source.
+[Documentation standards](development/documentation-standards.md) defines what each status means, which vocabulary applies to which path, and is the authoritative source.
 
 ## Documentation workflow
 

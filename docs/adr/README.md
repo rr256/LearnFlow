@@ -26,13 +26,16 @@ Use `ADR-NNN-short-title.md`, with zero-padded sequential numbering.
 
 ## Statuses
 
-ADRs use the ADR status set — `proposed`, `accepted`, `superseded`, `rejected` — which is separate from the normal-document statuses used elsewhere under `docs/`. [Documentation standards](../development/documentation-standards.md) defines both sets.
+ADR decision files — `ADR-NNN-*.md` other than `ADR-000-template.md` — use the ADR status set: `proposed`, `accepted`, `superseded`, `rejected`. [Documentation standards](../development/documentation-standards.md#which-vocabulary-applies-by-path) defines both sets and resolves every path.
 
-`ADR-000-template.md` is the exception: it carries the normal-document status `template` because it is a reusable format, not a decision.
+Two files in this directory are not decisions, so they are normal documentation files carrying normal-document statuses:
+
+- `ADR-000-template.md` — a reusable format, status `template`.
+- `README.md`, this file — navigation for the directory, status `approved`.
 
 ## Accepted ADRs
 
-[ADR-001](ADR-001-clean-architecture.md) · [ADR-002](ADR-002-provider-pattern.md) · [ADR-003](ADR-003-postgresql-persistence.md) · [ADR-004](ADR-004-ollama-local-ai-provider.md) · [ADR-005](ADR-005-docker-compose-local-development.md) · [ADR-006](ADR-006-custom-agent-orchestration.md) · [ADR-007](ADR-007-documentation-and-adr-policy.md) · [ADR-008](ADR-008-assessment-and-mistake-evidence-model.md) · [ADR-009](ADR-009-configuration-naming-and-validation.md)
+[ADR-001](ADR-001-clean-architecture.md) · [ADR-002](ADR-002-provider-pattern.md) · [ADR-003](ADR-003-postgresql-persistence.md) · [ADR-004](ADR-004-ollama-local-ai-provider.md) · [ADR-005](ADR-005-docker-compose-local-development.md) · [ADR-006](ADR-006-custom-agent-orchestration.md) · [ADR-007](ADR-007-documentation-and-adr-policy.md) · [ADR-008](ADR-008-assessment-and-mistake-evidence-model.md) · [ADR-009](ADR-009-configuration-naming-and-validation.md) · [ADR-010](ADR-010-feature-delivery-workflow.md)
 
 The [architecture decision register](../architecture/decisions.md) maps each ADR to the decision it records.
 

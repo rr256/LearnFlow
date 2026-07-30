@@ -52,6 +52,7 @@ These are register statuses. They are distinct from the document `status` field 
 | DEC-020 | Topic performance evidence belongs only to an external test result; checkpoint quiz outcomes reach topic progress through quiz attempts and question topic links. | Approved | [Domain model](../domain/domain-model.md), [Domain entities](../domain/entities.md) | Accepted — [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md) |
 | DEC-021 | Monthly plans are an MVP planning type alongside roadmap, weekly, and daily plans. | Approved | [MVP scope](../requirements/mvp.md), [Functional requirements](../requirements/functional.md), [Database schema](../database/schema.md) | Product decision; ADR optional |
 | DEC-022 | Configuration variables use three categories — core runtime (`APP_*`, `API_*`), capability (`<CAPABILITY>_PROVIDER` plus capability-level settings), and vendor (`<VENDOR>_<SETTING>`). `EMBEDDING_MODEL` is removed; `API_BASE_URL` is frontend configuration. `deployment/environments.md` is the authoritative catalogue, and configuration is validated before the application is created. | Approved | [Environments and configuration](../deployment/environments.md) | Accepted — [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md) |
+| DEC-023 | Changes reach `main` through a pull request. CI runs backend tests, Ruff lint and format, and documentation validation on pull requests to `main` and pushes to `main`; frontend, database, container, and security checks are added with the artifacts they verify. AI-assisted delivery follows one repeatable workflow that stops at an open pull request and never merges. | Approved | [CI/CD strategy](../deployment/ci-cd.md), [Git workflow](../development/git-workflow.md), [Engineering AI workflow](../ai/engineering-ai.md) | Accepted — [ADR-010](../adr/ADR-010-feature-delivery-workflow.md) |
 
 ## Deferred Decisions
 
@@ -64,6 +65,7 @@ These are register statuses. They are distinct from the document `status` field 
 | Agent framework such as LangGraph | Keep product responsibilities modular; use custom orchestration initially. | Workflows require stateful graphs, checkpoints, complex branching, or human approval flows. |
 | Mobile application | Keep backend APIs client-agnostic; do not build mobile clients now. | The web MVP is stable and real learner usage warrants it. |
 | Public cloud deployment | Use Docker Compose locally; do not host publicly now. | The product needs access beyond the learner's local machine. |
+| Branch protection on `main` | Rely on the pull-request workflow and CI checks; do not configure repository branch-protection rules yet. Branch protection is a repository setting, not a repository file, so it is not part of any change under version control. | A second contributor gains write access, or a merge bypasses CI in practice. See [ADR-010](../adr/ADR-010-feature-delivery-workflow.md). |
 | Automated syllabus extraction | Keep curriculum data model generic; do not auto-create curricula from PDFs now. | GATE CSE workflow is stable and a reviewed setup experience is designed. |
 
 ## Accepted ADRs
@@ -81,6 +83,7 @@ These ADRs are accepted and hold the durable rationale, alternatives, and conseq
 | [ADR-007](../adr/ADR-007-documentation-and-adr-policy.md) | Use repository documentation and ADRs as shared project memory | DEC-017 |
 | [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md) | Model assessment topics and mistake evidence sources explicitly | DEC-018, DEC-019, DEC-020 |
 | [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md) | Name and validate configuration variables explicitly | DEC-022 |
+| [ADR-010](../adr/ADR-010-feature-delivery-workflow.md) | Deliver features through pull requests with automated gates | DEC-023 |
 
 Decisions still marked **ADR pending** above have an approved direction but no formal ADR yet. Create the ADR before or alongside implementation of the affected area.
 

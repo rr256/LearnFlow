@@ -2,12 +2,13 @@
 title: LearnFlow Product Roadmap
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - milestones.md
   - future-ideas.md
   - ../requirements/mvp.md
+  - ../deployment/ci-cd.md
 ---
 
 # LearnFlow Product Roadmap
@@ -130,7 +131,10 @@ Future multi-user/cloud expansion only when justified
 - Automated tests for critical learning rules and API flows.
 - Error handling, logs, health/readiness checks, backup/restore instructions.
 - Improved UI states, accessibility basics, and performance feedback.
-- CI verification for stable checks.
+- CI verification for stable checks. The workflow configuration is implemented — backend tests, Ruff
+  lint and format checks, and documentation validation, per [CI/CD strategy](../deployment/ci-cd.md).
+  Hosted GitHub Actions verification remains pending the first pull request run, and frontend,
+  migration, and container checks are added with the artifacts they verify.
 - README and setup guide validated on a clean machine where possible.
 
 **Exit criteria:** the learner can use LearnFlow daily without fragile setup, unexplained failures, or risk of silent data loss.
@@ -165,4 +169,5 @@ If the answer to the first two questions is no, defer it.
 - [Milestones](milestones.md)
 - [Deferred ideas](future-ideas.md)
 - [MVP scope](../requirements/mvp.md)
+- [CI/CD strategy](../deployment/ci-cd.md) — what CI verifies today and what remains pending
 - [Architecture decision register](../architecture/decisions.md)

@@ -2,12 +2,14 @@
 title: LearnFlow Engineering AI Workflow
 status: approved
 owner: project-governance
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - prompts.md
   - ../development/documentation-standards.md
   - ../development/git-workflow.md
+  - ../deployment/ci-cd.md
+  - ../adr/ADR-010-feature-delivery-workflow.md
 ---
 
 # LearnFlow Engineering AI Workflow
@@ -137,6 +139,77 @@ AI assistants must not, without explicit approval:
 - Expand the MVP with future features.
 - Modify unrelated files merely for cleanup.
 
+## Automated Delivery Workflow
+
+The workflow above is implemented as a Claude Code skill, `.claude/skills/deliver-feature/SKILL.md`,
+so the same gates apply on every task instead of being re-derived from prose.
+
+### Phases
+
+| Phase | Action |
+| --- | --- |
+| 1 | Read `00-project-context.md`, the Required Context documents for the task, the development standards, terminology, and relevant accepted ADRs. |
+| 2 | State the task brief in the Required Task Brief Format, including the files expected to change. |
+| 3 | **Stop for decisions.** See below. |
+| 4 | Create one focused branch from an updated `main`, using a prefix from the [git workflow](../development/git-workflow.md). |
+| 5 | Implement inside the agreed scope, following the coding standards and folder structure. |
+| 6 | Add or update tests, then run the backend commands in the canonical [local quality checks](../development/coding-standards.md#local-quality-checks). |
+| 7 | Update every document the change affects, in the same change. |
+| 8 | Run the remaining commands in that same canonical set: the `scripts/` lint and format checks, and the documentation validator. |
+| 9 | Run the `documentation-reviewer` agent and report its findings. |
+| 10 | Review the diff against the Review Checklist in the git workflow. |
+| 11 | Create one scoped commit, push the branch, and open a pull request. |
+| 12 | Report using the Completion Report Format. |
+
+### The single approval gate
+
+Phase 3 is the only gate before delivery. The assistant stops for every condition in
+[Stop-and-Ask Conditions](#stop-and-ask-conditions), which is the canonical list. It presents options
+and a recommendation; the project owner decides. After the gate the workflow runs to an open pull
+request without further prompting.
+
+### Actions the delivery workflow never performs
+
+This is the canonical list. `.claude/skills/deliver-feature/SKILL.md` mirrors it exactly, and other
+documents link here rather than restating it.
+
+The workflow never:
+
+- Merges a pull request — no `gh pr merge`, no auto-merge, no local merge into `main`.
+- Force-pushes or rewrites history — no `--force`, `--force-with-lease`, `rebase`, `reset --hard`,
+  `commit --amend`, or `filter-branch` on shared work.
+- Deletes a branch, local or remote.
+- Commits to `main`, or pushes a branch it did not create.
+- Installs or authenticates the GitHub CLI, or handles credentials, tokens, or CI secrets.
+- Reads, writes, or commits a real `.env` file. `.env.example` may be updated when a new variable is
+  documented.
+- Modifies `.claude/settings.json`.
+- Commits virtual environments, `node_modules`, learner PDFs or notes, database volumes, vector
+  indexes, model files, coverage output, or `__pycache__`.
+- Marks a document `approved` or an ADR `accepted`, or drafts an ADR without direction.
+- Adds a dependency that did not pass Stop Gate 1.
+- Disables, skips, or weakens a test or check to make a step pass.
+- Expands MVP scope into a deferred capability.
+
+When the GitHub CLI is absent or unauthenticated, the workflow pushes the branch, prints the compare
+URL, and reports that the pull request was not created.
+
+Approving design decisions, reviewing and merging pull requests, and handling credentials or external
+services remain human responsibilities.
+
+### Review agent
+
+`.claude/agents/documentation-reviewer.md` reviews the documentation set and returns findings only.
+It has read-only tools, makes no decisions, resolves no conflicts, and drafts no ADRs. It complements
+`scripts/validate_docs.py`, which checks the mechanical rules described in
+[documentation standards](../development/documentation-standards.md).
+
+Note the two unrelated senses of *agent* in this repository. A **product agent** is a LearnFlow
+learning responsibility, described in [LearnFlow product agents](learnflow-agents.md) and
+[ADR-006](../adr/ADR-006-custom-agent-orchestration.md). An **assistant subagent** is an engineering
+review role defined under `.claude/agents/`, such as the documentation reviewer. They share a word,
+not a concept; `docs/domain/terminology.md` remains product-domain vocabulary only.
+
 ## Parallel/Subagent Work
 
 Specialized AI roles may be used later for architecture, documentation, backend, database, frontend, RAG, testing, and DevOps.
@@ -173,14 +246,23 @@ Open items: anything requiring project-owner direction
 
 ## Stop-and-Ask Conditions
 
-The assistant must stop for direction when:
+This is the canonical list, and it is **Stop Gate 1** of the [automated delivery workflow](#automated-delivery-workflow). Other documents and the delivery skill refer to it or mirror it exactly; they do not restate it in different words.
 
-- Required documentation is missing or conflicts with code.
-- A task needs a new external dependency or provider.
-- A schema change could lose or reinterpret learner data.
-- A request expands the MVP into a deferred capability.
-- A choice materially changes privacy, security, cost, or product behavior.
-- The assistant cannot verify a high-impact change safely.
+The assistant must stop and ask the project owner for direction when a task touches:
+
+- Clean Architecture layer boundaries or dependency direction.
+- A new external dependency, framework, or provider.
+- A new domain concept or entity, or a term absent from [terminology](../domain/terminology.md).
+- A database schema change, including any migration that could lose or reinterpret learner data.
+- A public HTTP API contract — a new endpoint, a changed shape, or changed status codes.
+- Privacy, secrets, authentication, authorization, or learner-data handling.
+- Security-relevant behavior of any kind.
+- Cost or product behavior, where the choice changes either materially.
+- Documentation that is missing, that conflicts with code or another document, or that records only a placeholder where the task needs an approved decision.
+- MVP scope, where the request expands into a deferred capability.
+- A high-impact change the assistant cannot verify safely.
+
+The assistant presents options and a recommendation. The project owner decides.
 
 ## Related Documents
 
@@ -189,4 +271,8 @@ The assistant must stop for direction when:
 - [AI prompt library](prompts.md)
 - [Documentation standards](../development/documentation-standards.md)
 - [Git workflow](../development/git-workflow.md)
+- [Coding standards](../development/coding-standards.md) — the canonical local quality checks the workflow runs
+- [CI/CD strategy](../deployment/ci-cd.md) — the checks the delivery workflow must pass
+- [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — why the workflow is automated to this boundary
+- [Repository and folder structure](../development/folder-structure.md) — where `.claude/` definitions live
 - [Architecture decision register](../architecture/decisions.md)

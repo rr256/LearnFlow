@@ -24,6 +24,7 @@ LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science 
 
 - Stage: documentation and architecture foundation, plus a minimal FastAPI backend foundation.
 - Implemented: a FastAPI application built through a composition-root application factory; validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, and `API_PORT`; and `GET /health`, an operational endpoint served outside `/api/v1`.
+- Delivery: changes reach `main` through a pull request. GitHub Actions runs backend tests, Ruff lint and format checks, and documentation validation on pull requests to `main` and pushes to `main`. See [CI/CD strategy](deployment/ci-cd.md) and [git workflow](development/git-workflow.md).
 - Not implemented: learner features, database persistence, Docker, AI and RAG, the frontend, curriculum data, and external integrations. Infer no application behavior beyond the implemented items above.
 - Decision status: use the documents in this repository and ADRs as the source of truth. Placeholders are intentionally not decisions.
 - Immediate objective: implement approved Milestone 1 scope, replacing relevant placeholders with approved project decisions before implementing each affected area.
@@ -47,6 +48,7 @@ LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science 
 | RAG or AI | [rag/overview.md](rag/overview.md), [ai/learnflow-agents.md](ai/learnflow-agents.md) |
 | Development practices | [development/tech-stack.md](development/tech-stack.md), [development/coding-standards.md](development/coding-standards.md) |
 | Containers or release | [deployment/docker.md](deployment/docker.md), [deployment/environments.md](deployment/environments.md) |
+| Delivery, CI, or assistant automation | [development/git-workflow.md](development/git-workflow.md), [deployment/ci-cd.md](deployment/ci-cd.md), [ai/engineering-ai.md](ai/engineering-ai.md) |
 
 ## Master index
 
@@ -74,6 +76,7 @@ Accepted ADRs:
 - [ADR-007 — Use repository documentation and ADRs as shared project memory](adr/ADR-007-documentation-and-adr-policy.md)
 - [ADR-008 — Model assessment topics and mistake evidence sources explicitly](adr/ADR-008-assessment-and-mistake-evidence-model.md)
 - [ADR-009 — Name and validate configuration variables explicitly](adr/ADR-009-configuration-naming-and-validation.md)
+- [ADR-010 — Deliver features through pull requests with automated gates](adr/ADR-010-feature-delivery-workflow.md)
 
 ### Design and implementation
 
@@ -117,9 +120,12 @@ Accepted ADRs:
 4. Keep edits narrowly scoped to the assigned task.
 5. Update linked documentation when implementation changes an approved behavior.
 6. Do not overwrite a document marked `approved` without explicit direction and an ADR when needed.
+7. For end-to-end delivery, follow the [engineering AI workflow](ai/engineering-ai.md). Its automated form stops for design decisions, opens a pull request, and never merges.
 
 ## Related Documents
 
 - [Documentation home](README.md)
 - [Documentation standards](development/documentation-standards.md)
+- [Engineering AI workflow](ai/engineering-ai.md)
+- [CI/CD strategy](deployment/ci-cd.md)
 - [ADR template](adr/ADR-000-template.md)

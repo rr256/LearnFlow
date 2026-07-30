@@ -26,9 +26,11 @@ Documentation and architecture foundation, plus a minimal FastAPI backend founda
 - A FastAPI application served through a composition-root application factory.
 - Validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, and `API_PORT`.
 - `GET /health`, an operational endpoint served outside `/api/v1`.
+- Continuous integration on pull requests: backend tests, Ruff lint and format checks, and
+  documentation validation. See [CI/CD strategy](docs/deployment/ci-cd.md).
 
 **Not implemented**
 
 Learner features, database persistence, Docker, AI and RAG, the frontend, curriculum data, and
-external integrations. Nothing beyond the three items above should be inferred from the current
-repository contents.
+external integrations. Nothing beyond the implemented items above should be inferred from the
+current repository contents.

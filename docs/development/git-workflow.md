@@ -2,12 +2,14 @@
 title: LearnFlow Git Workflow
 status: approved
 owner: development
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - coding-standards.md
   - documentation-standards.md
   - ../ai/engineering-ai.md
+  - ../deployment/ci-cd.md
+  - ../adr/ADR-010-feature-delivery-workflow.md
 ---
 
 # LearnFlow Git Workflow
@@ -68,8 +70,29 @@ Review diff
         ↓
 Commit focused change(s)
         ↓
-Merge into main after approval
+Push branch and open a pull request
+        ↓
+CI runs backend and documentation checks
+        ↓
+Review, then merge into main after approval
 ```
+
+## Pull Requests
+
+A change integrates into `main` through a pull request, not a direct commit.
+
+- Open the pull request against `main` from the focused branch.
+- Describe the outcome, the changed files, the verification performed, the documentation updated,
+  the assumptions relied upon, and any open items. This is the Completion Report Format from
+  [engineering AI workflow](../ai/engineering-ai.md).
+- The checks in [CI/CD strategy](../deployment/ci-cd.md) run on every pull request targeting `main`
+  and on every push to `main`. A failing check blocks merge until it is understood or the project
+  owner makes an explicit decision.
+- Reviewing and merging a pull request is a human action. It is never automated and never delegated
+  to an AI assistant.
+
+Branch protection on `main` is a repository setting rather than a repository file; it is a separate
+project-owner decision.
 
 ## Commit Standards
 
@@ -118,6 +141,21 @@ Before accepting AI-assisted changes:
 
 AI assistants must not create commits, force-push, rewrite history, or merge branches unless the project owner explicitly asks.
 
+### Standing authorization for the delivery workflow
+
+Invoking the `deliver-feature` skill in `.claude/skills/deliver-feature/SKILL.md` is the explicit
+project-owner request required above. It authorizes exactly one sequence on one branch: create the
+branch, implement, verify, update documentation, create one scoped commit, push that branch, and
+open a pull request.
+
+It authorizes nothing else. What the workflow must never do is listed canonically in
+[Actions the delivery workflow never performs](../ai/engineering-ai.md#actions-the-delivery-workflow-never-performs)
+— merging, history rewriting, credential handling, and the rest. That list is authoritative; this
+document does not restate it.
+
+The skill stops at the open pull request in every case, and the project owner still performs the four
+review steps above before merging.
+
 ## Database Migration Changes
 
 For any schema change:
@@ -157,5 +195,7 @@ Release notes should summarize learner-facing changes, migrations/configuration 
 - [Project context](../00-project-context.md)
 - [Coding standards](coding-standards.md)
 - [Documentation standards](documentation-standards.md)
+- [CI/CD strategy](../deployment/ci-cd.md) — the checks that run on every pull request
+- [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md)
 - [Database migrations](../database/migrations.md)
 - [Engineering AI workflow](../ai/engineering-ai.md)

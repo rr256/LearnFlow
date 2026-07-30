@@ -8,6 +8,7 @@ related:
   - ../architecture/overview.md
   - ../architecture/provider-pattern.md
   - ../deployment/docker.md
+  - ../deployment/ci-cd.md
 ---
 
 # LearnFlow Technology Stack
@@ -37,6 +38,8 @@ Versions are pinned in implementation dependency files after compatibility is te
 | Backend configuration | pydantic-settings | Loads and validates environment configuration at startup. | Reuses the Pydantic validation already present through FastAPI; fails fast with field-level errors. | Confined to the composition root; see [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md). |
 | Frontend testing | TypeScript/React test tooling | Component and user-flow verification. | Needed for reliable learner-facing behavior. | Exact framework selected with frontend scaffold. |
 | API documentation | FastAPI/OpenAPI output plus repository docs | Machine-readable API schemas and human architecture docs. | Keeps frontend contracts and documentation aligned. | API contract remains independent of documentation renderer. |
+| Continuous integration | GitHub Actions | Runs backend tests, Ruff checks, and documentation validation on pull requests and pushes to `main`. | Already hosted where the repository lives; needs no additional service or credential. | Workflow files are small and portable; see [CI/CD strategy](../deployment/ci-cd.md). |
+| Documentation validation | PyYAML in `scripts/validate_docs.py` | Parses documentation front matter for the checks defined in [mechanical validation](documentation-standards.md#mechanical-validation). | A real YAML parser rejects malformed front matter that a hand-rolled subset parser would accept. | Development-only dependency; never enters the application runtime. See [ADR-010](../adr/ADR-010-feature-delivery-workflow.md). |
 
 ## Component Boundaries
 
@@ -117,8 +120,10 @@ Do not add a framework only because it is popular or because an AI assistant sug
 - [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why these choices stay replaceable
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the generation and embedding choice
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the container choice
+- [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — the CI and documentation-validation choices
 - [Architecture overview](../architecture/overview.md)
 - [Provider pattern](../architecture/provider-pattern.md)
 - [Docker strategy](../deployment/docker.md)
+- [CI/CD strategy](../deployment/ci-cd.md)
 - [Coding standards](coding-standards.md)
 - [Engineering AI workflow](../ai/engineering-ai.md)

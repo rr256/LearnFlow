@@ -8,6 +8,8 @@ related:
   - tech-stack.md
   - ../architecture/clean-architecture.md
   - ../architecture/dependency-rules.md
+  - ../deployment/ci-cd.md
+  - ../adr/ADR-010-feature-delivery-workflow.md
 ---
 
 # LearnFlow Repository and Folder Structure
@@ -63,8 +65,14 @@ learnflow/
 ├── docker/
 │   ├── backend.Dockerfile
 │   └── frontend.Dockerfile
-├── scripts/                     # Repository-level development utilities
-└── .github/                     # Future CI/workflow configuration when introduced
+├── scripts/
+│   └── validate_docs.py         # Documentation front-matter and link validation
+├── .claude/
+│   ├── agents/                  # Read-only review agents
+│   ├── skills/                  # Repeatable assistant workflows
+│   └── settings.json            # Local Claude Code permissions
+└── .github/
+    └── workflows/               # CI workflow definitions
 ```
 
 ## Root Files
@@ -207,9 +215,41 @@ Contains Dockerfiles and small container build assets. Runtime configuration rem
 
 Contains repository-level repeatable utilities, such as documentation validation, development setup checks, or release helpers. Scripts must be documented and must not contain personal paths/secrets.
 
+| Path | Responsibility |
+| --- | --- |
+| `validate_docs.py` | Validates documentation front matter and links; [mechanical validation](documentation-standards.md#mechanical-validation) defines exactly what it checks. Run from the repository root; CI runs the same command. |
+
+Ruff is configured in `backend/pyproject.toml`, so running it from `backend/` does not cover
+`scripts/`. Repository-level scripts are held to the same standards and are linted against that same
+configuration explicitly. The commands are defined once, in the canonical
+[local quality checks](coding-standards.md#local-quality-checks); the documentation CI job runs them
+before running the validator, so `scripts/` is covered by CI.
+
 ### `backend/scripts/`
 
 Contains backend/domain-specific utilities, such as idempotent GATE CSE curriculum seeding/import after that workflow is approved.
+
+## Automation and Assistant Configuration
+
+### `.claude/`
+
+Contains configuration for Claude Code and compatible assistants. It holds workflow definitions, not
+project decisions: authority stays in `docs/` and the ADRs.
+
+| Path | Responsibility |
+| --- | --- |
+| `agents/` | Subagent definitions. `documentation-reviewer.md` is read-only and reports findings without editing files. |
+| `skills/` | Repeatable assistant workflows, one directory per skill with a `SKILL.md`. `deliver-feature/` encodes the end-to-end delivery workflow. |
+| `settings.json` | Local Claude Code permission settings. |
+
+`CLAUDE.md` at the repository root remains the entry-point instruction file and points to
+`docs/00-project-context.md`.
+
+### `.github/`
+
+Contains GitHub configuration. `workflows/pull-request.yml` defines the backend and documentation
+checks described in [CI/CD strategy](../deployment/ci-cd.md). Workflow files must not contain
+credentials, tokens, or deployment steps.
 
 ## Local and Generated Data
 
@@ -242,3 +282,6 @@ Local data locations are configured through environment variables and Docker vol
 - [Technology stack](tech-stack.md)
 - [Coding standards](coding-standards.md)
 - [Docker strategy](../deployment/docker.md)
+- [CI/CD strategy](../deployment/ci-cd.md) — what the workflow files in `.github/` verify
+- [Engineering AI workflow](../ai/engineering-ai.md) — what the definitions in `.claude/` implement
+- [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — the decision that introduced `scripts/`, `.github/workflows/`, and the delivery skill
