@@ -1,11 +1,12 @@
 # LearnFlow pull request verification.
 #
 # Runs the deterministic checks documented in docs/deployment/ci-cd.md:
-# backend tests, Ruff lint and format, and documentation validation.
+# backend tests, Ruff lint and format, documentation validation, and container
+# build validation.
 #
-# Frontend, database, container, and security-scanning jobs are deliberately
-# absent until the artifacts they check exist. Do not add a check here that is
-# not deterministic, documented, and runnable locally by the same command.
+# Frontend, database, and security-scanning jobs are deliberately absent until
+# the artifacts they check exist. Do not add a check here that is not
+# deterministic, documented, and runnable locally by the same command.
 
 name: pull-request
 
@@ -81,3 +82,20 @@ jobs:
 
       - name: Validate documentation front matter and links
         run: python scripts/validate_docs.py
+
+  containers:
+    name: Container build validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      # Validates service definitions and variable interpolation without
+      # starting anything. Compose defaults apply, so no .env file is needed.
+      - name: Validate Compose topology
+        run: docker compose config -q
+
+      # Catches dependency and build failures. No image is pushed to any
+      # registry; publication requires an approved deployment strategy first.
+      - name: Build backend image
+        run: docker build -f docker/backend.Dockerfile .

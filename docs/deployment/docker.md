@@ -6,6 +6,7 @@ last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - environments.md
+  - ci-cd.md
   - ../development/tech-stack.md
   - ../development/folder-structure.md
 ---
@@ -17,6 +18,8 @@ related:
 Define a reproducible local LearnFlow environment so the application, PostgreSQL, and ChromaDB can run consistently on another developer’s machine without separate native database setup.
 
 ## Initial Compose Topology
+
+This is the approved target topology:
 
 ```text
 compose.yaml
@@ -30,6 +33,44 @@ Host machine
 ```
 
 Ollama runs on the host initially. The backend receives its endpoint and configured model names through environment variables.
+
+## Implemented State
+
+`compose.yaml` currently defines the `backend` service only.
+
+| Service | State |
+| --- | --- |
+| `backend` | Implemented — builds from `docker/backend.Dockerfile`. |
+| `postgres` | Not implemented — no code reads `DATABASE_URL` or `POSTGRES_*`. |
+| `chromadb` | Not implemented — no code reads `CHROMA_URL`. |
+| `frontend` | Not implemented — no `frontend/` application exists. |
+
+Each remaining service joins `compose.yaml` in the change that implements the code consuming it. This
+follows the rule in [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md) that a
+configuration variable is added when its consumer exists: a `postgres` service today would need
+`POSTGRES_*` values that nothing reads and a readiness check the backend cannot yet perform.
+
+### Backend image and service decisions
+
+| Decision | Value |
+| --- | --- |
+| Base image | `python:3.14-slim`, matching the Python version the backend requires. |
+| Installed dependencies | `backend/requirements.txt` only. Test and lint tooling stays out of a runtime image. |
+| Copied source | `backend/app` only — the Dockerfile copies nothing else, and `.dockerignore` keeps tests and tooling out of the build context as well. |
+| Process user | A dedicated unprivileged `learnflow` user, not root. |
+| Entry point | `python -m app.main`, the form that honours `API_HOST` and `API_PORT`. |
+| Published port | Loopback only, so the API is not reachable from other devices on the local network. Both sides of the mapping follow `API_PORT`, which defaults to 8000. |
+| Health check | `GET /health` probed with a standard-library `urllib` call, so the image needs no extra package. |
+
+`.dockerignore` at the repository root keeps `.env` files, secrets, learner data, volumes, virtual
+environments, documentation, and CI configuration out of every build context. No image contains a
+`.env` file; Compose supplies configuration as environment variables.
+
+**Not yet built anywhere.** The change that added these files was prepared on a machine without
+Docker, so the image has never been built and the Compose file has never been validated by Docker
+itself. "Implemented" above means the definitions exist and CI checks them on every pull request; the
+first execution of `docker compose config -q` and `docker build` is that CI run. Until it passes,
+treat both files as written but unbuilt. This is also why the Milestone 1 Compose item stays unticked.
 
 ## Service Responsibilities
 
@@ -78,15 +119,21 @@ Variable naming follows the three categories defined in
 capability (`<CAPABILITY>_PROVIDER` and capability-level settings), and vendor
 (`<VENDOR>_<SETTING>`). All values are validated at backend startup.
 
-Compose supplies these variables to the backend and frontend services. When a container serves the
+Compose supplies these variables to the backend service, and to the frontend service once it exists.
+When a container serves the
 backend through `python -m app.main`, `API_HOST` must be `0.0.0.0` rather than the local default of
 `127.0.0.1`, or the service will not accept connections from outside the container. A container that
 invokes uvicorn directly must pass `--host 0.0.0.0` instead, because that form does not read
 `API_HOST`.
 
+`compose.yaml` therefore sets `API_HOST: 0.0.0.0` as a fixed value rather than interpolating it, so a
+developer's local `API_HOST=127.0.0.1` cannot reach the container and leave the service unreachable.
+`APP_ENV`, `APP_LOG_LEVEL`, and `API_PORT` do interpolate from the shell or a local `.env` file, with
+the documented defaults applied when unset.
+
 ## Local Development Commands
 
-The final README will provide tested commands. The expected workflow is:
+[README.md](../../README.md) documents the local container workflow. The commands are:
 
 ```bash
 # Build/start local services
@@ -121,10 +168,13 @@ Use `docker compose down -v` only with explicit care: it removes named volumes a
 
 ## Images and Builds
 
-- Backend image builds from `docker/backend.Dockerfile`.
-- Frontend image builds from `docker/frontend.Dockerfile`.
+- Backend image builds from `docker/backend.Dockerfile`. Implemented.
+- Frontend image builds from `docker/frontend.Dockerfile`. Added with the frontend application.
 - Use `.dockerignore` to exclude virtual environments, node modules, Git metadata where unnecessary, learner data, secrets, and build artifacts.
 - Keep image build stages reproducible; do not rely on untracked local files.
+- The build context is the repository root, so a Dockerfile can copy from `backend/`.
+- CI validates the Compose topology and builds the backend image on every pull request; see
+  [CI/CD strategy](ci-cd.md). No image is pushed to a registry.
 
 ## Database and Seed Workflow
 
@@ -158,6 +208,8 @@ The application must not silently create schema changes at startup outside the A
 - [ADR-009: Name and validate configuration variables explicitly](../adr/ADR-009-configuration-naming-and-validation.md) — the variable naming categories Compose supplies
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — why Ollama stays on the host rather than in Compose
 - [Environments](environments.md)
+- [CI/CD strategy](ci-cd.md) — the container checks that run on every pull request
+- [Repository and folder structure](../development/folder-structure.md) — where `compose.yaml`, `docker/`, and `.dockerignore` live
 - [Technology stack](../development/tech-stack.md)
 - [Database migrations](../database/migrations.md)
 - [Provider pattern](../architecture/provider-pattern.md)

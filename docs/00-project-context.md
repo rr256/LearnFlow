@@ -23,9 +23,9 @@ LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science 
 ## Current project state
 
 - Stage: documentation and architecture foundation, plus a minimal FastAPI backend foundation.
-- Implemented: a FastAPI application built through a composition-root application factory; validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, and `API_PORT`; and `GET /health`, an operational endpoint served outside `/api/v1`.
-- Delivery: changes reach `main` through a pull request. GitHub Actions runs backend tests, Ruff lint and format checks, and documentation validation on pull requests to `main` and pushes to `main`. See [CI/CD strategy](deployment/ci-cd.md) and [git workflow](development/git-workflow.md).
-- Not implemented: learner features, database persistence, Docker, AI and RAG, the frontend, curriculum data, and external integrations. Infer no application behavior beyond the implemented items above.
+- Implemented: a FastAPI application built through a composition-root application factory; validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, and `API_PORT`; `GET /health`, an operational endpoint served outside `/api/v1`; and a backend container image with a Docker Compose `backend` service.
+- Delivery: changes reach `main` through a pull request. GitHub Actions runs backend tests, Ruff lint and format checks, documentation validation, and container build validation on pull requests to `main` and pushes to `main`. See [CI/CD strategy](deployment/ci-cd.md) and [git workflow](development/git-workflow.md).
+- Not implemented: learner features, database persistence, AI and RAG, the frontend, curriculum data, and external integrations. Compose covers the backend only — the `postgres`, `chromadb`, and `frontend` services join it with the code that consumes them, per [Docker strategy](deployment/docker.md). Infer no application behavior beyond the implemented items above.
 - Decision status: use the documents in this repository and ADRs as the source of truth. Placeholders are intentionally not decisions.
 - Immediate objective: implement approved Milestone 1 scope, replacing relevant placeholders with approved project decisions before implementing each affected area.
 

@@ -9,6 +9,7 @@ related:
   - ../development/git-workflow.md
   - ../development/coding-standards.md
   - ../development/documentation-standards.md
+  - docker.md
   - ../adr/ADR-010-feature-delivery-workflow.md
 ---
 
@@ -24,19 +25,15 @@ The MVP does not require public deployment. Continuous integration protects code
 
 ### Continuous Integration
 
-CI configuration is implemented and covers the backend and the documentation set. Both existing jobs
-run on every pull request targeting `main` and on every push to `main`; the workflow applies no path
-filters, so a documentation-only change runs the backend job too. See
-[Implemented Workflow](#implemented-workflow) below.
+CI configuration is implemented and covers the backend, the documentation set, and the container
+build. All three jobs run on every pull request targeting `main` and on every push to `main`; the
+workflow applies no path filters, so a documentation-only change runs the backend and container jobs
+too. See [Implemented Workflow](#implemented-workflow) below.
 
-Three limits apply to the current state:
+Two limits apply to the current state:
 
-- **Hosted verification is pending.** Every check was verified locally when this change was prepared,
-  through the canonical [local quality checks](../development/coding-standards.md#local-quality-checks).
-  The first hosted GitHub Actions run happens when the pull request carrying the workflow is opened,
-  so no hosted run has executed yet.
-- **Frontend, database, and container checks are not implemented.** No `frontend/`, migration, or
-  Docker artifact exists to check; see the *CI Responsibilities* table below.
+- **Frontend and database checks are not implemented.** No `frontend/` application or migration exists
+  to check; see the *CI Responsibilities* table below.
 - **Branch protection is not configured.** CI results inform review, but nothing technically prevents
   a merge while a check is failing. Branch protection is a repository setting rather than a
   repository file, and is recorded as a deferred decision in the
@@ -56,25 +53,38 @@ CI verifies only stable, repeatable checks:
 | Backend | Dependency install, formatting/linting, type checks if configured, unit/API tests. | Implemented — Ruff lint, Ruff format check, pytest. |
 | Frontend | Dependency install, lint/type checks, unit/component tests when configured. | Not implemented — no `frontend/` exists. |
 | Database | Migration consistency checks and migration tests when migrations exist. | Not implemented — no migrations exist. |
-| Containers | Dockerfile/Compose build validation when Docker files exist. | Not implemented — no Docker artifacts exist. |
+| Containers | Compose topology validation and image build. | Implemented — backend image; the other services are added with their code. |
 | Security hygiene | Secret scanning and dependency review where supported. | Not implemented. |
 
 Do not add a CI check merely because it is common. Every check must be deterministic, documented, and fast enough to provide useful feedback. Add each pending check in the change that introduces the artifact it verifies.
 
 ## Implemented Workflow
 
-`.github/workflows/pull-request.yml` defines two independent jobs on Python 3.14:
+`.github/workflows/pull-request.yml` defines three independent jobs:
 
 | Job | Working directory | Commands |
 | --- | --- | --- |
 | `backend` | `backend/` | `python -m pip install -r requirements-dev.txt`, `python -m ruff check .`, `python -m ruff format --check .`, `python -m pytest` |
 | `documentation` | repository root | `python -m pip install -r backend/requirements-dev.txt`, `python -m ruff check --config backend/pyproject.toml scripts/`, `python -m ruff format --check --config backend/pyproject.toml scripts/`, `python scripts/validate_docs.py` |
+| `containers` | repository root | `docker compose config -q`, `docker build -f docker/backend.Dockerfile .` |
 
-Every verification command above also appears in the canonical
+The `backend` and `documentation` jobs run on Python 3.14. The `containers` job uses the Docker
+tooling preinstalled on the runner and needs no Python setup.
+
+Every Python verification command above also appears in the canonical
 [local quality checks](../development/coding-standards.md#local-quality-checks), with one deliberate
 difference: the canonical local set runs `python -m pytest -W error`, treating warnings as errors,
 while CI runs `python -m pytest`. The local set is therefore the stricter of the two. The `pip
 install` steps are dependency installation, not checks.
+
+The `containers` job commands are not in the canonical local set, which covers the Python checks that
+run without extra tooling. Container commands need a working Docker installation; run them locally
+when Docker is available, per [Docker strategy](docker.md).
+
+**No container command has been executed anywhere yet.** The change that introduced this job was
+prepared on a machine without Docker, so neither `docker compose config -q` nor the backend image
+build has run locally. The `containers` job on the pull request introducing it is their first
+execution. Until that run passes, treat the Compose file and Dockerfile as written but unbuilt.
 
 Properties that keep the workflow trustworthy:
 
@@ -106,20 +116,19 @@ remain the responsibility of the `documentation-reviewer` agent and human review
 
 ## Target Pipeline
 
-The implemented workflow runs the first two stages below as two independent parallel jobs. The
+The implemented workflow runs the first two stages below as three independent parallel jobs. The
 remaining stages describe the intended shape of the pipeline as the artifacts they check are added;
 they do not exist today.
 
 ```text
 Checkout source                                          # implemented
       ↓
-Validate documentation and run backend checks/tests      # implemented, in parallel
+Validate documentation, run backend checks/tests,
+and validate the container build                         # implemented, in parallel
       ↓
 Run frontend checks and tests                            # pending a frontend
       ↓
 Run migration/integration checks when applicable         # pending migrations
-      ↓
-Build container images when Docker artifacts exist       # pending Docker artifacts
       ↓
 Report pass/fail results                                 # implemented
 ```
@@ -131,16 +140,17 @@ Stages run in parallel when they have no shared state and use isolated test envi
 Current rules:
 
 - Feature branches must pass CI before merging to `main`.
-- Both jobs run on every pull request and every push to `main`, whatever the change touches.
+- All three jobs run on every pull request and every push to `main`, whatever the change touches.
 - A failing check must be understood before merge, or merged only on an explicit project-owner
   decision. Because branch protection is not configured, this is a convention that reviewers uphold
   rather than a restriction GitHub enforces.
 - Database changes require schema-documentation review.
+- Container and Compose changes are covered by the `containers` job, which validates the topology and
+  builds the backend image.
 
 Rules that take effect when the corresponding checks exist:
 
 - Database changes run migration tests.
-- Infrastructure and provider changes run Docker and configuration checks.
 
 ## Test Data and Secrets
 
@@ -161,7 +171,7 @@ When database tests are introduced:
 
 ## Container Build Policy
 
-When Dockerfiles and `compose.yaml` exist:
+The `containers` job implements this policy for the backend image:
 
 - Build images in CI to catch dependency/build failures.
 - Avoid pushing images to a public registry until a deployment strategy is approved.
@@ -208,7 +218,7 @@ conditions to each pending check in the *CI Responsibilities* table before addin
 - [Project context](../00-project-context.md)
 - [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — the decision this pipeline implements
 - [Environments](environments.md)
-- [Docker strategy](docker.md)
+- [Docker strategy](docker.md) — the images and topology the `containers` job validates
 - [Git workflow](../development/git-workflow.md)
 - [Coding standards](../development/coding-standards.md)
 - [Documentation standards](../development/documentation-standards.md) — the rules the documentation job enforces

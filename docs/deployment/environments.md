@@ -161,9 +161,10 @@ groups above and join `.env.example` in the change that implements their consume
 
 ## Local Environment
 
-The local environment uses:
+The local environment target uses:
 
-- Docker Compose services for frontend, backend, PostgreSQL, and ChromaDB.
+- Docker Compose services for frontend, backend, PostgreSQL, and ChromaDB. `compose.yaml` currently
+  defines the `backend` service only; see [Docker strategy](docker.md).
 - Host-machine Ollama for local generation/embedding models.
 - Local storage provider for learner-owned source resources.
 - Private local volumes for PostgreSQL, ChromaDB, and resource storage.
