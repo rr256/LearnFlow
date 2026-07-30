@@ -50,10 +50,13 @@ python -m pip install -r requirements-dev.txt   # runtime + test/lint tooling
 python -m pytest                                # tests
 python -m ruff check .                          # lint
 python -m ruff format --check .                 # formatting
-python -m uvicorn app.main:app --reload         # run locally
+python -m app.main                              # serve on API_HOST / API_PORT
+python -m uvicorn app.main:app --reload         # reload workflow (own --host/--port)
 ```
 
 Python 3.14 is required. `GET /health` is an operational endpoint served outside `/api/v1`.
+Configuration is validated at startup; see
+[`docs/deployment/environments.md`](docs/deployment/environments.md) for the variable catalogue.
 
 ## Never commit
 

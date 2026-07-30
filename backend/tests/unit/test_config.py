@@ -1,0 +1,89 @@
+"""Unit tests for validated backend configuration."""
+
+import pytest
+from pydantic import ValidationError
+
+from app.composition.config import AppEnv, LogLevel, Settings
+
+
+def test_defaults_apply_when_nothing_is_configured():
+    settings = Settings(_env_file=None)
+
+    assert settings.app_env is AppEnv.local
+    assert settings.app_log_level is LogLevel.info
+    assert settings.api_host == "127.0.0.1"
+    assert settings.api_port == 8000
+
+
+def test_environment_variables_override_defaults(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("APP_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("API_HOST", "0.0.0.0")
+    monkeypatch.setenv("API_PORT", "9001")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_env is AppEnv.staging
+    assert settings.app_log_level is LogLevel.debug
+    assert settings.api_host == "0.0.0.0"
+    assert settings.api_port == 9001
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        ("DEBUG", LogLevel.debug),
+        ("debug", LogLevel.debug),
+        ("Debug", LogLevel.debug),
+        ("INFO", LogLevel.info),
+        ("info", LogLevel.info),
+        ("WARNING", LogLevel.warning),
+        ("warning", LogLevel.warning),
+        ("ErRoR", LogLevel.error),
+        ("critical", LogLevel.critical),
+    ],
+)
+def test_log_level_is_accepted_in_any_casing(monkeypatch, configured, expected):
+    monkeypatch.setenv("APP_LOG_LEVEL", configured)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_log_level is expected
+    assert settings.app_log_level.value == expected.value.upper()
+
+
+@pytest.mark.parametrize("value", ["verbose", "trace", "", "warn"])
+def test_invalid_log_level_is_rejected(monkeypatch, value):
+    monkeypatch.setenv("APP_LOG_LEVEL", value)
+
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None)
+
+    assert "app_log_level" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("value", ["production ", "prod", "development", ""])
+def test_invalid_app_env_is_rejected(monkeypatch, value):
+    monkeypatch.setenv("APP_ENV", value)
+
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None)
+
+    assert "app_env" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("value", ["0", "65536", "-1", "not-a-port"])
+def test_invalid_api_port_is_rejected(monkeypatch, value):
+    monkeypatch.setenv("API_PORT", value)
+
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None)
+
+    assert "api_port" in str(excinfo.value)
+
+
+def test_port_boundaries_are_accepted(monkeypatch):
+    """1 and 65535 are valid; the range check must not be off by one."""
+    for port in (1, 65535):
+        monkeypatch.setenv("API_PORT", str(port))
+        assert Settings(_env_file=None).api_port == port

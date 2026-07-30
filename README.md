@@ -19,4 +19,16 @@ The [`docs/`](docs/) directory is the authoritative source of truth for this pro
 
 ## Project status
 
-Documentation and architecture foundation. The application is not yet implemented; no architecture should be inferred from the current repository contents.
+Documentation and architecture foundation, plus a minimal FastAPI backend foundation.
+
+**Implemented**
+
+- A FastAPI application served through a composition-root application factory.
+- Validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, and `API_PORT`.
+- `GET /health`, an operational endpoint served outside `/api/v1`.
+
+**Not implemented**
+
+Learner features, database persistence, Docker, AI and RAG, the frontend, curriculum data, and
+external integrations. Nothing beyond the three items above should be inferred from the current
+repository contents.

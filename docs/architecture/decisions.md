@@ -2,7 +2,7 @@
 title: LearnFlow Architecture Decision Register
 status: approved
 owner: architecture
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - ../adr/README.md
@@ -51,6 +51,7 @@ These are register statuses. They are distinct from the document `status` field 
 | DEC-019 | A checkpoint quiz covers one or more topics through a `checkpoint_quiz_topics` join table; the application requires at least one linked topic. | Approved | [Domain entities](../domain/entities.md), [Database schema](../database/schema.md) | Accepted — [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md) |
 | DEC-020 | Topic performance evidence belongs only to an external test result; checkpoint quiz outcomes reach topic progress through quiz attempts and question topic links. | Approved | [Domain model](../domain/domain-model.md), [Domain entities](../domain/entities.md) | Accepted — [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md) |
 | DEC-021 | Monthly plans are an MVP planning type alongside roadmap, weekly, and daily plans. | Approved | [MVP scope](../requirements/mvp.md), [Functional requirements](../requirements/functional.md), [Database schema](../database/schema.md) | Product decision; ADR optional |
+| DEC-022 | Configuration variables use three categories — core runtime (`APP_*`, `API_*`), capability (`<CAPABILITY>_PROVIDER` plus capability-level settings), and vendor (`<VENDOR>_<SETTING>`). `EMBEDDING_MODEL` is removed; `API_BASE_URL` is frontend configuration. `deployment/environments.md` is the authoritative catalogue, and configuration is validated before the application is created. | Approved | [Environments and configuration](../deployment/environments.md) | Accepted — [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md) |
 
 ## Deferred Decisions
 
@@ -64,7 +65,6 @@ These are register statuses. They are distinct from the document `status` field 
 | Mobile application | Keep backend APIs client-agnostic; do not build mobile clients now. | The web MVP is stable and real learner usage warrants it. |
 | Public cloud deployment | Use Docker Compose locally; do not host publicly now. | The product needs access beyond the learner's local machine. |
 | Automated syllabus extraction | Keep curriculum data model generic; do not auto-create curricula from PDFs now. | GATE CSE workflow is stable and a reviewed setup experience is designed. |
-| Exact configuration-variable names | Deployment documents list provisional environment-variable names, including more than one candidate for the embedding model. Do not rename, remove, or choose between them yet. | Configuration code is implemented; the names are then fixed in one authoritative place. |
 
 ## Accepted ADRs
 
@@ -80,6 +80,7 @@ These ADRs are accepted and hold the durable rationale, alternatives, and conseq
 | [ADR-006](../adr/ADR-006-custom-agent-orchestration.md) | Start with a custom product-agent orchestrator | DEC-014 |
 | [ADR-007](../adr/ADR-007-documentation-and-adr-policy.md) | Use repository documentation and ADRs as shared project memory | DEC-017 |
 | [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md) | Model assessment topics and mistake evidence sources explicitly | DEC-018, DEC-019, DEC-020 |
+| [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md) | Name and validate configuration variables explicitly | DEC-022 |
 
 Decisions still marked **ADR pending** above have an approved direction but no formal ADR yet. Create the ADR before or alongside implementation of the affected area.
 

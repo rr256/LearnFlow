@@ -34,6 +34,7 @@ Versions are pinned in implementation dependency files after compatibility is te
 | Containers | Docker + Docker Compose | Reproducible local services and environment. | Lets contributors run the same backend/database/vector setup without separate database installation. | Deployment mechanism can evolve later. |
 | Backend testing | Pytest | Domain, application, integration, and API tests. | Natural Python testing ecosystem. | Standard project tooling; exact plugins selected later. |
 | Backend lint/format | Ruff | Linting, formatting, and import sorting for Python. | One fast tool replaces separate formatter, import sorter, and linter. | Tooling choice; reversible without affecting application code. |
+| Backend configuration | pydantic-settings | Loads and validates environment configuration at startup. | Reuses the Pydantic validation already present through FastAPI; fails fast with field-level errors. | Confined to the composition root; see [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md). |
 | Frontend testing | TypeScript/React test tooling | Component and user-flow verification. | Needed for reliable learner-facing behavior. | Exact framework selected with frontend scaffold. |
 | API documentation | FastAPI/OpenAPI output plus repository docs | Machine-readable API schemas and human architecture docs. | Keeps frontend contracts and documentation aligned. | API contract remains independent of documentation renderer. |
 

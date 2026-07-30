@@ -2,7 +2,7 @@
 title: LearnFlow Environments and Configuration
 status: approved
 owner: development-and-operations
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - docker.md
@@ -39,19 +39,57 @@ Future environments are documented now to prevent local assumptions from becomin
 - Provider selection occurs in the composition root, not in domain/application logic.
 - Frontend-visible environment values must never include database URLs, storage credentials, or private provider secrets.
 
+## Variable Naming
+
+Every configuration variable belongs to one of three categories, defined in
+[ADR-009](../adr/ADR-009-configuration-naming-and-validation.md):
+
+| Category | Form | Purpose |
+| --- | --- | --- |
+| Core runtime | `APP_*`, `API_*` | How the application process itself runs. |
+| Capability | `<CAPABILITY>_PROVIDER`, plus capability-level settings | Which adapter fulfils an application port, and settings that stay meaningful whichever adapter is chosen. |
+| Vendor | `<VENDOR>_<SETTING>` | Settings meaningful only to one specific vendor. |
+
+For example, `AI_PROVIDER=ollama` selects the adapter (capability) and `OLLAMA_CHAT_MODEL`
+configures it (vendor). Switching providers keeps the first and replaces the second.
+
 ## Configuration Groups
+
+This document is the authoritative catalogue of LearnFlow configuration variables. Other documents
+link here rather than restating the list.
+
+A variable appears in `.env.example` only once the code that reads it exists. Variables listed below
+but not yet in `.env.example` are planned, not active.
 
 ### Application
 
-```text
-APP_ENV
-APP_LOG_LEVEL
-API_HOST
-API_PORT
-FRONTEND_ORIGIN
-```
+**Implemented.** These are read by `backend/app/composition/config.py` today.
+
+| Variable | Default | Accepted values |
+| --- | --- | --- |
+| `APP_ENV` | `local` | `local`, `test`, `staging`, `production` |
+| `APP_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` — accepted in any casing |
+| `API_HOST` | `127.0.0.1` | Bind address; use `0.0.0.0` inside a container |
+| `API_PORT` | `8000` | Integer, 1–65535 |
+
+`API_CORS_ALLOWED_ORIGINS` is a planned core-runtime setting for when CORS middleware is introduced.
+It carries the `API_` prefix because a CORS allow-list governs how the API process serves requests;
+it selects no capability adapter and names no vendor.
+
+`APP_LOG_LEVEL` is matched case-insensitively — `debug`, `Debug`, and `DEBUG` are all accepted — and
+normalised internally to the uppercase canonical form. Write it uppercase in `.env` files and
+documentation examples so the stored and configured values read the same.
+
+`API_HOST` and `API_PORT` are consumed by the `python -m app.main` entry point, which serves the
+application on that address. The `python -m uvicorn app.main:app` form takes its host and port from
+uvicorn's own arguments instead; use it for reload workflows and ASGI tooling.
+
+`API_BASE_URL` is **not** a backend variable. `API_HOST`/`API_PORT` are the address the backend
+binds to; the client-facing base URL is future frontend configuration.
 
 ### Database
+
+**Planned.** Added when persistence is implemented.
 
 ```text
 DATABASE_URL
@@ -62,15 +100,22 @@ POSTGRES_PASSWORD
 
 ### RAG and Storage
 
+**Planned.** Added when the storage and retrieval adapters are implemented.
+
 ```text
 RESOURCE_STORAGE_PROVIDER
 RESOURCE_STORAGE_PATH
 CHROMA_URL
 EMBEDDING_PROVIDER
-EMBEDDING_MODEL
 ```
 
+The embedding model is configured by the vendor-specific `OLLAMA_EMBEDDING_MODEL` below. There is
+no generic `EMBEDDING_MODEL` variable; ADR-009 removed it because two variables for one setting left
+the precedence undefined.
+
 ### AI Provider
+
+**Planned.** Added when the AI and embedding adapters are implemented.
 
 ```text
 AI_PROVIDER
@@ -93,20 +138,26 @@ Future provider variables remain absent from the MVP `.env` unless that provider
 
 The committed `.env.example` must:
 
-- Include every configuration variable required for a fresh local setup.
+- Include every **implemented** configuration variable, so a fresh local setup needs nothing else.
+- **Exclude planned variables until the code that reads them exists.** A variable in `.env.example`
+  that nothing consumes asks contributors to configure a service that is not there, and cannot be
+  validated at startup.
 - Use safe non-secret placeholders.
 - Explain values that have non-obvious format/meaning.
 - Not contain developer-specific local paths.
-- Be updated in the same change as a new required configuration variable.
+- Be updated in the same change that introduces or removes a configuration variable.
 
-Example form:
+The committed file therefore currently contains exactly the four implemented variables:
 
 ```text
 APP_ENV=local
-DATABASE_URL=postgresql://learnflow:CHANGE_ME@postgres:5432/learnflow
-AI_PROVIDER=ollama
-OLLAMA_BASE_URL=http://host.docker.internal:11434
+APP_LOG_LEVEL=INFO
+API_HOST=127.0.0.1
+API_PORT=8000
 ```
+
+Planned entries such as `DATABASE_URL`, `AI_PROVIDER`, and `OLLAMA_BASE_URL` are catalogued in the
+groups above and join `.env.example` in the change that implements their consumer.
 
 ## Local Environment
 
@@ -142,6 +193,10 @@ Before staging/production exists, the following rules still apply:
 
 ## Configuration Validation
 
+Configuration is validated in `backend/app/composition/config.py` when `Settings` is constructed.
+Invalid values raise before `create_app()` returns an application, so the process fails fast rather
+than starting in an unusable state. See [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md).
+
 The backend should validate at startup:
 
 - Required values are present for the selected environment.
@@ -164,6 +219,7 @@ Example: if `AI_PROVIDER=ollama`, the backend requires an Ollama endpoint and co
 
 - [Project context](../00-project-context.md)
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the decision this configuration serves
+- [ADR-009: Name and validate configuration variables explicitly](../adr/ADR-009-configuration-naming-and-validation.md) — the naming categories and validation approach this catalogue follows
 - [Docker strategy](docker.md)
 - [CI/CD](ci-cd.md)
 - [Technology stack](../development/tech-stack.md)
