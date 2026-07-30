@@ -2,7 +2,7 @@
 title: LearnFlow Technology Stack
 status: approved
 owner: architecture-and-development
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - ../architecture/overview.md
@@ -33,6 +33,7 @@ Versions are pinned in implementation dependency files after compatibility is te
 | Source-file storage | Local filesystem storage | Stores learner PDFs and private attachments. | Simple local-first setup. | Replaceable through `StorageProvider`; Azure Blob Storage is a future option. |
 | Containers | Docker + Docker Compose | Reproducible local services and environment. | Lets contributors run the same backend/database/vector setup without separate database installation. | Deployment mechanism can evolve later. |
 | Backend testing | Pytest | Domain, application, integration, and API tests. | Natural Python testing ecosystem. | Standard project tooling; exact plugins selected later. |
+| Backend lint/format | Ruff | Linting, formatting, and import sorting for Python. | One fast tool replaces separate formatter, import sorter, and linter. | Tooling choice; reversible without affecting application code. |
 | Frontend testing | TypeScript/React test tooling | Component and user-flow verification. | Needed for reliable learner-facing behavior. | Exact framework selected with frontend scaffold. |
 | API documentation | FastAPI/OpenAPI output plus repository docs | Machine-readable API schemas and human architecture docs. | Keeps frontend contracts and documentation aligned. | API contract remains independent of documentation renderer. |
 
@@ -71,7 +72,7 @@ Contributors need:
 
 - Git.
 - Docker Desktop / Docker Compose.
-- Python runtime compatible with the backend dependency lock/configuration.
+- Python 3.14 (the backend declares `requires-python = ">=3.14,<3.15"` in `backend/pyproject.toml`).
 - Node.js runtime compatible with the frontend dependency lock/configuration.
 - Ollama plus configured models for RAG/mentor features.
 

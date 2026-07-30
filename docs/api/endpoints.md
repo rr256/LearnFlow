@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - conventions.md
@@ -26,7 +26,7 @@ The MVP has one local learner. Learner-owned endpoints resolve the effective lea
 
 | ID | Method and path | Purpose | Notes |
 | --- | --- | --- | --- |
-| OPS-001 | `GET /health` | Report API readiness for local environment checks. | Operational endpoint; intentionally outside `/api/v1` so health probes stay stable across API major versions. Does not expose learner data or provider secrets. |
+| OPS-001 | `GET /health` | Report API readiness for local environment checks. | Operational endpoint; intentionally outside `/api/v1` so health probes stay stable across API major versions. Returns flat `{"status": "ok"}` with `200`, exempt from the `data` envelope. Does not expose learner data or provider secrets. |
 
 ## Curriculum Endpoints
 

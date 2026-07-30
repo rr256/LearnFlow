@@ -2,7 +2,7 @@
 title: LearnFlow API Conventions
 status: approved
 owner: architecture-and-api
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - endpoints.md
@@ -48,6 +48,14 @@ They report process readiness for local environment checks, container health pro
 
 Operational endpoints return no learner data, no curriculum content, and no provider configuration or secrets. Any endpoint that returns learner-facing data is an application endpoint and belongs under `/api/v1`, regardless of how simple it is.
 
+Operational endpoints are also exempt from the `data` response envelope described below. They return a flat object, because container health probes and monitoring tools read the status field directly and should not have to traverse an envelope:
+
+```json
+{ "status": "ok" }
+```
+
+This exemption applies only to operational endpoints. Every endpoint under `/api/v1` uses the envelope.
+
 ## Resource Naming
 
 - Use plural, lowercase, kebab-case resource names: `/study-plans`, `/resources`, `/quiz-attempts`. Separate words with hyphens; do not use underscores or camelCase in a path segment.
@@ -92,7 +100,7 @@ Use `202 Accepted` for resource ingestion, indexing, or other operations that ar
 
 ## Success Response Shapes
 
-Return the resource or action result directly under a `data` property.
+Application endpoints under `/api/v1` return the resource or action result directly under a `data` property. Operational endpoints are exempt, as described above.
 
 ```json
 {

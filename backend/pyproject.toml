@@ -1,0 +1,36 @@
+[project]
+name = "learnflow-backend"
+version = "0.1.0"
+description = "LearnFlow backend API"
+requires-python = ">=3.14,<3.15"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers --strict-config"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+# Module resolution root, so `app` and `tests` are treated as first-party imports.
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # import sorting
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "ANN", # missing type annotations
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test functions are self-describing and return None; annotations add noise.
+"tests/**" = ["ANN"]
+
+[tool.ruff.format]
+docstring-code-format = true
