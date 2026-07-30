@@ -1,0 +1,9 @@
+# LearnFlow backend runtime dependencies.
+#
+# Direct dependencies only. Transitive packages are resolved by pip and are not
+# pinned here, so a dependency upgrade does not require reconciling unrelated pins.
+#
+# Development and test tooling lives in requirements-dev.txt.
+
+fastapi==0.140.0
+uvicorn==0.51.0

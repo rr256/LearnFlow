@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -29,7 +29,9 @@ learnflow/
 ├── .gitignore
 ├── docs/                        # Authoritative engineering documentation
 ├── backend/
-│   ├── requirements.txt         # Initial Python dependency declaration
+│   ├── requirements.txt         # Direct runtime dependencies
+│   ├── requirements-dev.txt     # Runtime plus test/lint tooling
+│   ├── pyproject.toml           # Python requirement, pytest and Ruff configuration
 │   ├── app/
 │   │   ├── domain/
 │   │   ├── application/
@@ -77,6 +79,14 @@ learnflow/
 | `docs/` | The authoritative project context, design, ADRs, and workflow documentation. |
 
 ## Backend Structure
+
+### Backend Root Files
+
+| Path | Responsibility |
+| --- | --- |
+| `requirements.txt` | Direct runtime dependencies only. Transitive packages are resolved by pip and are not pinned, so upgrading one dependency does not require reconciling unrelated pins. |
+| `requirements-dev.txt` | Includes `requirements.txt` and adds test and tooling dependencies. This is the file contributors install. |
+| `pyproject.toml` | Python version requirement, pytest configuration, and Ruff lint/format configuration. |
 
 ### `backend/app/domain/`
 

@@ -2,7 +2,7 @@
 title: LearnFlow Coding Standards
 status: approved
 owner: architecture-and-development
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - folder-structure.md
@@ -63,9 +63,20 @@ Define code-quality expectations for LearnFlow contributors and AI assistants. T
 
 ### Python Formatting and Linting
 
-- Use an automated formatter and linter selected during backend scaffold work.
+Ruff is the selected formatter and linter. It covers formatting, linting, and import sorting in one
+tool, so no separate Black, isort, or flake8 configuration is used. Configuration lives in
+`backend/pyproject.toml`.
+
+```bash
+cd backend
+python -m ruff check .           # lint
+python -m ruff format .          # format
+python -m ruff format --check .  # verify formatting without writing
+```
+
+- Both checks must pass before a change is committed.
 - Do not manually reformat unrelated code in a feature change.
-- Keep imports ordered and remove unused imports.
+- Keep imports ordered and remove unused imports; Ruff enforces both.
 - Prefer standard-library features before adding a utility dependency.
 
 ## TypeScript and Frontend Standards
