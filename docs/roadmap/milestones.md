@@ -8,6 +8,7 @@ related:
   - roadmap.md
   - ../requirements/mvp.md
   - ../development/git-workflow.md
+  - ../deployment/ci-cd.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -119,7 +120,8 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 - [ ] Errors, logging, and health/readiness behavior are documented and tested where practical.
 - [ ] Database/resource backup and restore instructions are documented.
 - [ ] `.env.example`, `.gitignore`, Docker setup, and README are validated.
-- [ ] CI runs stable checks for documentation, code, tests, and builds.
+- [x] CI configuration runs documentation, lint, and backend test checks on pull requests and pushes to `main` (`.github/workflows/pull-request.yml`). Every check was verified locally when this change was prepared; the first hosted run executes on the pull request that introduces the workflow.
+- [ ] CI also covers frontend, migration, and container build checks, once those artifacts exist.
 - [ ] Major learner workflows have loading, empty, error, and success states.
 - [ ] Known limitations are documented rather than hidden.
 
@@ -147,4 +149,5 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 - [Roadmap](roadmap.md)
 - [MVP scope](../requirements/mvp.md)
 - [Git workflow](../development/git-workflow.md)
+- [CI/CD strategy](../deployment/ci-cd.md) — what CI verifies today and what remains pending
 - [Deferred ideas](future-ideas.md)

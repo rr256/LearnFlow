@@ -9,6 +9,9 @@ related:
   - ../architecture/dependency-rules.md
   - ../domain/terminology.md
   - git-workflow.md
+  - documentation-standards.md
+  - ../deployment/ci-cd.md
+  - ../adr/ADR-010-feature-delivery-workflow.md
 ---
 
 # LearnFlow Coding Standards
@@ -74,10 +77,32 @@ python -m ruff format .          # format
 python -m ruff format --check .  # verify formatting without writing
 ```
 
-- Both checks must pass before a change is committed.
+- Both checks must pass before a change is committed, as part of the [local quality checks](#local-quality-checks).
 - Do not manually reformat unrelated code in a feature change.
 - Keep imports ordered and remove unused imports; Ruff enforces both.
 - Prefer standard-library features before adding a utility dependency.
+
+## Local Quality Checks
+
+This is the canonical local check set for LearnFlow. Run all of it before committing a change. Other documents refer to this section rather than restating the commands.
+
+```bash
+cd backend
+python -m pytest -W error                                              # tests; warnings fail the run
+python -m ruff check .                                                 # backend lint
+python -m ruff format --check .                                        # backend formatting
+cd ..
+python -m ruff check --config backend/pyproject.toml scripts/          # repository scripts lint
+python -m ruff format --check --config backend/pyproject.toml scripts/ # repository scripts formatting
+python scripts/validate_docs.py                                        # documentation front matter and links
+```
+
+- Every command must pass. Do not suppress a check, weaken an assertion, or skip a test to make one pass.
+- `-W error` treats warnings as errors, so a deprecation surfaces in the change that introduced it rather than later.
+- Ruff configuration lives in `backend/pyproject.toml`. `scripts/` sits outside `backend/`, so its invocations name that configuration explicitly; both trees are held to the same rules.
+- The documentation validator enforces the mechanical rules in [documentation standards](documentation-standards.md) and runs from the repository root.
+
+CI runs these same checks on every pull request, with one difference: the workflow runs `python -m pytest` while this local set adds `-W error`, so the local run is the stricter of the two. See [CI/CD strategy](../deployment/ci-cd.md).
 
 ## TypeScript and Frontend Standards
 
@@ -181,3 +206,6 @@ Before adding a dependency:
 - [API conventions](../api/conventions.md)
 - [Database migrations](../database/migrations.md)
 - [Git workflow](git-workflow.md)
+- [CI/CD strategy](../deployment/ci-cd.md) — the pipeline that enforces the checks defined here
+- [Documentation standards](documentation-standards.md) — the rules the documentation validator checks
+- [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md)

@@ -2,13 +2,14 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - ../architecture/overview.md
   - ../architecture/clean-architecture.md
   - ../domain/terminology.md
   - ../rag/overview.md
+  - engineering-ai.md
 ---
 
 # LearnFlow Product Agents
@@ -18,6 +19,8 @@ related:
 Define the specialized learning responsibilities inside LearnFlow.
 
 “Agent” in LearnFlow means a focused application capability with a clear responsibility, controlled inputs, permitted tools, and predictable outputs. It does **not** mean an autonomous process that can freely access databases, files, or external services.
+
+This document covers **product agents** only. The engineering assistant subagents defined under `.claude/agents/`, such as the documentation reviewer, are a separate and unrelated sense of the word; see [engineering AI workflow](engineering-ai.md#review-agent).
 
 ## Design Decision
 
@@ -271,4 +274,4 @@ Potential future needs include long-running workflow checkpoints, multi-agent ha
 - [Domain terminology](../domain/terminology.md) — the canonical vocabulary for stages, evidence, and focus areas used here
 - [RAG overview](../rag/overview.md)
 - [Functional requirements](../requirements/functional.md)
-- [Engineering AI workflow](engineering-ai.md)
+- [Engineering AI workflow](engineering-ai.md) — the engineering assistant subagents, a separate sense of “agent” from the product agents defined here

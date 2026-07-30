@@ -2,12 +2,15 @@
 title: LearnFlow Documentation Standards
 status: approved
 owner: project-governance
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - ../adr/ADR-000-template.md
   - git-workflow.md
   - ../ai/engineering-ai.md
+  - coding-standards.md
+  - ../deployment/ci-cd.md
+  - ../adr/ADR-010-feature-delivery-workflow.md
 ---
 
 # LearnFlow Documentation Standards
@@ -64,11 +67,11 @@ related:
 
 ## Document Statuses
 
-LearnFlow uses two separate status vocabularies. Ordinary documents under `docs/` use the normal-document statuses. Files under `docs/adr/` use the ADR statuses, because an ADR records a decision rather than describing current direction.
+LearnFlow uses two separate status vocabularies. ADR decision files use the ADR statuses, because an ADR records a decision rather than describing current direction. Every other maintained document under `docs/` uses the normal-document statuses, including the two non-decision files that live under `docs/adr/`. [Which Vocabulary Applies, By Path](#which-vocabulary-applies-by-path) resolves every path.
 
 ### Normal Document Statuses
 
-Applies to every maintained document except ADRs.
+Applies to every maintained document except ADR decision files — including `docs/adr/ADR-000-template.md` and `docs/adr/README.md`.
 
 | Status | Meaning |
 | --- | --- |
@@ -80,7 +83,7 @@ Applies to every maintained document except ADRs.
 
 ### ADR Statuses
 
-Applies to files under `docs/adr/`.
+Applies to ADR decision files only — `docs/adr/ADR-NNN-*.md` except `ADR-000-template.md`.
 
 | Status | Meaning |
 | --- | --- |
@@ -89,7 +92,18 @@ Applies to files under `docs/adr/`.
 | `superseded` | Replaced by a later ADR. Retained for history; link to the replacement. |
 | `rejected` | Considered and deliberately not adopted. Retained so the reasoning is not revisited blindly. |
 
-`ADR-000-template.md` is the one file under `docs/adr/` that uses the normal-document status `template`, because it is a reusable format rather than a decision.
+### Which Vocabulary Applies, By Path
+
+A file's location and name decide which vocabulary applies to it:
+
+| Path | Document type | Vocabulary |
+| --- | --- | --- |
+| `docs/adr/ADR-NNN-*.md`, except `ADR-000-template.md` | An ADR decision file | ADR statuses |
+| `docs/adr/ADR-000-template.md` | A reusable format, not a decision | Normal statuses — always `template` |
+| `docs/adr/README.md` | Navigation for the ADR directory, not a decision | Normal statuses — `approved` |
+| Every other maintained document under `docs/` | Normal document | Normal statuses |
+
+**ADR decision files are `docs/adr/ADR-NNN-*.md`, with `ADR-000-template.md` excluded by name.** `docs/adr/ADR-000-template.md` and `docs/adr/README.md` are normal documentation files and carry normal-document statuses — `template` and `approved` respectively. There are exactly these two non-decision exceptions under `docs/adr/`.
 
 Do not use `draft` or `approved` on an ADR, and do not use `accepted` or `rejected` on a normal document.
 
@@ -134,6 +148,25 @@ Not every document needs every heading, but every document must state its purpos
 - Update links when moving/renaming a document.
 - Include a `## Related Documents` section at the end of maintained design documents.
 - Do not duplicate a full explanation merely to avoid a link.
+
+## Mechanical Validation
+
+`scripts/validate_docs.py` enforces the parts of this document that a script can check, and CI runs it on every pull request. It checks that:
+
+- Front matter is present, is a YAML mapping, and carries `title`, `status`, `owner`, `last_updated`, and `related`.
+- `status` is valid for the document's type, resolved by the path rules in [Which Vocabulary Applies, By Path](#which-vocabulary-applies-by-path).
+- `last_updated` is a real `YYYY-MM-DD` date that is not in the future.
+- A `superseded` document links to its replacement.
+- Every `related:` path, relative Markdown link, and heading anchor resolves, across `docs/`, `README.md`, and `CLAUDE.md`.
+
+Two deliberate exemptions keep the validator aligned with these rules:
+
+- A document whose `status` is `template` is exempt from the real-date check, because `ADR-000-template.md` carries `YYYY-MM-DD` as a placeholder by design.
+- Links inside fenced code blocks are examples rather than navigation, so they are not resolved.
+
+The validator does not judge content. Duplicated or conflicting decisions, missing ADRs, and terminology drift are reviewed by the `documentation-reviewer` agent and by people.
+
+Run it as part of the canonical [local quality checks](coding-standards.md#local-quality-checks).
 
 ## Documentation Update Triggers
 
@@ -201,4 +234,7 @@ Before committing a meaningful documentation change:
 - [Architecture decision register](../architecture/decisions.md)
 - [ADR template](../adr/ADR-000-template.md)
 - [Git workflow](git-workflow.md)
+- [Coding standards](coding-standards.md) — the canonical local check set that runs the validator
+- [CI/CD strategy](../deployment/ci-cd.md) — the pipeline that enforces these rules on every pull request
+- [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md)
 - [Engineering AI workflow](../ai/engineering-ai.md)
