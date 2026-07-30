@@ -132,9 +132,9 @@ Future multi-user/cloud expansion only when justified
 - Error handling, logs, health/readiness checks, backup/restore instructions.
 - Improved UI states, accessibility basics, and performance feedback.
 - CI verification for stable checks. The workflow configuration is implemented — backend tests, Ruff
-  lint and format checks, and documentation validation, per [CI/CD strategy](../deployment/ci-cd.md).
-  Hosted GitHub Actions verification remains pending the first pull request run, and frontend,
-  migration, and container checks are added with the artifacts they verify.
+  lint and format checks, documentation validation, and container build validation, per
+  [CI/CD strategy](../deployment/ci-cd.md). Hosted GitHub Actions verification remains pending the
+  first pull request run, and frontend and migration checks are added with the artifacts they verify.
 - README and setup guide validated on a clean machine where possible.
 
 **Exit criteria:** the learner can use LearnFlow daily without fragile setup, unexplained failures, or risk of silent data loss.

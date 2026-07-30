@@ -53,6 +53,20 @@ python -m uvicorn app.main:app --reload         # reload workflow (own --host/--
 
 Tests, lint, and formatting are part of the repository check set below.
 
+Local containers — `compose.yaml` defines the `backend` service only; PostgreSQL, ChromaDB, and the
+frontend join it with the code that uses them:
+
+```bash
+docker compose up --build                       # build and start
+docker compose logs -f backend                  # follow logs
+docker compose down                             # stop, preserving volumes
+docker compose config -q                        # validate the topology
+docker build -f docker/backend.Dockerfile .      # validate the image build
+```
+
+`docker compose down -v` deletes named volumes and is destructive; never present it as a routine
+stop command. See [`docs/deployment/docker.md`](docs/deployment/docker.md).
+
 Python 3.14 is required. `GET /health` is an operational endpoint served outside `/api/v1`.
 Configuration is validated at startup; see
 [`docs/deployment/environments.md`](docs/deployment/environments.md) for the variable catalogue.

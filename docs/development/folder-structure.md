@@ -9,6 +9,7 @@ related:
   - ../architecture/clean-architecture.md
   - ../architecture/dependency-rules.md
   - ../deployment/ci-cd.md
+  - ../deployment/docker.md
   - ../adr/ADR-010-feature-delivery-workflow.md
 ---
 
@@ -62,6 +63,7 @@ learnflow/
 │   ├── types/                   # Frontend types derived from API contracts
 │   ├── tests/
 │   └── public/
+├── .dockerignore                # Build-context exclusions for all images
 ├── docker/
 │   ├── backend.Dockerfile
 │   └── frontend.Dockerfile
@@ -81,7 +83,8 @@ learnflow/
 | --- | --- |
 | `README.md` | Project introduction, quick start, and links to documentation. |
 | `CLAUDE.md` | Concise repository instructions for Claude Code and compatible implementation assistants. It links to `docs/00-project-context.md`; it does not duplicate the handbook. |
-| `compose.yaml` | Local service composition for frontend, backend, PostgreSQL, and ChromaDB. |
+| `compose.yaml` | Local service composition for frontend, backend, PostgreSQL, and ChromaDB. Currently defines the `backend` service only; see [Docker strategy](../deployment/docker.md). |
+| `.dockerignore` | Build-context exclusions shared by every image: secrets, `.env` files, learner data, volumes, virtual environments, documentation, and CI configuration. |
 | `.env.example` | Safe environment-variable names/examples; no secrets. |
 | `.gitignore` | Excludes virtual environments, node modules, local data, secrets, generated artifacts, and model/index data. |
 | `docs/` | The authoritative project context, design, ADRs, and workflow documentation. |
@@ -211,6 +214,11 @@ TypeScript types based on public API contracts. Do not copy database/ORM types i
 
 Contains Dockerfiles and small container build assets. Runtime configuration remains in `compose.yaml` and environment files.
 
+| Path | Responsibility |
+| --- | --- |
+| `backend.Dockerfile` | Backend runtime image, built from the repository root so it can copy `backend/`. [Docker strategy](../deployment/docker.md) records the image decisions. |
+| `frontend.Dockerfile` | Added with the frontend application. |
+
 ### `scripts/`
 
 Contains repository-level repeatable utilities, such as documentation validation, development setup checks, or release helpers. Scripts must be documented and must not contain personal paths/secrets.
@@ -247,9 +255,9 @@ project decisions: authority stays in `docs/` and the ADRs.
 
 ### `.github/`
 
-Contains GitHub configuration. `workflows/pull-request.yml` defines the backend and documentation
-checks described in [CI/CD strategy](../deployment/ci-cd.md). Workflow files must not contain
-credentials, tokens, or deployment steps.
+Contains GitHub configuration. `workflows/pull-request.yml` defines the backend, documentation, and
+container build checks described in [CI/CD strategy](../deployment/ci-cd.md). Workflow files must not
+contain credentials, tokens, or deployment steps.
 
 ## Local and Generated Data
 
@@ -281,7 +289,7 @@ Local data locations are configured through environment variables and Docker vol
 - [Dependency rules](../architecture/dependency-rules.md)
 - [Technology stack](tech-stack.md)
 - [Coding standards](coding-standards.md)
-- [Docker strategy](../deployment/docker.md)
+- [Docker strategy](../deployment/docker.md) — what `compose.yaml`, `docker/`, and `.dockerignore` contain today
 - [CI/CD strategy](../deployment/ci-cd.md) — what the workflow files in `.github/` verify
 - [Engineering AI workflow](../ai/engineering-ai.md) — what the definitions in `.claude/` implement
 - [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — the decision that introduced `scripts/`, `.github/workflows/`, and the delivery skill

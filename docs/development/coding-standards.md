@@ -102,7 +102,9 @@ python scripts/validate_docs.py                                        # documen
 - Ruff configuration lives in `backend/pyproject.toml`. `scripts/` sits outside `backend/`, so its invocations name that configuration explicitly; both trees are held to the same rules.
 - The documentation validator enforces the mechanical rules in [documentation standards](documentation-standards.md) and runs from the repository root.
 
-CI runs these same checks on every pull request, with one difference: the workflow runs `python -m pytest` while this local set adds `-W error`, so the local run is the stricter of the two. See [CI/CD strategy](../deployment/ci-cd.md).
+This set covers the checks that need nothing beyond Python and the pinned development dependencies. Container commands require a Docker installation and are documented in [Docker strategy](../deployment/docker.md) instead.
+
+CI runs every check in this set on each pull request, with one difference: the workflow runs `python -m pytest` while this local set adds `-W error`, so the local run is the stricter of the two. CI additionally validates the Compose topology and builds the backend image. See [CI/CD strategy](../deployment/ci-cd.md).
 
 ## TypeScript and Frontend Standards
 

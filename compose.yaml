@@ -1,0 +1,53 @@
+# LearnFlow local development services.
+#
+# Currently defines the backend service only. The approved target topology in
+# docs/deployment/docker.md also includes postgres, chromadb, and frontend; each
+# joins this file in the change that implements the code consuming it, so no
+# service here is unused or unconfigurable. Ollama runs on the host.
+#
+#   docker compose up --build        start, building images as needed
+#   docker compose logs -f backend   follow backend logs
+#   docker compose down              stop, preserving any named volumes
+#
+# `docker compose down -v` deletes named volumes and is destructive. It is not a
+# routine stop command.
+
+name: learnflow
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment:
+      # Values interpolate from the shell or a local .env file, with the
+      # documented defaults applied when unset. docs/deployment/environments.md
+      # is the authoritative catalogue.
+      APP_ENV: ${APP_ENV:-local}
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      # Fixed, not interpolated: `python -m app.main` binds this address, and a
+      # container must listen on 0.0.0.0 to accept connections from the host. A
+      # developer's local API_HOST=127.0.0.1 must not reach the container.
+      API_HOST: 0.0.0.0
+      API_PORT: ${API_PORT:-8000}
+    # Published on the loopback interface only, so the API is not exposed to
+    # other devices on the local network.
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:${API_PORT:-8000}"
+    # GET /health is the operational endpoint served outside /api/v1. urllib is
+    # standard library, so the image needs no extra health-probe package.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request
+          with urllib.request.urlopen(
+              "http://127.0.0.1:${API_PORT:-8000}/health", timeout=2
+          ) as response:
+              raise SystemExit(0 if response.status == 200 else 1)
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

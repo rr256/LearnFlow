@@ -1,0 +1,81 @@
+# ---------------------------------------------------------------------------
+# Build-context exclusions for LearnFlow images.
+#
+# The build context is the repository root. Everything a runtime image does not
+# need is excluded here: local environments, private data, secrets, tooling, and
+# documentation. See docs/deployment/docker.md.
+# ---------------------------------------------------------------------------
+
+# --- Secrets and local configuration ----------------------------------------
+# No .env file ever enters an image. Compose supplies configuration as
+# environment variables. .env.example is documentation, not runtime input.
+.env
+.env.*
+.env.example
+*.pem
+*.key
+secrets/
+
+# --- Version control and CI -------------------------------------------------
+.git/
+.gitignore
+.github/
+.claude/
+
+# --- Documentation and repository tooling -----------------------------------
+docs/
+scripts/
+README.md
+CLAUDE.md
+compose.yaml
+docker/
+
+# --- Python local and generated ---------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Backend files not needed at runtime ------------------------------------
+backend/tests/
+backend/scripts/
+backend/requirements-dev.txt
+backend/pyproject.toml
+
+# --- Node.js and Next.js ----------------------------------------------------
+node_modules/
+.next/
+out/
+.turbo/
+
+# --- Learner data and runtime volumes ---------------------------------------
+storage/
+uploads/
+data/
+resource_storage/
+chroma/
+chroma_data/
+postgres_data/
+pgdata/
+volumes/
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Logs, IDE, and OS ------------------------------------------------------
+logs/
+*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
