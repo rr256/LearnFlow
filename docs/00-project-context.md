@@ -2,7 +2,7 @@
 title: LearnFlow Project Context
 status: approved
 owner: project-governance
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 audience: all-contributors-and-ai-assistants
 read_before: any-design-or-implementation-task
 related:
@@ -22,10 +22,11 @@ LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science 
 
 ## Current project state
 
-- Stage: documentation and architecture foundation.
-- Implementation status: backend environment may exist, but no application architecture should be inferred from it.
+- Stage: documentation and architecture foundation, plus a minimal FastAPI backend foundation.
+- Implemented: a FastAPI application built through a composition-root application factory; validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, and `API_PORT`; and `GET /health`, an operational endpoint served outside `/api/v1`.
+- Not implemented: learner features, database persistence, Docker, AI and RAG, the frontend, curriculum data, and external integrations. Infer no application behavior beyond the implemented items above.
 - Decision status: use the documents in this repository and ADRs as the source of truth. Placeholders are intentionally not decisions.
-- Immediate objective: replace relevant placeholders with approved project decisions before implementing the affected area.
+- Immediate objective: implement approved Milestone 1 scope, replacing relevant placeholders with approved project decisions before implementing each affected area.
 
 ## Non-negotiable engineering direction
 
@@ -72,6 +73,7 @@ Accepted ADRs:
 - [ADR-006 — Start with a custom product-agent orchestrator](adr/ADR-006-custom-agent-orchestration.md)
 - [ADR-007 — Use repository documentation and ADRs as shared project memory](adr/ADR-007-documentation-and-adr-policy.md)
 - [ADR-008 — Model assessment topics and mistake evidence sources explicitly](adr/ADR-008-assessment-and-mistake-evidence-model.md)
+- [ADR-009 — Name and validate configuration variables explicitly](adr/ADR-009-configuration-naming-and-validation.md)
 
 ### Design and implementation
 

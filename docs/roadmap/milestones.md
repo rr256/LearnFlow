@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -22,15 +22,15 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 
 ### Definition of Done
 
-- [ ] `docs/00-project-context.md` is the mandatory project entry point and links resolve.
-- [ ] Vision, MVP, functional, and non-functional requirements are approved.
-- [ ] Domain model, entities, and terminology are approved.
-- [ ] Architecture overview, Clean Architecture, provider pattern, and dependency rules are approved.
-- [ ] Database, API, RAG, AI workflow, development, deployment, and roadmap documentation is present and cross-linked.
-- [ ] Architecture decision register reflects approved and deferred decisions.
-- [ ] Required ADRs are created or explicitly scheduled before related implementation begins.
-- [ ] No duplicate documentation folder remains as a competing source of truth.
-- [ ] Documentation changes are committed in a reviewable Git commit.
+- [x] `docs/00-project-context.md` is the mandatory project entry point and links resolve.
+- [x] Vision, MVP, functional, and non-functional requirements are approved.
+- [x] Domain model, entities, and terminology are approved.
+- [x] Architecture overview, Clean Architecture, provider pattern, and dependency rules are approved.
+- [x] Database, API, RAG, AI workflow, development, deployment, and roadmap documentation is present and cross-linked.
+- [x] Architecture decision register reflects approved and deferred decisions.
+- [x] Required ADRs are created or explicitly scheduled before related implementation begins.
+- [x] No duplicate documentation folder remains as a competing source of truth.
+- [x] Documentation changes are committed in a reviewable Git commit.
 
 ## Milestone 1 — Local Platform Foundation
 
@@ -39,10 +39,10 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 ### Definition of Done
 
 - [ ] Repository skeleton follows `docs/development/folder-structure.md`.
-- [ ] Backend starts through FastAPI application factory/composition root.
-- [ ] `GET /health` returns a safe readiness response.
+- [x] Backend starts through FastAPI application factory/composition root.
+- [x] `GET /health` returns a safe readiness response.
 - [ ] Docker Compose starts frontend, backend, PostgreSQL, and ChromaDB.
-- [ ] Backend configuration is validated from environment variables.
+- [x] Backend configuration is validated from environment variables.
 - [ ] Alembic initializes and applies an initial migration to a fresh PostgreSQL database.
 - [ ] Curated GATE CSE curriculum seed/import is idempotent.
 - [ ] Curriculum API endpoints return data-driven program/subject/topic hierarchy.

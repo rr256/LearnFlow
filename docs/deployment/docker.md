@@ -2,7 +2,7 @@
 title: LearnFlow Docker Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-07-29
+last_updated: 2026-07-30
 related:
   - ../00-project-context.md
   - environments.md
@@ -69,34 +69,20 @@ Rules:
 
 Use `.env` for local values and commit only `.env.example`.
 
-Expected configuration groups include:
+[Environments and configuration](environments.md) is the authoritative catalogue of every LearnFlow
+configuration variable, including which are implemented and which are planned. It is not duplicated
+here, so the two documents cannot drift apart.
 
-```text
-# Application
-APP_ENV
-API_BASE_URL
+Variable naming follows the three categories defined in
+[ADR-009](../adr/ADR-009-configuration-naming-and-validation.md): core runtime (`APP_*`, `API_*`),
+capability (`<CAPABILITY>_PROVIDER` and capability-level settings), and vendor
+(`<VENDOR>_<SETTING>`). All values are validated at backend startup.
 
-# PostgreSQL
-POSTGRES_DB
-POSTGRES_USER
-POSTGRES_PASSWORD
-DATABASE_URL
-
-# ChromaDB
-CHROMA_URL
-
-# Resource storage
-RESOURCE_STORAGE_PROVIDER
-RESOURCE_STORAGE_PATH
-
-# Ollama / AI
-AI_PROVIDER
-OLLAMA_BASE_URL
-OLLAMA_CHAT_MODEL
-OLLAMA_EMBEDDING_MODEL
-```
-
-Exact variable names are finalized when configuration code is introduced. All values must be validated at backend startup.
+Compose supplies these variables to the backend and frontend services. When a container serves the
+backend through `python -m app.main`, `API_HOST` must be `0.0.0.0` rather than the local default of
+`127.0.0.1`, or the service will not accept connections from outside the container. A container that
+invokes uvicorn directly must pass `--host 0.0.0.0` instead, because that form does not read
+`API_HOST`.
 
 ## Local Development Commands
 
@@ -169,6 +155,7 @@ The application must not silently create schema changes at startup outside the A
 
 - [Project context](../00-project-context.md)
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the decision this document implements
+- [ADR-009: Name and validate configuration variables explicitly](../adr/ADR-009-configuration-naming-and-validation.md) — the variable naming categories Compose supplies
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — why Ollama stays on the host rather than in Compose
 - [Environments](environments.md)
 - [Technology stack](../development/tech-stack.md)

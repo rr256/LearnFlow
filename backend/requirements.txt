@@ -6,4 +6,5 @@
 # Development and test tooling lives in requirements-dev.txt.
 
 fastapi==0.140.0
+pydantic-settings==2.14.2
 uvicorn==0.51.0
