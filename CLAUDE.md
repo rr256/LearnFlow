@@ -51,16 +51,23 @@ python -m app.main                              # serve on API_HOST / API_PORT
 python -m uvicorn app.main:app --reload         # reload workflow (own --host/--port)
 python -m alembic upgrade head                  # apply the database schema
 python -m scripts.seed_curriculum               # load the curated curriculum, idempotently
+python -m scripts.seed_examination_schedule     # load the published examination schedule
+python -m scripts.set_study_goal                # bind the local learner to both
 ```
 
 Tests, lint, and formatting are part of the repository check set below.
 
 Database — PostgreSQL through SQLAlchemy and Alembic. `DATABASE_URL` is required and has no default.
 Migrations are never applied automatically, by startup or by a container entrypoint. The schema is
-migrated one area per milestone; only the curriculum tables exist today. The curated GATE CSE
-curriculum is loaded by an idempotent seed, not by a migration — it matches records on a natural key
-and never deletes, so it is safe to repeat. See
+migrated one area per milestone; the curriculum tables, the examination schedule tables, and
+`learners` and `study_goals` exist today. Curated content is loaded by idempotent seeds, not by
+migrations — each matches records on a natural key and never deletes, so both are safe to repeat.
+Run them in the order above; each refuses to run ahead of its predecessor. See
 [`docs/database/migrations.md`](docs/database/migrations.md).
+
+An examination is stored as a dated **window**, never as a single guessed date, and a published
+schedule keeps its source and its `provisional`/`confirmed` status. See
+[`docs/adr/ADR-013-examination-schedule-and-study-goal.md`](docs/adr/ADR-013-examination-schedule-and-study-goal.md).
 
 Local containers — `compose.yaml` defines the `backend` and `postgres` services; ChromaDB and the
 frontend join them with the code that uses them:

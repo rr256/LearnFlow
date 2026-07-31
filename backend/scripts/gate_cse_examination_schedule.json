@@ -1,0 +1,76 @@
+{
+  "$comment": [
+    "Published examination schedule for GATE 2027, the examination cycle the",
+    "bundled GATE CSE curriculum is transcribed from.",
+    "",
+    "Source: the GATE 2027 website published by IIT Madras, the organising",
+    "institute -- https://gate2027.iitm.ac.in/ -- recorded in `source_reference`",
+    "below and read on the date in `source_checked_on`.",
+    "",
+    "`schedule_status` is `provisional`, and must stay so until the organising",
+    "institute confirms the dates. The source states that every date it publishes",
+    "is liable to change, and a schedule stored without that qualification would",
+    "read as settled fact in every plan built against it.",
+    "",
+    "Transcription rules, applied uniformly so the file stays checkable against",
+    "the source:",
+    "  * One period per published date or date range. A period that occupies a",
+    "    single day repeats that day in `starts_on` and `ends_on`.",
+    "  * The three examination weekends are three separate `examination` periods,",
+    "    not one 6-21 February range. The weekdays between them are not sitting",
+    "    days, and spanning them would put eleven days into the examination",
+    "    window that no examination occupies.",
+    "  * No period names the day the Computer Science paper itself is sat. The",
+    "    organising institute has not published it. The examination window is what",
+    "    is known; a single CS date would be a guess presented as a deadline.",
+    "  * `results` is the announcement day, 19 March 2027.",
+    "",
+    "One inference, recorded because the source does not state it directly:",
+    "  * The source publishes closing dates for registration -- 21 September 2026",
+    "    at the regular fee, 30 September 2026 with the late fee -- rather than an",
+    "    opening date for the late period. `late_registration` is therefore",
+    "    recorded as beginning the day after regular registration closes, which is",
+    "    the only reading consistent with both published dates. If the institute",
+    "    later publishes an explicit opening date, correct this entry and re-run",
+    "    the seed; it updates the period in place."
+  ],
+  "program_code": "gate-cse",
+  "cycle_label": "2027",
+  "name": "GATE 2027",
+  "organising_body": "IIT Madras",
+  "source_reference": "https://gate2027.iitm.ac.in/",
+  "source_checked_on": "2026-08-01",
+  "schedule_status": "provisional",
+  "periods": [
+    {
+      "period_type": "registration",
+      "starts_on": "2026-08-14",
+      "ends_on": "2026-09-21"
+    },
+    {
+      "period_type": "late_registration",
+      "starts_on": "2026-09-22",
+      "ends_on": "2026-09-30"
+    },
+    {
+      "period_type": "examination",
+      "starts_on": "2027-02-06",
+      "ends_on": "2027-02-07"
+    },
+    {
+      "period_type": "examination",
+      "starts_on": "2027-02-13",
+      "ends_on": "2027-02-14"
+    },
+    {
+      "period_type": "examination",
+      "starts_on": "2027-02-20",
+      "ends_on": "2027-02-21"
+    },
+    {
+      "period_type": "results",
+      "starts_on": "2027-03-19",
+      "ends_on": "2027-03-19"
+    }
+  ]
+}

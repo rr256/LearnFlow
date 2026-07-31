@@ -2,7 +2,7 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-30
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - ../architecture/overview.md
@@ -66,7 +66,7 @@ Create and adapt the learner's roadmap, monthly, weekly, and daily plan.
 
 ### Inputs
 
-- Active study goal and target date.
+- Active study goal and its horizon — an examination window, a target date, or both.
 - Availability slots and planning preferences.
 - Curriculum structure and topic relationships.
 - Topic progress, revision records, pending plan items, and assessment evidence.

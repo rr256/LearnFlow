@@ -2,11 +2,12 @@
 title: LearnFlow Domain Model
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-29
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - entities.md
   - terminology.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../requirements/functional.md
   - ../database/schema.md
 ---
@@ -23,6 +24,8 @@ The model is intentionally generic. GATE CSE is the first curated learning progr
 
 ```text
 Learning Program
+  ├── Examination Schedule
+  │    └── Examination Period
   └── Subject
        └── Topic / Subtopic
             ├── Learning Resource
@@ -71,9 +74,23 @@ A learner-owned or curated reference used for study. Examples include PDF notes,
 
 A resource can be linked to one or more subjects, topics, or subtopics. Resource content is distinct from the curriculum structure and from learner progress.
 
+### Examination Schedule
+
+The dated calendar an examining body publishes for one cycle of a learning program, such as GATE 2027.
+
+It is reference data, not learner data: it describes the world, carries a named source and the date that source was read, and every learner aiming at that cycle reads the same dates. A schedule is `provisional` while its source says the dates are liable to change, and `confirmed` only once the examining body confirms them.
+
+### Examination Period
+
+One dated span within a schedule: registration, late registration, the examination itself, or the results announcement. A period that occupies a single day starts and ends on the same day.
+
+The examination is always modelled as one or more periods, never as a single date. An examining body commonly publishes a range of sitting days and announces the specific paper's day much later, so a single stored date would be a guess. The **examination window** — the first published sitting day to the last — is derived from the examination periods, excluding the deadlines that bracket them.
+
 ### Study Goal
 
-The learner's target outcome and timeline, including a target examination/completion date and planned study availability.
+The learner's target outcome and timeline, including what they are working toward and planned study availability.
+
+A goal aims at a published examination cycle, at a target completion date, or at both — never at neither, because a plan needs a horizon. A goal that names an examination cycle *refers* to its schedule rather than copying its dates, so a correction the examining body publishes reaches the goal without rewriting it.
 
 The goal provides the constraint used to create and adapt study plans.
 
@@ -156,6 +173,10 @@ Learning Program 1 ── * Subject
 Subject 1 ── * Topic
 Topic 1 ── * Subtopic (optional hierarchy)
 
+Learning Program 1 ── * Examination Schedule (one per cycle)
+Examination Schedule 1 ── * Examination Period
+Study Goal * ── 0..1 Examination Schedule
+
 Learner 1 ── * Study Goal
 Learner 1 ── * Study Plan
 Study Plan 1 ── * Plan Item
@@ -188,6 +209,8 @@ Topic 1 ── * Topic Performance Evidence
 10. An external test result is learner-entered private data; LearnFlow does not rely on provider integration or scraping.
 11. The GATE CSE curriculum is curated and verified. Future AI-extracted syllabus structures must remain draft until reviewed and approved by a learner or authorized curator.
 12. A learning stage should lead to a supportive next action, not a negative label or irreversible judgement.
+13. A study goal aims at an examination cycle, a target date, or both. A goal aiming at neither has no horizon to plan against.
+14. An examination period is a span of days. LearnFlow never records a single examination date that the examining body has not published, and never presents a provisional date without saying it may change.
 
 ## Future-Ready Boundaries
 
@@ -205,6 +228,7 @@ This document intentionally does not define database fields, table names, API en
 
 - [Project context](../00-project-context.md)
 - [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — quiz-topic cardinality, mistake sources, and evidence boundaries
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination schedule concept and what a study goal aims at
 - [Functional requirements](../requirements/functional.md)
 - [Domain entities](entities.md)
 - [Terminology](terminology.md)

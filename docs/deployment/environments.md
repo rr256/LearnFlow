@@ -2,7 +2,7 @@
 title: LearnFlow Environments and Configuration
 status: approved
 owner: development-and-operations
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - docker.md
@@ -10,6 +10,7 @@ related:
   - ../development/tech-stack.md
   - ../database/migrations.md
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
 ---
 
 # LearnFlow Environments and Configuration
@@ -73,6 +74,16 @@ but not yet in `.env.example` are planned, not active.
 | `APP_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` — accepted in any casing |
 | `API_HOST` | `127.0.0.1` | Bind address; use `0.0.0.0` inside a container |
 | `API_PORT` | `8000` | Integer, 1–65535 |
+| `APP_DEFAULT_TIMEZONE` | `Asia/Kolkata` | An IANA timezone name, validated at startup against the standard library's zone database |
+
+`APP_DEFAULT_TIMEZONE` is the timezone a learner record is created with. It is core runtime under
+ADR-009: it describes how this installation runs, selects no capability adapter, and names no vendor.
+The default suits GATE CSE, the learning program LearnFlow ships with; a learner elsewhere sets it
+once rather than editing code. It is validated through `zoneinfo`, so a typo fails at startup naming
+the field rather than surfacing later as a study plan whose days land a day out. No dependency was
+added for it — `tzdata` already ships as a dependency of psycopg. See
+[ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md), which settles it as one of the open
+items [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) recorded.
 
 `API_CORS_ALLOWED_ORIGINS` is a planned core-runtime setting for when CORS middleware is introduced.
 It carries the `API_` prefix because a CORS allow-list governs how the API process serves requests;
@@ -161,11 +172,12 @@ The committed `.env.example` must:
 - Not contain developer-specific local paths.
 - Be updated in the same change that introduces or removes a configuration variable.
 
-The committed file therefore currently contains exactly the eight implemented variables:
+The committed file therefore currently contains exactly the nine implemented variables:
 
 ```text
 APP_ENV=local
 APP_LOG_LEVEL=INFO
+APP_DEFAULT_TIMEZONE=Asia/Kolkata
 API_HOST=127.0.0.1
 API_PORT=8000
 DATABASE_URL=postgresql+psycopg://learnflow:learnflow@127.0.0.1:5432/learnflow
@@ -261,6 +273,7 @@ Example: if `AI_PROVIDER=ollama`, the backend requires an Ollama endpoint and co
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the decision this configuration serves
 - [ADR-009: Name and validate configuration variables explicitly](../adr/ADR-009-configuration-naming-and-validation.md) — the naming categories and validation approach this catalogue follows
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — why `DATABASE_URL` has no default
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why `APP_DEFAULT_TIMEZONE` exists and what sets its default
 - [Docker strategy](docker.md)
 - [CI/CD](ci-cd.md)
 - [Database migrations](../database/migrations.md) — the workflow `DATABASE_URL` and `TEST_DATABASE_URL` serve

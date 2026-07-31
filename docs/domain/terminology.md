@@ -2,11 +2,12 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-29
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - domain-model.md
   - entities.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../development/coding-standards.md
 ---
 
@@ -30,7 +31,14 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Topic relationship** | A link between topics, such as prerequisite or recommended-before. | Used for learning order and planning. |
 | **Learning resource** | A learner-owned or curated study reference. | Includes PDFs, notes, PYQs, formula sheets, and local video references. |
 | **PYQ** | Previous-year question. | A verified historical exam question; distinguish it from AI-generated practice. |
-| **Study goal** | The learner's target outcome and deadline. | Includes target exam/completion date and planning constraints. |
+| **Examination schedule** | The dated calendar an examining body publishes for one cycle of a learning program, such as GATE 2027. | Reference data with a named source, not learner data. Every learner aiming at that cycle reads the same dates. |
+| **Examination cycle** | One occurrence of a recurring examination, identified by a label such as `2027`. | A learning program has many cycles over time; each has its own schedule. |
+| **Examination period** | One dated span within an examination schedule: registration, late registration, the examination, or the results announcement. | A single-day event starts and ends on the same day. The stored period types are `registration`, `late_registration`, `examination`, and `results`. |
+| **Examination window** | The span from the first published sitting day to the last. | Use this, never a single examination date, unless the examining body has published one. Derived from the examination periods; not stored. |
+| **Provisional** | A published schedule whose source says the dates are still liable to change. | The honest default before an examining body confirms. Say so wherever the dates are shown. |
+| **Confirmed** | A published schedule whose dates the examining body has confirmed. | Set it only on the examining body's word, never on age or proximity. |
+| **Study goal** | The learner's target outcome and deadline. | Aims at an examination cycle, a target completion date, or both — never at neither. |
+| **Target date** | A learner's own completion date, for a learner following no published examination. | Not a substitute for an examination window. Leave it empty rather than guessing a paper date. |
 | **Availability** | Time the learner can realistically allocate to study. | A planning input, not a measure of commitment or ability. |
 | **Study plan** | A roadmap, monthly plan, weekly plan, or daily plan of recommended work. | Generated against a study goal and current evidence. |
 | **Plan item** | One actionable recommendation in a study plan. | Examples: study, practise, revise, or review mistakes. |
@@ -67,6 +75,8 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Failed topic | Topic needing focused practice | A topic is not a pass/fail judgement. |
 | Mastered | Strong understanding | Mastery is difficult to prove and should not be inferred from one signal. |
 | Complete | Material completed; plan item completed | Clarify whether material or a planned task was completed. |
+| Exam date; examination date | Examination window; examination period | A body that publishes several sitting days has not named the learner's day. A single date presents a guess as a deadline. |
+| Exam; GATE date | Examination cycle; examination schedule | Keeps platform-core language reusable across learning programs. |
 | Test integration | Manual external test result entry | The MVP does not connect to third-party test platforms. |
 | AI memory | Learner progress, resource retrieval, or conversation context | Store durable facts in the application/database, not in model memory. |
 | GATE topic | Topic in the GATE CSE learning program | Keeps platform-core language reusable. |
@@ -79,10 +89,17 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 - Use `resource` for a study item; use `document` only when referring specifically to a file format or ingestion process.
 - Use `evidence` for observed learning signals; use `stage` for the learner-visible interpretation of that evidence.
 - Use `recommendation` for system guidance; avoid wording that makes a recommendation sound mandatory.
+- Name a **new** dated span `starts_on`/`ends_on` and a new single day `taken_on`/`due_on`, so the
+  name says whether one date or two are meant. Existing names stay as they are: `study_goals.
+  target_date` and `study_plans.period_start`/`period_end` predate this rule, and renaming a column
+  is a migration decision rather than a wording one.
+- State a published date's status wherever it is shown. A provisional date presented without that
+  word reads as settled fact.
 
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination vocabulary above
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)

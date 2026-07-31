@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -253,6 +253,10 @@ business rules — those stay in the use case it calls. Run them from `backend/`
 | `seed_curriculum.py` | Idempotent curriculum seed/import. Wires the seed use case to PostgreSQL and reports what changed; see [database migrations](../database/migrations.md#the-curriculum-seed). |
 | `curriculum_seed_file.py` | Reads a curriculum seed JSON file into application DTOs, reporting the field at fault when the file is malformed. |
 | `gate_cse_curriculum.json` | The curated GATE CSE curriculum. Data, not code: its `$comment` block records the official source and the transcription rules. |
+| `seed_examination_schedule.py` | Idempotent examination schedule seed. Runs after the curriculum seed; see [database migrations](../database/migrations.md#the-examination-schedule-seed). |
+| `examination_schedule_file.py` | Reads an examination schedule JSON file into application DTOs, reporting the field at fault when the file is malformed. |
+| `gate_cse_examination_schedule.json` | The published GATE 2027 schedule. Data, not code: its `$comment` block records the official source, the transcription rules, and the one inference it makes. |
+| `set_study_goal.py` | Sets the local learner's curriculum and examination goal, idempotently; see [setting the local learner's study goal](../database/migrations.md#setting-the-local-learners-study-goal). |
 
 ## Automation and Assistant Configuration
 

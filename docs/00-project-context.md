@@ -2,7 +2,7 @@
 title: LearnFlow Project Context
 status: approved
 owner: project-governance
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 audience: all-contributors-and-ai-assistants
 read_before: any-design-or-implementation-task
 related:
@@ -22,10 +22,10 @@ LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science 
 
 ## Current project state
 
-- Stage: documentation and architecture foundation, plus a minimal FastAPI backend foundation, the curriculum persistence schema, and the curated curriculum that fills it.
-- Implemented: a FastAPI application built through a composition-root application factory; validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, `API_PORT`, and the required `DATABASE_URL`; `GET /health`, an operational endpoint served outside `/api/v1`; a backend container image with Docker Compose `backend` and `postgres` services; SQLAlchemy models plus an Alembic migration creating the curriculum tables; and an idempotent seed that loads the curated GATE CSE curriculum into them, described in [database migrations](database/migrations.md#the-curriculum-seed).
+- Stage: documentation and architecture foundation, plus a minimal FastAPI backend foundation, the curriculum and examination-schedule persistence schema, the curated data that fills both, and the learner's study goal.
+- Implemented: a FastAPI application built through a composition-root application factory; validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `APP_DEFAULT_TIMEZONE`, `API_HOST`, `API_PORT`, and the required `DATABASE_URL`; `GET /health`, an operational endpoint served outside `/api/v1`; a backend container image with Docker Compose `backend` and `postgres` services; SQLAlchemy models plus Alembic migrations creating the curriculum tables, the examination schedule tables, and `learners` and `study_goals`; an idempotent seed that loads the curated GATE CSE curriculum, described in [database migrations](database/migrations.md#the-curriculum-seed); a second idempotent seed that loads the published GATE 2027 examination schedule, described in [the examination schedule seed](database/migrations.md#the-examination-schedule-seed); and a command that binds the local learner to that curriculum and examination goal.
 - Delivery: changes reach `main` through a pull request. GitHub Actions runs backend tests, Ruff lint and format checks, documentation validation, database migration checks, and container build validation on pull requests to `main` and pushes to `main`. See [CI/CD strategy](deployment/ci-cd.md) and [git workflow](development/git-workflow.md).
-- Not implemented: learner features, AI and RAG, the frontend, and external integrations. The curriculum tables are written by the seed but read by nothing — no endpoint exposes them, and the learner, progress, resource, and assessment tables are migrated with the milestones that use them, per [ADR-011](adr/ADR-011-sqlalchemy-persistence-implementation.md). Compose covers the backend and PostgreSQL — the `chromadb` and `frontend` services join it with the code that consumes them, per [Docker strategy](deployment/docker.md). Infer no application behavior beyond the implemented items above.
+- Not implemented: AI and RAG, the frontend, external integrations, and every learner feature beyond choosing a curriculum and an examination goal. No endpoint reads any of the tables — the curriculum, schedule, and goal are written and read only by the commands that maintain them. `availability_slots`, planning, progress, resource, and assessment tables are migrated with the milestones that use them, per [ADR-011](adr/ADR-011-sqlalchemy-persistence-implementation.md). Compose covers the backend and PostgreSQL — the `chromadb` and `frontend` services join it with the code that consumes them, per [Docker strategy](deployment/docker.md). Infer no application behavior beyond the implemented items above.
 - Decision status: use the documents in this repository and ADRs as the source of truth. Placeholders are intentionally not decisions.
 - Immediate objective: implement approved Milestone 1 scope, replacing relevant placeholders with approved project decisions before implementing each affected area.
 
@@ -79,6 +79,10 @@ Accepted ADRs:
 - [ADR-010 — Deliver features through pull requests with automated gates](adr/ADR-010-feature-delivery-workflow.md)
 - [ADR-011 — Implement PostgreSQL persistence synchronously and migrate per milestone](adr/ADR-011-sqlalchemy-persistence-implementation.md)
 - [ADR-012 — Load curriculum as reconciled reference data from a versioned file](adr/ADR-012-curriculum-seed-and-reconciliation.md)
+
+Proposed ADRs, drafted and awaiting acceptance:
+
+- [ADR-013 — Model an examination period as a published window of reference data](adr/ADR-013-examination-schedule-and-study-goal.md)
 
 ### Design and implementation
 

@@ -15,6 +15,7 @@ Only the settings the backend actually uses today are defined here. AI, retrieva
 and storage settings arrive with the code that reads them.
 """
 
+import zoneinfo
 from enum import StrEnum
 from pathlib import Path
 
@@ -67,6 +68,15 @@ class Settings(BaseSettings):
     api_host: str = Field(default="127.0.0.1", min_length=1)
     api_port: int = Field(default=8000, ge=1, le=65535)
 
+    # The timezone a learner record is created with. Core runtime under ADR-009:
+    # it describes how this installation runs, selects no adapter, and names no
+    # vendor. The default suits the learning program LearnFlow ships with; a
+    # learner elsewhere sets it once rather than editing code.
+    #
+    # Validated as a real IANA zone, because a typo would otherwise surface much
+    # later as a study plan whose days land in the wrong place.
+    app_default_timezone: str = "Asia/Kolkata"
+
     # Capability-level setting under ADR-009: it survives a change of relational
     # database, unlike the POSTGRES_* values that configure the Compose service.
     #
@@ -86,6 +96,23 @@ class Settings(BaseSettings):
         values, so value casing is normalised here.
         """
         return value.upper() if isinstance(value, str) else value
+
+    @field_validator("app_default_timezone")
+    @classmethod
+    def _require_a_known_timezone(cls, value: str) -> str:
+        """Reject anything the standard library cannot resolve to a real zone.
+
+        ``ZoneInfo`` reads the system database, or ``tzdata`` where the platform
+        ships none, so this accepts exactly the zones the application can later
+        compute with.
+        """
+        try:
+            zoneinfo.ZoneInfo(value)
+        except (zoneinfo.ZoneInfoNotFoundError, ValueError) as error:
+            raise ValueError(
+                f"{value!r} is not a known IANA timezone, for example 'Asia/Kolkata'."
+            ) from error
+        return value
 
 
 def load_settings() -> Settings:

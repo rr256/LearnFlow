@@ -2,7 +2,7 @@
 title: LearnFlow Product Roadmap
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - milestones.md
@@ -74,7 +74,7 @@ Future multi-user/cloud expansion only when justified
 **Outcomes:**
 
 - Learner profile/local identity foundation.
-- Study goal, target date, and availability setup.
+- Study goal setup: the curriculum, a horizon — an examination cycle, a target date, or both — and availability.
 - Data-driven curriculum explorer.
 - Topic progress, supportive learning stages, and study-activity recording.
 - Progress overview showing current state and priority focus areas.
@@ -93,7 +93,7 @@ Future multi-user/cloud expansion only when justified
 - Revision scheduling, due list, and revision completion tracking.
 - Clear next-action explanations and timeline trade-off visibility.
 
-**Exit criteria:** the learner can receive and adjust an actionable study plan tied to target date, availability, progress, and revision needs.
+**Exit criteria:** the learner can receive and adjust an actionable study plan tied to the goal's horizon, availability, progress, and revision needs.
 
 ## Phase 4 — Resources, RAG, and Mentor Assistance
 

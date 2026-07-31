@@ -37,16 +37,11 @@ from app.infrastructure.persistence.base import (
     CreatedAtMixin,
     TimestampMixin,
     UuidPrimaryKeyMixin,
+    in_clause,
 )
 
 CURRICULUM_VERSION_STATUSES = ("draft", "active", "retired")
 TOPIC_RELATIONSHIP_TYPES = ("prerequisite", "recommended_before", "related")
-
-
-def _in_clause(column: str, allowed: tuple[str, ...]) -> str:
-    """Render a SQL membership test for a controlled text column."""
-    values = ", ".join(f"'{value}'" for value in allowed)
-    return f"{column} IN ({values})"
 
 
 class LearningProgram(UuidPrimaryKeyMixin, TimestampMixin, Base):
@@ -77,7 +72,7 @@ class CurriculumVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("learning_program_id", "version_label"),
         CheckConstraint(
-            _in_clause("status", CURRICULUM_VERSION_STATUSES),
+            in_clause("status", CURRICULUM_VERSION_STATUSES),
             name="status_is_known",
         ),
         # "At most one active version per program" is enforced as a partial
@@ -175,7 +170,7 @@ class TopicRelationship(CreatedAtMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            _in_clause("relationship_type", TOPIC_RELATIONSHIP_TYPES),
+            in_clause("relationship_type", TOPIC_RELATIONSHIP_TYPES),
             name="relationship_type_is_known",
         ),
         CheckConstraint(
