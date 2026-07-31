@@ -2,7 +2,7 @@
 title: "ADR-009: Name and Validate Configuration Variables Explicitly"
 status: accepted
 owner: architecture-and-development
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - ../deployment/environments.md
@@ -161,6 +161,28 @@ contributors to configure services that do not yet exist.
 - `extra="ignore"` lets unrelated variables in a developer's shell coexist without failing startup.
 - Never log full connection strings, credentials, or secret values; validation errors name the field
   and the constraint, not the value's origin.
+
+### Implementation status — 2026-07-31
+
+This note records what has changed since the decision was accepted. The Decision, Consequences, and
+Alternatives above are the accepted text and are not rewritten as variables are added.
+
+`DATABASE_URL` is now implemented. The decision above states that variables are added when their
+consumer exists, and the backend gained one: a configured SQLAlchemy engine and an Alembic
+environment that read it. The sentence in *Variables are added when their consumer exists* naming
+`APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, and `API_PORT` as the only defined variables describes the
+state when this ADR was accepted, not the state today. AI, retrieval, and storage variables remain
+unimplemented and still join in the change that reads them.
+
+`DATABASE_URL` is a capability-level setting under the categories above, alongside the vendor-level
+`POSTGRES_*` values that configure the local database service. It is also the first variable defined
+with no default, and it still fails at startup naming the field, which is the fail-fast behaviour
+this decision requires. The catalogue records why it has no default; that reasoning is not repeated
+here.
+
+[Environments and configuration](../deployment/environments.md) remains the authoritative catalogue.
+Consult it rather than this ADR for which variables exist today; this ADR records why they are named
+and validated as they are, and is not updated each time one is added.
 
 ## Related Documents
 

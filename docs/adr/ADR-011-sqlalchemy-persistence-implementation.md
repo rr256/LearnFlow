@@ -1,11 +1,13 @@
 ---
 title: "ADR-011: Implement PostgreSQL Persistence Synchronously and Migrate Per Milestone"
-status: proposed
+status: accepted
 owner: architecture-and-data
 last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
+  - ADR-005-docker-compose-local-development.md
+  - ADR-009-configuration-naming-and-validation.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../deployment/environments.md
@@ -17,10 +19,7 @@ related:
 
 ## Status
 
-`proposed`
-
-Awaiting project-owner acceptance. The implementation it describes is in the pull request that
-introduced this record; nothing else depends on it yet.
+Accepted — 2026-07-31
 
 ## Context
 

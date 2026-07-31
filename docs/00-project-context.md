@@ -77,9 +77,6 @@ Accepted ADRs:
 - [ADR-008 — Model assessment topics and mistake evidence sources explicitly](adr/ADR-008-assessment-and-mistake-evidence-model.md)
 - [ADR-009 — Name and validate configuration variables explicitly](adr/ADR-009-configuration-naming-and-validation.md)
 - [ADR-010 — Deliver features through pull requests with automated gates](adr/ADR-010-feature-delivery-workflow.md)
-
-Proposed ADRs, drafted and awaiting acceptance:
-
 - [ADR-011 — Implement PostgreSQL persistence synchronously and migrate per milestone](adr/ADR-011-sqlalchemy-persistence-implementation.md)
 
 ### Design and implementation
