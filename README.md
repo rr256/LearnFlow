@@ -32,11 +32,13 @@ docker compose logs -f backend   # follow backend logs
 docker compose down              # stop, preserving named volumes
 ```
 
-Apply the database schema once the services are up. Nothing migrates automatically:
+Apply the database schema once the services are up, then load the curated curriculum. Neither step
+runs automatically:
 
 ```bash
 cd backend
-python -m alembic upgrade head
+python -m alembic upgrade head       # create the tables
+python -m scripts.seed_curriculum    # load the GATE CSE curriculum; safe to repeat
 ```
 
 The API is then published on the loopback interface only:
@@ -63,6 +65,7 @@ python -m pip install -r requirements-dev.txt
 python -m app.main                          # serves on API_HOST / API_PORT
 python -m uvicorn app.main:app --reload      # reload workflow, own --host/--port
 python -m alembic upgrade head               # apply the database schema
+python -m scripts.seed_curriculum            # load the curated curriculum, idempotently
 ```
 
 Python 3.14 is required, and `DATABASE_URL` must be set — the backend will not start without it.
@@ -89,14 +92,18 @@ database schema.
 - SQLAlchemy models and an Alembic migration for the curriculum tables — learning programs,
   curriculum versions, subjects, topics, and topic relationships. See
   [database schema](docs/database/schema.md).
+- An idempotent seed, `python -m scripts.seed_curriculum`, loading the curated GATE CSE curriculum —
+  11 subjects, 65 topics and subtopics, transcribed from the official syllabus. It matches records on
+  a natural key, writes only what differs, and never deletes, so repeat runs are safe. See
+  [the curriculum seed](docs/database/migrations.md#the-curriculum-seed).
 - Continuous integration on pull requests: backend tests, Ruff lint and format checks,
   documentation validation, database migration checks, and container build validation. See
   [CI/CD strategy](docs/deployment/ci-cd.md).
 
 **Not implemented**
 
-Learner features, AI and RAG, the frontend, curriculum data, and external integrations. Persistence
-is schema only: no repository, use case, or endpoint reads the curriculum tables yet, and the
-learner, progress, resource, and assessment tables arrive with the milestones that use them. Compose
-has no ChromaDB or frontend service. Nothing beyond the implemented items above should be inferred
-from the current repository contents.
+Learner features, AI and RAG, the frontend, and external integrations. The curriculum tables are
+written by the seed but read by nothing: no endpoint exposes them, and the learner, progress,
+resource, and assessment tables arrive with the milestones that use them. Compose has no ChromaDB or
+frontend service. Nothing beyond the implemented items above should be inferred from the current
+repository contents.

@@ -31,7 +31,7 @@ tables arrive in more than one migration.
 
 | Schema area | State |
 | --- | --- |
-| Curriculum | Implemented — migration `20260731_01_create_curriculum_tables`. |
+| Curriculum | Implemented — migration `20260731_01_create_curriculum_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-curriculum-seed). |
 | Learner planning | Not implemented — `learners`, `study_goals`, and `availability_slots` arrive with Milestone 2; `study_plans` and `plan_items` with Milestone 3. |
 | Progress and revision | Not implemented — `learner_topic_progress` and `study_activities` arrive with Milestone 2; `revision_records` with Milestone 3. |
 | Resources and RAG metadata | Not implemented — arrives with Milestone 4. |
@@ -580,15 +580,43 @@ Together these produced the conventions and constraint decisions recorded above 
 
 | Review input | State |
 | --- | --- |
-| The final GATE CSE curriculum seed structure | **Pending** — no seed tooling exists yet. Review the curriculum tables against it when it does. |
+| The final GATE CSE curriculum seed structure | **Reviewed 2026-07-31** — the tables carry the curated GATE CSE curriculum unchanged. See below. |
 | The first API contracts | **Pending** — [endpoints](../api/endpoints.md) defines the curriculum endpoints CUR-001 to CUR-003 at intent level, but none is implemented and no request/response schema exists. Review against those schemas when they are written. |
 | The actual revision-scheduling rules | Not applicable to this area. |
 
-The two pending inputs arrive later in Milestone 1, and either may find that the approved shape needs
+The remaining pending input arrives later in Milestone 1 and may find that the approved shape needs
 to change — a subject code longer than `varchar(64)`, say, or an ordering rule the `position`
-uniqueness forbids. Either is a follow-up migration, never an edit to the applied one. Record the
+uniqueness forbids. That is a follow-up migration, never an edit to the applied one. Record the
 outcome of each pending review here when it happens, and treat the curriculum area as fully reviewed
 only then.
+
+#### Seed-structure review outcome
+
+The curated curriculum — 11 subjects and 65 topics and subtopics, loaded by
+`backend/scripts/seed_curriculum.py` — fits the applied tables with no change required. What the
+review settled:
+
+- `subjects.code` holds the longest code in use, `computer-organization-and-architecture`, at 38
+  characters, comfortably inside `varchar(64)`.
+- `topics.code` stays null throughout. The official syllabus names topics rather than numbering them,
+  so the seed matches a topic on `(subject_id, parent_topic_id, name)` — the uniqueness rule this
+  table already declares. `code` remains available for a curriculum that needs renames to survive,
+  but note that no constraint makes it unique; see
+  [the curriculum seed](migrations.md#the-curriculum-seed).
+- `topics.name` is `text`, which the syllabus needs: the longest topic name is 139 characters,
+  because several official entries are a clause rather than a label.
+- Two levels are enough for this syllabus; the self-referencing `parent_topic_id` is not exercised
+  beyond depth two.
+- `is_trackable` is set by the seed, as this document requires. A topic that groups subtopics is not
+  directly trackable; a leaf is.
+- `subjects.position` uniqueness holds, but only because the seed works around it: the constraint is
+  checked per statement rather than deferred, so re-ordering needs the existing rows moved aside
+  first. No schema change was needed. [Migrations](migrations.md#the-curriculum-seed) is the
+  authoritative description of how the seed does it.
+- `curriculum_versions.published_at` is set when a version is seeded as active and is never
+  overwritten afterwards, so a repeat run reports no change.
+
+Nothing here required a migration.
 
 ## Related Documents
 

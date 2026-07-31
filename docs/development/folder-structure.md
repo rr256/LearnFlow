@@ -8,6 +8,7 @@ related:
   - tech-stack.md
   - ../architecture/clean-architecture.md
   - ../architecture/dependency-rules.md
+  - ../database/migrations.md
   - ../deployment/ci-cd.md
   - ../deployment/docker.md
   - ../adr/ADR-010-feature-delivery-workflow.md
@@ -55,7 +56,7 @@ learnflow/
 │   │   ├── unit/
 │   │   ├── integration/
 │   │   └── api/
-│   └── scripts/                 # Backend-only seed/import utilities
+│   └── scripts/                 # Backend-only seed/import utilities and their data
 ├── frontend/
 │   ├── app/                     # Next.js routes/pages
 │   ├── features/                # Learner-facing feature modules
@@ -172,7 +173,7 @@ Contains the Alembic environment (`env.py`), the revision template (`script.py.m
 
 | Folder | Test focus |
 | --- | --- |
-| `unit/` | Domain and application behavior with no live external dependencies. Also holds persistence tests that only compile DDL, since those need no database. |
+| `unit/` | Domain and application behavior with no live external dependencies. Also holds persistence tests that only compile SQL, since those need no database, and the fakes application tests use in place of a port. |
 | `integration/` | PostgreSQL, storage, provider-adapter, and RAG boundary tests. These need a live dependency and skip when it is not configured. |
 | `api/` | FastAPI request/response and contract tests. |
 
@@ -241,7 +242,17 @@ before running the validator, so `scripts/` is covered by CI.
 
 ### `backend/scripts/`
 
-Contains backend/domain-specific utilities, such as idempotent GATE CSE curriculum seeding/import after that workflow is approved.
+Contains backend/domain-specific utilities. A module here does composition-root work under the
+existing rule in [dependency rules](../architecture/dependency-rules.md): it may read configuration
+and construct concrete adapters, which application and domain code must not. It holds wiring, not
+business rules — those stay in the use case it calls. Run them from `backend/` as modules —
+`python -m scripts.<name>` — so the `app` package resolves.
+
+| Path | Responsibility |
+| --- | --- |
+| `seed_curriculum.py` | Idempotent curriculum seed/import. Wires the seed use case to PostgreSQL and reports what changed; see [database migrations](../database/migrations.md#the-curriculum-seed). |
+| `curriculum_seed_file.py` | Reads a curriculum seed JSON file into application DTOs, reporting the field at fault when the file is malformed. |
+| `gate_cse_curriculum.json` | The curated GATE CSE curriculum. Data, not code: its `$comment` block records the official source and the transcription rules. |
 
 ## Automation and Assistant Configuration
 
@@ -295,6 +306,7 @@ Local data locations are configured through environment variables and Docker vol
 - [Dependency rules](../architecture/dependency-rules.md)
 - [Technology stack](tech-stack.md)
 - [Coding standards](coding-standards.md)
+- [Database migrations](../database/migrations.md) — the authoritative description of the curriculum seed named in `backend/scripts/`
 - [Docker strategy](../deployment/docker.md) — what `compose.yaml`, `docker/`, and `.dockerignore` contain today
 - [CI/CD strategy](../deployment/ci-cd.md) — what the workflow files in `.github/` verify
 - [Engineering AI workflow](../ai/engineering-ai.md) — what the definitions in `.claude/` implement
