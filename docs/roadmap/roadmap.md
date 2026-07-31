@@ -2,7 +2,7 @@
 title: LearnFlow Product Roadmap
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - milestones.md
@@ -133,8 +133,8 @@ Future multi-user/cloud expansion only when justified
 - Improved UI states, accessibility basics, and performance feedback.
 - CI verification for stable checks. The workflow configuration is implemented — backend tests, Ruff
   lint and format checks, documentation validation, and container build validation, per
-  [CI/CD strategy](../deployment/ci-cd.md). Hosted GitHub Actions verification remains pending the
-  first pull request run, and frontend and migration checks are added with the artifacts they verify.
+  [CI/CD strategy](../deployment/ci-cd.md), which describes what the pipeline runs today. Frontend
+  and migration checks are added with the artifacts they verify.
 - README and setup guide validated on a clean machine where possible.
 
 **Exit criteria:** the learner can use LearnFlow daily without fragile setup, unexplained failures, or risk of silent data loss.

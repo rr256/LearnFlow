@@ -2,7 +2,7 @@
 title: "ADR-010: Deliver Features Through Pull Requests With Automated Gates"
 status: accepted
 owner: development-and-operations
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - ../deployment/ci-cd.md
@@ -11,6 +11,7 @@ related:
   - ../development/documentation-standards.md
   - ../development/coding-standards.md
   - ../development/folder-structure.md
+  - ../deployment/docker.md
 ---
 
 # ADR-010: Deliver Features Through Pull Requests With Automated Gates
@@ -199,6 +200,21 @@ merging is the point at which that judgement is applied.
   owner decision and is not configured by this change.
 - Recorded as DEC-023 in [the decision register](../architecture/decisions.md).
 
+### Implementation status — 2026-07-31
+
+This note records what has changed since the decision was accepted. The Decision, Consequences, and
+Alternatives above are the accepted text and are not rewritten as the pipeline grows.
+
+The workflow described above as two jobs now has three. A `containers` job was added with the backend
+container setup and first passed on pull request #7, validating the Compose topology and building the
+backend image. This is the decision working as intended rather than a departure from it: the decision
+states that frontend, database, container, and security checks are each added in the change that
+introduces the artifact they verify.
+
+[CI/CD strategy](../deployment/ci-cd.md) is the current description of the pipeline and the jobs it
+runs. Consult it rather than this ADR for what CI does today; this ADR records why the pipeline is
+shaped the way it is, and is not updated each time a job is added.
+
 ## Related Documents
 
 - [Project context](../00-project-context.md)
@@ -210,5 +226,7 @@ merging is the point at which that judgement is applied.
 - [Coding standards](../development/coding-standards.md) — the canonical local quality checks
 - [Repository and folder structure](../development/folder-structure.md) — where the workflow, skill,
   and validator files live
+- [Docker strategy](../deployment/docker.md) — the Compose topology and backend image the `containers`
+  job validates
 - [ADR-007: Use repository documentation and ADRs as shared project memory](ADR-007-documentation-and-adr-policy.md)
 - [Architecture decision register](../architecture/decisions.md)

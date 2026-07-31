@@ -2,7 +2,7 @@
 title: LearnFlow CI/CD Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - environments.md
@@ -81,10 +81,11 @@ The `containers` job commands are not in the canonical local set, which covers t
 run without extra tooling. Container commands need a working Docker installation; run them locally
 when Docker is available, per [Docker strategy](docker.md).
 
-**No container command has been executed anywhere yet.** The change that introduced this job was
-prepared on a machine without Docker, so neither `docker compose config -q` nor the backend image
-build has run locally. The `containers` job on the pull request introducing it is their first
-execution. Until that run passes, treat the Compose file and Dockerfile as written but unbuilt.
+The `containers` job first ran on pull request #7 and passed, so the Compose topology and the backend
+image build are verified in CI. It has not been run locally: the change that introduced it was
+prepared without a Docker installation, and CI remains the authoritative verification for container
+checks. Note what the job does not cover — it validates and builds, but starts no container, so the
+health check and the service's runtime behavior are unverified. See [Docker strategy](docker.md).
 
 Properties that keep the workflow trustworthy:
 
