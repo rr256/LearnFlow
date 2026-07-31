@@ -21,6 +21,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     CheckConstraint,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -69,7 +70,9 @@ class CurriculumVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
     version_label: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     source_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
-    published_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    # The type is stated rather than inferred: a bare `Mapped[datetime]` maps to
+    # a naive DateTime, which schema.md forbids for every timestamp.
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("learning_program_id", "version_label"),

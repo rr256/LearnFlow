@@ -114,13 +114,30 @@ def test_topic_relationship_is_keyed_on_source_target_and_type():
     ]
 
 
-def test_timestamps_are_timezone_aware():
-    """schema.md requires timestamptz, not a naive local timestamp."""
+def test_every_timestamp_column_is_timezone_aware():
+    """schema.md requires timestamptz throughout, not a naive local timestamp.
+
+    Every DateTime column is checked, not just the audit ones. A bare
+    ``Mapped[datetime]`` annotation maps to a naive DateTime, so a column that
+    omits an explicit type silently violates the convention while still looking
+    correct in the migration.
+    """
+    naive: list[str] = []
     for table_name in CURRICULUM_TABLES:
-        created_at = Base.metadata.tables[table_name].columns["created_at"]
-        assert isinstance(created_at.type, DateTime)
-        assert created_at.type.timezone is True
-        assert created_at.nullable is False
+        for column in Base.metadata.tables[table_name].columns:
+            if isinstance(column.type, DateTime) and not column.type.timezone:
+                naive.append(f"{table_name}.{column.name}")
+
+    assert naive == []
+
+
+@pytest.mark.parametrize("table_name", CURRICULUM_TABLES)
+def test_creation_timestamps_are_recorded(table_name):
+    created_at = Base.metadata.tables[table_name].columns["created_at"]
+
+    assert isinstance(created_at.type, DateTime)
+    assert created_at.nullable is False
+    assert created_at.server_default is not None
 
 
 def test_topic_relationships_records_creation_only():
