@@ -2,13 +2,15 @@
 title: LearnFlow Technology Stack
 status: approved
 owner: architecture-and-development
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - ../architecture/overview.md
   - ../architecture/provider-pattern.md
   - ../deployment/docker.md
   - ../deployment/ci-cd.md
+  - ../database/migrations.md
+  - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
 ---
 
 # LearnFlow Technology Stack
@@ -26,7 +28,8 @@ Versions are pinned in implementation dependency files after compatibility is te
 | Web frontend | Next.js + React + TypeScript | Learner-facing web application. | Mature web ecosystem, typed UI development, future deployment flexibility. | Client can evolve as long as API contracts remain stable. |
 | Backend API | Python + FastAPI | HTTP API, application use cases, dependency wiring. | Strong AI/data ecosystem and clear typed API support. | Core backend choice; avoid replacing without a compelling reason. |
 | Domain/application persistence | PostgreSQL | Structured curriculum, learner data, plans, progress, assessments, resource metadata. | Reliable relational data, constraints, transactions, and future multi-user support. | Repositories reduce coupling; migration remains consequential. |
-| ORM / persistence mapping | SQLAlchemy | Maps infrastructure persistence models to PostgreSQL. | Mature Python ecosystem and supports repository implementation. | Implementation detail behind repositories. |
+| ORM / persistence mapping | SQLAlchemy | Maps infrastructure persistence models to PostgreSQL. | Mature Python ecosystem and supports repository implementation. | Implementation detail behind repositories. Used synchronously; see [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md). |
+| PostgreSQL driver | psycopg 3 | Connects SQLAlchemy and Alembic to PostgreSQL. | Current generation of the reference Python driver, and it serves both synchronous and asynchronous SQLAlchemy, so the execution model can change without changing driver. Installed as `psycopg[binary]`, which needs no local libpq or compiler. | Driver choice behind SQLAlchemy's dialect. |
 | Database migrations | Alembic | Versioned PostgreSQL schema changes. | Standard SQLAlchemy migration workflow. | Expected to remain with SQLAlchemy unless persistence strategy changes. |
 | Local AI generation | Ollama | Mentor explanations, grounded answers, and supported practice generation. | Local-first, low recurring cost, learner privacy. | Replaceable through `AIProvider` adapter. |
 | Embeddings | Ollama embedding model | Converts resource chunks/queries to vectors. | Keeps the initial RAG workflow local and reuses the runtime already installed for generation. | Replaceable through `EmbeddingProvider`, independently of the generation provider. |
@@ -38,7 +41,7 @@ Versions are pinned in implementation dependency files after compatibility is te
 | Backend configuration | pydantic-settings | Loads and validates environment configuration at startup. | Reuses the Pydantic validation already present through FastAPI; fails fast with field-level errors. | Confined to the composition root; see [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md). |
 | Frontend testing | TypeScript/React test tooling | Component and user-flow verification. | Needed for reliable learner-facing behavior. | Exact framework selected with frontend scaffold. |
 | API documentation | FastAPI/OpenAPI output plus repository docs | Machine-readable API schemas and human architecture docs. | Keeps frontend contracts and documentation aligned. | API contract remains independent of documentation renderer. |
-| Continuous integration | GitHub Actions | Runs backend tests, Ruff checks, documentation validation, and container build validation on pull requests and pushes to `main`. | Already hosted where the repository lives; needs no additional service or credential. | Workflow files are small and portable; see [CI/CD strategy](../deployment/ci-cd.md). |
+| Continuous integration | GitHub Actions | Runs the checks enumerated in [CI/CD strategy](../deployment/ci-cd.md) on pull requests and pushes to `main`. | Already hosted where the repository lives; needs no additional service or credential. | Workflow files are small and portable. |
 | Documentation validation | PyYAML in `scripts/validate_docs.py` | Parses documentation front matter for the checks defined in [mechanical validation](documentation-standards.md#mechanical-validation). | A real YAML parser rejects malformed front matter that a hand-rolled subset parser would accept. | Development-only dependency; never enters the application runtime. See [ADR-010](../adr/ADR-010-feature-delivery-workflow.md). |
 
 ## Component Boundaries
@@ -59,10 +62,10 @@ The backend business logic does not directly depend on provider SDKs. Concrete i
 
 ```text
 Docker Compose
-├── frontend service
-├── backend service
-├── PostgreSQL service
-└── ChromaDB service
+├── frontend service      pending a frontend application
+├── backend service       implemented
+├── PostgreSQL service    implemented
+└── ChromaDB service      pending retrieval code
 
 Host machine
 └── Ollama service and downloaded models
@@ -121,6 +124,8 @@ Do not add a framework only because it is popular or because an AI assistant sug
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the generation and embedding choice
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the container choice
 - [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — the CI and documentation-validation choices
+- [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — the driver and execution-model choices
+- [Database migrations](../database/migrations.md) — the Alembic workflow
 - [Architecture overview](../architecture/overview.md)
 - [Provider pattern](../architecture/provider-pattern.md)
 - [Docker strategy](../deployment/docker.md)

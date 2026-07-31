@@ -2,7 +2,7 @@
 title: LearnFlow Architecture Decision Register
 status: approved
 owner: architecture
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - ../adr/README.md
@@ -22,6 +22,7 @@ When a decision is significant enough to affect multiple modules, future contrib
 - **Approved:** agreed direction; implementation may proceed when its detailed documentation is ready.
 - **Accepted — ADR-NNN:** approved direction with an accepted ADR recording its rationale.
 - **ADR pending:** approved direction that still requires a formal ADR before or alongside implementation.
+- **ADR proposed — ADR-NNN:** approved direction whose ADR is drafted and awaiting project-owner acceptance.
 - **Deferred:** intentionally not implemented now; revisit only when the stated trigger occurs.
 
 These are register statuses. They are distinct from the document `status` field in front matter, which uses the vocabularies defined in [documentation standards](../development/documentation-standards.md).
@@ -52,7 +53,8 @@ These are register statuses. They are distinct from the document `status` field 
 | DEC-020 | Topic performance evidence belongs only to an external test result; checkpoint quiz outcomes reach topic progress through quiz attempts and question topic links. | Approved | [Domain model](../domain/domain-model.md), [Domain entities](../domain/entities.md) | Accepted — [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md) |
 | DEC-021 | Monthly plans are an MVP planning type alongside roadmap, weekly, and daily plans. | Approved | [MVP scope](../requirements/mvp.md), [Functional requirements](../requirements/functional.md), [Database schema](../database/schema.md) | Product decision; ADR optional |
 | DEC-022 | Configuration variables use three categories — core runtime (`APP_*`, `API_*`), capability (`<CAPABILITY>_PROVIDER` plus capability-level settings), and vendor (`<VENDOR>_<SETTING>`). `EMBEDDING_MODEL` is removed; `API_BASE_URL` is frontend configuration. `deployment/environments.md` is the authoritative catalogue, and configuration is validated before the application is created. | Approved | [Environments and configuration](../deployment/environments.md) | Accepted — [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md) |
-| DEC-023 | Changes reach `main` through a pull request. CI runs backend tests, Ruff lint and format, documentation validation, and container build validation on pull requests to `main` and pushes to `main`; frontend, database, and security checks are added with the artifacts they verify. AI-assisted delivery follows one repeatable workflow that stops at an open pull request and never merges. | Approved | [CI/CD strategy](../deployment/ci-cd.md), [Git workflow](../development/git-workflow.md), [Engineering AI workflow](../ai/engineering-ai.md) | Accepted — [ADR-010](../adr/ADR-010-feature-delivery-workflow.md) |
+| DEC-023 | Changes reach `main` through a pull request. CI runs the checks enumerated in [CI/CD strategy](../deployment/ci-cd.md) on pull requests to `main` and pushes to `main`; each remaining check is added with the artifact it verifies. AI-assisted delivery follows one repeatable workflow that stops at an open pull request and never merges. | Approved | [CI/CD strategy](../deployment/ci-cd.md), [Git workflow](../development/git-workflow.md), [Engineering AI workflow](../ai/engineering-ai.md) | Accepted — [ADR-010](../adr/ADR-010-feature-delivery-workflow.md) |
+| DEC-024 | PostgreSQL persistence uses synchronous SQLAlchemy with psycopg 3. The schema is migrated one area per milestone, starting with the curriculum tables; `schema.md` remains the approved target for all six areas. Controlled values are validated text guarded by a `CHECK` constraint, and one active curriculum version per program is enforced by a partial unique index. | Approved | [Database schema](../database/schema.md), [Database migrations](../database/migrations.md) | Accepted — [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) |
 
 ## Deferred Decisions
 
@@ -84,6 +86,7 @@ These ADRs are accepted and hold the durable rationale, alternatives, and conseq
 | [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md) | Model assessment topics and mistake evidence sources explicitly | DEC-018, DEC-019, DEC-020 |
 | [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md) | Name and validate configuration variables explicitly | DEC-022 |
 | [ADR-010](../adr/ADR-010-feature-delivery-workflow.md) | Deliver features through pull requests with automated gates | DEC-023 |
+| [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) | Implement PostgreSQL persistence synchronously and migrate per milestone | DEC-024 |
 
 Decisions still marked **ADR pending** above have an approved direction but no formal ADR yet. Create the ADR before or alongside implementation of the affected area.
 

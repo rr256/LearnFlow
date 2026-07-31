@@ -35,8 +35,8 @@ The project is initially maintained by one developer with AI assistance. The wor
 Create one focused branch for each meaningful change:
 
 ```text
-feature/study-goal-setup
-feature/resource-ingestion
+feat/study-goal-setup
+feat/resource-ingestion
 fix/revision-scheduling
 docs/domain-model
 chore/docker-local-setup
@@ -46,7 +46,7 @@ Branch prefixes:
 
 | Prefix | Use |
 | --- | --- |
-| `feature/` | New learner-facing capability. |
+| `feat/` | New learner-facing capability. Matches the `feat` Conventional Commit type and the repository's branch history. |
 | `fix/` | Correct behavior or defect. |
 | `docs/` | Documentation-only change. |
 | `refactor/` | Internal restructuring without intended behavior change. |

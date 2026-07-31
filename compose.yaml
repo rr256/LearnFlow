@@ -1,11 +1,12 @@
 # LearnFlow local development services.
 #
-# Currently defines the backend service only. The approved target topology in
-# docs/deployment/docker.md also includes postgres, chromadb, and frontend; each
-# joins this file in the change that implements the code consuming it, so no
-# service here is unused or unconfigurable. Ollama runs on the host.
+# Currently defines the backend and postgres services. The approved target
+# topology in docs/deployment/docker.md also includes chromadb and frontend;
+# each joins this file in the change that implements the code consuming it, so
+# no service here is unused or unconfigurable. Ollama runs on the host.
 #
 #   docker compose up --build        start, building images as needed
+#   docker compose up -d postgres    database only, for host-side Alembic/tests
 #   docker compose logs -f backend   follow backend logs
 #   docker compose down              stop, preserving any named volumes
 #
@@ -30,6 +31,12 @@ services:
       # developer's local API_HOST=127.0.0.1 must not reach the container.
       API_HOST: 0.0.0.0
       API_PORT: ${API_PORT:-8000}
+      # Composed here rather than interpolated from DATABASE_URL, for the same
+      # reason as API_HOST: a developer's .env points at 127.0.0.1 for host-side
+      # Alembic runs, which inside this container is the container itself. The
+      # credentials and database name still come from the POSTGRES_* values, so
+      # the two services cannot drift apart.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-learnflow}:${POSTGRES_PASSWORD:-learnflow}@postgres:5432/${POSTGRES_DB:-learnflow}
     # Published on the loopback interface only, so the API is not exposed to
     # other devices on the local network.
     ports:
@@ -51,3 +58,43 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+    # The backend does not create schema at startup, so a reachable database is
+    # not required for the process to boot. Waiting for health anyway means the
+    # first request meets a database ready to accept connections.
+    #
+    # Migrations are not run from this container: the image contains
+    # backend/app only, not alembic.ini or migrations/. Apply them from the host
+    # against the published port; see docs/database/migrations.md.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    # PostgreSQL 15 or later is required: the topics uniqueness constraint uses
+    # NULLS NOT DISTINCT. Pinned to a major version so a rebuild cannot move the
+    # local database to a new major without an explicit change here.
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-learnflow}
+      POSTGRES_USER: ${POSTGRES_USER:-learnflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-learnflow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Published on loopback only, so the database is not reachable from other
+    # devices on the local network. It is published at all so a contributor can
+    # run Alembic and the integration tests from the host.
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-learnflow} -d ${POSTGRES_DB:-learnflow}
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  # Learner data lives here. `docker compose down -v` deletes it; `docker
+  # compose down` does not.
+  postgres_data:

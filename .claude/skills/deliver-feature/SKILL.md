@@ -89,7 +89,7 @@ git pull --ff-only
 git checkout -b <prefix>/<short-kebab-description>
 ```
 
-Use a prefix from the table in `git-workflow.md`: `feature/`, `fix/`, `docs/`, `refactor/`,
+Use a prefix from the table in `git-workflow.md`: `feat/`, `fix/`, `docs/`, `refactor/`,
 `test/`, or `chore/`. One branch per change. Never implement on `main`; if the working tree is
 dirty, stop and report rather than stashing or discarding anything.
 

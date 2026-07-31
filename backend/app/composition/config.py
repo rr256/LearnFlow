@@ -11,14 +11,14 @@ Variable naming follows the three categories in ADR-009:
    settings that are not vendor-specific.
 3. Vendor -- ``<VENDOR>_<SETTING>`` configures one specific vendor.
 
-Only the settings the backend actually uses today are defined here. Database, AI,
-retrieval, and storage settings arrive with the code that reads them.
+Only the settings the backend actually uses today are defined here. AI, retrieval,
+and storage settings arrive with the code that reads them.
 """
 
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
@@ -66,6 +66,16 @@ class Settings(BaseSettings):
     app_log_level: LogLevel = LogLevel.info
     api_host: str = Field(default="127.0.0.1", min_length=1)
     api_port: int = Field(default=8000, ge=1, le=65535)
+
+    # Capability-level setting under ADR-009: it survives a change of relational
+    # database, unlike the POSTGRES_* values that configure the Compose service.
+    #
+    # Deliberately has no default. Every other setting here describes how this
+    # process runs and has a safe universal value; a database URL names an
+    # external system and carries credentials, so there is no honest default to
+    # fall back on. A missing value fails at startup with a named field rather
+    # than silently pointing the backend at the wrong database.
+    database_url: PostgresDsn
 
     @field_validator("app_log_level", mode="before")
     @classmethod

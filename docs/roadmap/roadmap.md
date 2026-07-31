@@ -131,10 +131,9 @@ Future multi-user/cloud expansion only when justified
 - Automated tests for critical learning rules and API flows.
 - Error handling, logs, health/readiness checks, backup/restore instructions.
 - Improved UI states, accessibility basics, and performance feedback.
-- CI verification for stable checks. The workflow configuration is implemented — backend tests, Ruff
-  lint and format checks, documentation validation, and container build validation, per
-  [CI/CD strategy](../deployment/ci-cd.md), which describes what the pipeline runs today. Frontend
-  and migration checks are added with the artifacts they verify.
+- CI verification for stable checks. The workflow configuration is implemented;
+  [CI/CD strategy](../deployment/ci-cd.md) enumerates what the pipeline runs today and what remains
+  pending. Each remaining check is added with the artifact it verifies.
 - README and setup guide validated on a clean machine where possible.
 
 **Exit criteria:** the learner can use LearnFlow daily without fragile setup, unexplained failures, or risk of silent data loss.

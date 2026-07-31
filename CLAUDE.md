@@ -49,12 +49,18 @@ cd backend
 python -m pip install -r requirements-dev.txt   # runtime + test/lint tooling
 python -m app.main                              # serve on API_HOST / API_PORT
 python -m uvicorn app.main:app --reload         # reload workflow (own --host/--port)
+python -m alembic upgrade head                  # apply the database schema
 ```
 
 Tests, lint, and formatting are part of the repository check set below.
 
-Local containers — `compose.yaml` defines the `backend` service only; PostgreSQL, ChromaDB, and the
-frontend join it with the code that uses them:
+Database — PostgreSQL through SQLAlchemy and Alembic. `DATABASE_URL` is required and has no default.
+Migrations are never applied automatically, by startup or by a container entrypoint. The schema is
+migrated one area per milestone; only the curriculum tables exist today. See
+[`docs/database/migrations.md`](docs/database/migrations.md).
+
+Local containers — `compose.yaml` defines the `backend` and `postgres` services; ChromaDB and the
+frontend join them with the code that uses them:
 
 ```bash
 docker compose up --build                       # build and start
@@ -64,8 +70,9 @@ docker compose config -q                        # validate the topology
 docker build -f docker/backend.Dockerfile .      # validate the image build
 ```
 
-`docker compose down -v` deletes named volumes and is destructive; never present it as a routine
-stop command. See [`docs/deployment/docker.md`](docs/deployment/docker.md).
+`docker compose down -v` deletes named volumes and is destructive — `postgres_data` holds learner
+data; never present it as a routine stop command. See
+[`docs/deployment/docker.md`](docs/deployment/docker.md).
 
 Python 3.14 is required. `GET /health` is an operational endpoint served outside `/api/v1`.
 Configuration is validated at startup; see
@@ -92,6 +99,10 @@ CI runs these same checks on every pull request, except that the workflow runs `
 without `-W error`; see [`docs/deployment/ci-cd.md`](docs/deployment/ci-cd.md). Changes reach `main`
 through a pull request, per
 [`docs/development/git-workflow.md`](docs/development/git-workflow.md).
+
+The database migration tests are outside this set because they need PostgreSQL. They skip unless
+`TEST_DATABASE_URL` names a disposable database, and must never be pointed at `DATABASE_URL`. CI runs
+them against an ephemeral service container.
 
 ## Never commit
 

@@ -15,6 +15,51 @@ def test_defaults_apply_when_nothing_is_configured():
     assert settings.api_port == 8000
 
 
+def test_database_url_is_required(monkeypatch):
+    """A database URL names an external system, so it has no safe default."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None)
+
+    assert "database_url" in str(excinfo.value)
+
+
+def test_database_url_is_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+psycopg://learner:secret@db.internal:6543/learnflow"
+    )
+
+    settings = Settings(_env_file=None)
+
+    # PostgresDsn is a multi-host URL, so host details come from hosts().
+    host = settings.database_url.hosts()[0]
+    assert host["host"] == "db.internal"
+    assert host["port"] == 6543
+    assert settings.database_url.path == "/learnflow"
+    assert settings.database_url.scheme == "postgresql+psycopg"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "mysql://learnflow:learnflow@127.0.0.1:3306/learnflow",
+        "sqlite:///learnflow.db",
+        "redis://127.0.0.1:6379/0",
+        "not-a-url",
+        "",
+    ],
+)
+def test_non_postgresql_database_url_is_rejected(monkeypatch, value):
+    """ADR-003 selects PostgreSQL; another backend must not start silently."""
+    monkeypatch.setenv("DATABASE_URL", value)
+
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None)
+
+    assert "database_url" in str(excinfo.value)
+
+
 def test_environment_variables_override_defaults(monkeypatch):
     monkeypatch.setenv("APP_ENV", "staging")
     monkeypatch.setenv("APP_LOG_LEVEL", "DEBUG")
