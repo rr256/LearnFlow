@@ -36,9 +36,19 @@ def gate_cse() -> CurriculumSeed:
 
 def test_bundled_gate_cse_file_loads(gate_cse):
     assert gate_cse.program_code == "gate-cse"
-    assert gate_cse.version_label == "2026"
+    assert gate_cse.version_label == "2027"
     assert gate_cse.version_status == "active"
-    assert "gate2026.iitg.ac.in" in (gate_cse.source_reference or "")
+
+
+def test_bundled_gate_cse_cites_both_official_2027_sources(gate_cse):
+    """The version is only traceable if the reference survives into the database,
+    so both papers of the GATE 2027 syllabus are named in `source_reference`."""
+    reference = gate_cse.source_reference or ""
+
+    assert "IIT Madras" in reference
+    assert "CS_GATE2027_Syllabus.pdf" in reference
+    assert "GA_GATE2027_Syllabus.pdf" in reference
+    assert reference.count("https://gate2027.iitm.ac.in/") == 2
 
 
 def test_bundled_gate_cse_file_applies_and_is_idempotent(gate_cse):
@@ -68,6 +78,47 @@ def test_bundled_gate_cse_subjects_are_the_official_sections_in_order(gate_cse):
         "computer-networks",
         "general-aptitude",
     ]
+
+
+def topics_of(seed, code):
+    return next(s for s in seed.subjects if s.code == code).topics
+
+
+def test_bundled_gate_cse_carries_the_2027_rewrites(gate_cse):
+    """Four subjects were rewritten between GATE 2026 and 2027. Pinning a
+    distinctive phrase from each catches a silent revert to the older syllabus,
+    which would otherwise look like a working seed carrying stale curriculum."""
+    names = {
+        code: [topic.name for topic in topics_of(gate_cse, code)]
+        for code in ("digital-logic", "computer-organization-and-architecture", "computer-networks")
+    }
+
+    # Digital Logic: 2026 listed "Boolean algebra" and "Minimization" separately.
+    assert names["digital-logic"] == [
+        "Boolean algebra and minimization - algebraic technique, Karnaugh map, tabular method",
+        "Design of combinational and sequential circuits",
+        "Number representation and arithmetic (fixed and floating point)",
+    ]
+    # Computer Organization: 2026 opened with "Machine instructions and addressing modes".
+    organization = names["computer-organization-and-architecture"]
+    assert organization[0] == "Instruction set and addressing modes"
+    assert "Design of control unit - hardwired and microprogrammed" in organization
+    # Computer Networks: 2027 is markedly shorter and drops ARP/DHCP/ICMP and UDP.
+    assert names["computer-networks"][0] == "Principles of Layering"
+    assert names["computer-networks"][-1] == "DNS and HTTP"
+    assert not any("ARP" in name or "UDP" in name for name in names["computer-networks"])
+
+
+def test_bundled_gate_cse_quantitative_aptitude_has_three_subtopics(gate_cse):
+    """2027 joins mensuration and elementary statistics into one comma-separated
+    item; 2026 listed them as two."""
+    aptitude = topics_of(gate_cse, "general-aptitude")
+    quantitative = next(topic for topic in aptitude if topic.name == "Quantitative Aptitude")
+
+    assert [child.name for child in quantitative.topics][-1] == (
+        "Mensuration and geometry, Elementary statistics and probability"
+    )
+    assert len(quantitative.topics) == 3
 
 
 def test_bundled_gate_cse_every_subject_has_topics_and_a_source_description(gate_cse):

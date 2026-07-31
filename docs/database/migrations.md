@@ -233,10 +233,10 @@ transcribed GATE CSE syllabus and records its official source and transcription 
 | | |
 | --- | --- |
 | Learning program | `gate-cse` — GATE Computer Science and Information Technology |
-| Curriculum version | `2026`, seeded `active` |
-| Organising institute | IIT Guwahati |
-| CS sections 1–10 | <https://gate2026.iitg.ac.in/doc/GATE2026_Syllabus/CS_2026_Syllabus.pdf> |
-| General Aptitude | <https://gate2026.iitg.ac.in/doc/GATE2026_Syllabus/GA_2026_Syllabus.pdf> |
+| Curriculum version | `2027`, seeded `active` |
+| Organising institute | IIT Madras |
+| CS sections 1–10 | <https://gate2027.iitm.ac.in/static/doc/GATE2027_Syllabus/CS_GATE2027_Syllabus.pdf> |
+| General Aptitude | <https://gate2027.iitm.ac.in/static/doc/GATE2027_Syllabus/GA_GATE2027_Syllabus.pdf> |
 
 General Aptitude is published separately but is part of the CS paper, so it is seeded as an eleventh
 subject after the ten numbered CS sections. Both URLs are also stored in the version's
@@ -244,7 +244,8 @@ subject after the ten numbered CS sections. Both URLs are also stored in the ver
 
 The transcription rules — one subject per official section, topics split at the delimiter each
 section itself uses, wording unchanged — are recorded in the data file's `$comment` block so the file
-stays checkable against the two PDFs.
+stays checkable against the two PDFs. The `$comment` block also records what changed from the GATE
+2026 syllabus and the two spacing artefacts reproduced from the 2027 source rather than tidied away.
 
 A later syllabus year is a new data file with its own `version_label`. Because the seed refuses to
 activate a second version while another is active, the order is fixed — retire first, then activate:
