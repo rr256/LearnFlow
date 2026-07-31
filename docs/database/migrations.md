@@ -8,7 +8,9 @@ related:
   - overview.md
   - schema.md
   - ../development/git-workflow.md
+  - ../development/folder-structure.md
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
+  - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../deployment/environments.md
 ---
 
@@ -110,6 +112,7 @@ The applied revisions are:
 | Revision | Change |
 | --- | --- |
 | `20260731_01` | `create_curriculum_tables` — learning programs, curriculum versions, subjects, topics, and topic relationships. |
+| `20260731_02` | `add_topic_code_unique_constraint` — `uq_topics_subject_id_code`, so a topic code identifies one topic within its subject. Additive; safe on populated tables. |
 
 ## What Requires a Migration
 
@@ -186,15 +189,16 @@ Before accepting a migration:
 
 `backend/tests/integration/` automates the first, third, and fifth of these: it applies the
 migrations to an empty database, compares the models against the resulting schema, attempts the
-writes each documented constraint forbids, and downgrades back to empty. The tests read
+writes each documented constraint forbids, and downgrades back to empty. The curriculum seed is
+exercised against the same database, including a repeat run that must write nothing. The tests read
 `TEST_DATABASE_URL` and skip when it is unset, so they never touch development or learner data;
 [environments and configuration](../deployment/environments.md) records why it has no fallback. The
 CI `database` job supplies an ephemeral PostgreSQL service and fails if that database is
 unreachable, so the checks cannot pass by silently skipping. See
 [CI/CD strategy](../deployment/ci-cd.md).
 
-Testing against representative existing data remains a manual step, because no populated database
-exists yet.
+Testing against representative existing data remains a manual step. The seed tests populate a
+database with reference data, but no learner-owned data exists yet to migrate against.
 
 ## Seed Data vs Migrations
 
@@ -209,13 +213,113 @@ The curated GATE CSE curriculum is reference data. Manage it through explicit, i
 
 A migration may create minimal required system records only when the schema genuinely requires them.
 
+### The curriculum seed
+
+`backend/scripts/seed_curriculum.py` implements the rules above for the curriculum area. Run it from
+`backend/`, after the migrations:
+
+```bash
+python -m scripts.seed_curriculum             # the bundled GATE CSE curriculum
+python -m scripts.seed_curriculum --dry-run   # report what would change, then roll back
+python -m scripts.seed_curriculum --file <path>
+```
+
+The curriculum itself is data, not code: `backend/scripts/gate_cse_curriculum.json` holds the
+transcribed GATE CSE syllabus and records its official source and transcription rules in a
+`$comment` block. Loading a different program or a later syllabus is a new file, not a code change.
+
+#### Source of the bundled GATE CSE curriculum
+
+| | |
+| --- | --- |
+| Learning program | `gate-cse` — GATE Computer Science and Information Technology |
+| Curriculum version | `2027`, seeded `active` |
+| Organising institute | IIT Madras |
+| CS sections 1–10 | <https://gate2027.iitm.ac.in/static/doc/GATE2027_Syllabus/CS_GATE2027_Syllabus.pdf> |
+| General Aptitude | <https://gate2027.iitm.ac.in/static/doc/GATE2027_Syllabus/GA_GATE2027_Syllabus.pdf> |
+
+General Aptitude is published separately but is part of the CS paper, so it is seeded as an eleventh
+subject after the ten numbered CS sections. Both URLs are also stored in the version's
+`source_reference` column, so a seeded curriculum can be traced to its source from the database alone.
+
+The transcription rules — one subject per official section, topics split at the delimiter each
+section itself uses, wording unchanged — are recorded in the data file's `$comment` block so the file
+stays checkable against the two PDFs. The `$comment` block also records what changed from the GATE
+2026 syllabus and the two spacing artefacts reproduced from the 2027 source rather than tidied away.
+
+A later syllabus year is a new data file with its own `version_label`. Because the seed refuses to
+activate a second version while another is active, the order is fixed — retire first, then activate:
+
+1. Re-seed the current year's file with `"version_status": "retired"`. Nothing else in it changes,
+   and its subjects and topics are rewritten as unchanged.
+2. Seed the new year's file as `"version_status": "active"`.
+
+Running step 2 first is refused, naming both versions. There is no single-run switchover, and no
+command retires a version that no seed file names.
+
+This path has not been exercised — only the 2026 curriculum exists. Treat the sequence above as the
+supported route, not as a rehearsed procedure.
+
+Repeatability comes from matching every record on a natural key and writing only what differs:
+
+| Record | Natural key | Enforced by |
+| --- | --- | --- |
+| Learning program | `code` | `uq_learning_programs_code` |
+| Curriculum version | `(learning_program_id, version_label)` | `uq_curriculum_versions_learning_program_id_version_label` |
+| Subject | `(curriculum_version_id, code)` | `uq_subjects_curriculum_version_id_code` |
+| Topic | `(subject_id, code)`, when the topic carries a code | `uq_topics_subject_id_code` |
+| Topic | `(subject_id, parent_topic_id, name)` otherwise | `uq_topics_subject_id_parent_topic_id_name` |
+| Topic relationship | `(source_topic_id, target_topic_id, relationship_type)` | `pk_topic_relationships` |
+
+Every key the seed matches on is enforced by the database, so the seed and the schema cannot disagree
+about what identifies a record. Note that the two topic rules have different scopes: a name is unique
+among siblings, so the same name may appear under two parents, while a code is unique across the
+whole subject at any depth. The seed validates a file at both scopes before writing.
+
+A second run of an unchanged file writes nothing and reports every record as unchanged.
+
+**The seed never deletes.** A subject or topic dropped from the source file keeps its row, because
+learner progress, plans, and assessment evidence reference those identifiers. Dropped subjects move
+behind the seeded ones so the seeded positions stay contiguous. Removing curriculum a learner has
+used is a deliberate, separately approved change, not a side effect of editing a data file.
+
+A topic without a `code` that is renamed in the source reads as a new topic rather than a rename,
+since nothing distinguishes the two. Give a topic a `code` when its name may need to change.
+
+The seed refuses to activate a second curriculum version while another is active, naming both, rather
+than letting the partial unique index from
+[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) surface as an integrity error.
+
+The target database is `DATABASE_URL`, read through the application's validated settings, and the
+whole run is one transaction that commits only on success.
+
+#### Re-ordering subjects
+
+`(curriculum_version_id, position)` is unique and PostgreSQL checks it per statement, not at commit,
+so two subjects trading places would collide midway through the update even though the final state is
+valid.
+
+When any subject's position changes, the seed therefore moves every subject of that version out of
+the positive range first — `position` becomes `-position - 1`, which is injective and always negative
+— flushes, and then assigns the final positions. The order of the updates that follow stops mattering
+because every target position is free.
+
+A subject whose position is unchanged is still rewritten during this step. Vacating moved it too, so
+skipping it would leave it parked outside the range. It is still reported as unchanged, because its
+final state is what was already stored.
+
+This is a workaround for a per-statement constraint check, not a schema decision; the alternative
+would be a deferrable constraint, which
+[schema.md](schema.md#topics) does not specify.
+
 ## Environment Workflow
 
 ### Local development
 
 1. Start PostgreSQL through the documented Docker environment: `docker compose up -d postgres`.
 2. Apply the current Alembic migration head: `cd backend && python -m alembic upgrade head`.
-3. Load/update approved curriculum seed data when required. No seed tooling exists yet.
+3. Load or refresh the curated curriculum: `cd backend && python -m scripts.seed_curriculum`. It is
+   safe to repeat; see [the curriculum seed](#the-curriculum-seed).
 4. Run application and migration tests. The migration tests need `TEST_DATABASE_URL` pointing at a
    separate disposable database, never the one from step 1.
 
@@ -241,9 +345,11 @@ An AI assistant may propose or generate a migration, but it must not:
 - [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md) — establishes Alembic as the migration workflow
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — requires migrations to stay an explicit step, not a startup side effect
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — why the schema is migrated one area at a time
+- [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — the durable rationale for the seed's matching, update, and never-delete rules
 - [CI/CD strategy](../deployment/ci-cd.md) — the `database` job that runs these migrations on every pull request
 - [Environments and configuration](../deployment/environments.md) — the authoritative catalogue for `DATABASE_URL` and `TEST_DATABASE_URL`
 - [Database overview](overview.md)
 - [Database schema](schema.md)
+- [Repository and folder structure](../development/folder-structure.md) — where the seed tooling lives
 - [Git workflow](../development/git-workflow.md)
 - [Architecture Decision Register](../architecture/decisions.md)

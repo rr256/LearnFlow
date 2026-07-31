@@ -50,13 +50,16 @@ python -m pip install -r requirements-dev.txt   # runtime + test/lint tooling
 python -m app.main                              # serve on API_HOST / API_PORT
 python -m uvicorn app.main:app --reload         # reload workflow (own --host/--port)
 python -m alembic upgrade head                  # apply the database schema
+python -m scripts.seed_curriculum               # load the curated curriculum, idempotently
 ```
 
 Tests, lint, and formatting are part of the repository check set below.
 
 Database — PostgreSQL through SQLAlchemy and Alembic. `DATABASE_URL` is required and has no default.
 Migrations are never applied automatically, by startup or by a container entrypoint. The schema is
-migrated one area per milestone; only the curriculum tables exist today. See
+migrated one area per milestone; only the curriculum tables exist today. The curated GATE CSE
+curriculum is loaded by an idempotent seed, not by a migration — it matches records on a natural key
+and never deletes, so it is safe to repeat. See
 [`docs/database/migrations.md`](docs/database/migrations.md).
 
 Local containers — `compose.yaml` defines the `backend` and `postgres` services; ChromaDB and the

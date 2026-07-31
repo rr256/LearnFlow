@@ -22,10 +22,10 @@ LearnFlow is an AI-powered, extensible learning platform. GATE Computer Science 
 
 ## Current project state
 
-- Stage: documentation and architecture foundation, plus a minimal FastAPI backend foundation and the curriculum persistence schema.
-- Implemented: a FastAPI application built through a composition-root application factory; validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, `API_PORT`, and the required `DATABASE_URL`; `GET /health`, an operational endpoint served outside `/api/v1`; a backend container image with Docker Compose `backend` and `postgres` services; and SQLAlchemy models plus an Alembic migration creating the curriculum tables.
+- Stage: documentation and architecture foundation, plus a minimal FastAPI backend foundation, the curriculum persistence schema, and the curated curriculum that fills it.
+- Implemented: a FastAPI application built through a composition-root application factory; validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, `API_PORT`, and the required `DATABASE_URL`; `GET /health`, an operational endpoint served outside `/api/v1`; a backend container image with Docker Compose `backend` and `postgres` services; SQLAlchemy models plus an Alembic migration creating the curriculum tables; and an idempotent seed that loads the curated GATE CSE curriculum into them, described in [database migrations](database/migrations.md#the-curriculum-seed).
 - Delivery: changes reach `main` through a pull request. GitHub Actions runs backend tests, Ruff lint and format checks, documentation validation, database migration checks, and container build validation on pull requests to `main` and pushes to `main`. See [CI/CD strategy](deployment/ci-cd.md) and [git workflow](development/git-workflow.md).
-- Not implemented: learner features, AI and RAG, the frontend, curriculum data, and external integrations. Persistence exists as schema only — no repository, use case, or endpoint reads the curriculum tables yet, and the learner, progress, resource, and assessment tables are migrated with the milestones that use them, per [ADR-011](adr/ADR-011-sqlalchemy-persistence-implementation.md). Compose covers the backend and PostgreSQL — the `chromadb` and `frontend` services join it with the code that consumes them, per [Docker strategy](deployment/docker.md). Infer no application behavior beyond the implemented items above.
+- Not implemented: learner features, AI and RAG, the frontend, and external integrations. The curriculum tables are written by the seed but read by nothing — no endpoint exposes them, and the learner, progress, resource, and assessment tables are migrated with the milestones that use them, per [ADR-011](adr/ADR-011-sqlalchemy-persistence-implementation.md). Compose covers the backend and PostgreSQL — the `chromadb` and `frontend` services join it with the code that consumes them, per [Docker strategy](deployment/docker.md). Infer no application behavior beyond the implemented items above.
 - Decision status: use the documents in this repository and ADRs as the source of truth. Placeholders are intentionally not decisions.
 - Immediate objective: implement approved Milestone 1 scope, replacing relevant placeholders with approved project decisions before implementing each affected area.
 
@@ -78,6 +78,7 @@ Accepted ADRs:
 - [ADR-009 — Name and validate configuration variables explicitly](adr/ADR-009-configuration-naming-and-validation.md)
 - [ADR-010 — Deliver features through pull requests with automated gates](adr/ADR-010-feature-delivery-workflow.md)
 - [ADR-011 — Implement PostgreSQL persistence synchronously and migrate per milestone](adr/ADR-011-sqlalchemy-persistence-implementation.md)
+- [ADR-012 — Load curriculum as reconciled reference data from a versioned file](adr/ADR-012-curriculum-seed-and-reconciliation.md)
 
 ### Design and implementation
 

@@ -8,6 +8,7 @@ related:
   - ADR-003-postgresql-persistence.md
   - ADR-005-docker-compose-local-development.md
   - ADR-009-configuration-naming-and-validation.md
+  - ADR-012-curriculum-seed-and-reconciliation.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../deployment/environments.md
@@ -20,6 +21,37 @@ related:
 ## Status
 
 Accepted — 2026-07-31
+
+## Implementation status
+
+*Note added 2026-07-31. The decision below is unchanged; this records what has since been built
+against it.*
+
+The curriculum tables are now read and written through the persistence layer. The approved GATE CSE
+curriculum seed — [ADR-012](ADR-012-curriculum-seed-and-reconciliation.md) — loads them through a
+`CurriculumSeedRepository` port, a SQLAlchemy adapter implementing it, and an application use case
+that owns the reconcile rules.
+
+This supersedes the *Neutral* consequence recorded below, which noted that the curriculum tables
+existed with nothing reading them and that this would arrive "with the curriculum seed and API in the
+remainder of Milestone 1". The seed half has arrived; the API half has not. No HTTP endpoint reads
+the curriculum tables yet.
+
+Two further points of fact, neither altering the decision:
+
+- The synchronous execution model chosen here is now exercised by real repository code rather than by
+  models alone. `sqlalchemy.orm.Session` carries the seed's whole run as one unit of work, and
+  nothing has required an asynchronous variant.
+- The curriculum area now spans two migrations, not one. `20260731_01_create_curriculum_tables`
+  created it; `20260731_02_add_topic_code_unique_constraint` added `uq_topics_subject_id_code` after
+  the seed showed that a natural key it matched on was unenforced. The "one schema area per
+  milestone" ordering decision is unaffected — a follow-up migration amending an area is the
+  mechanism this record prescribes, not an exception to it.
+
+The database-enforced single-active-version rule decided below is now also checked by the seed before
+it writes, so a rival active version is refused with a message naming both rather than surfacing as an
+integrity error. The partial unique index remains the authority; the application check only improves
+the diagnostic.
 
 ## Context
 
@@ -178,6 +210,7 @@ constraint where practical.
 - [ADR-003: Use PostgreSQL for structured persistence](ADR-003-postgresql-persistence.md) — the decision this record implements
 - [ADR-005: Use Docker Compose for local development](ADR-005-docker-compose-local-development.md) — why migrations stay an explicit step
 - [ADR-009: Name and validate configuration variables explicitly](ADR-009-configuration-naming-and-validation.md) — the category `DATABASE_URL` belongs to
+- [ADR-012: Load curriculum as reconciled reference data from a versioned file](ADR-012-curriculum-seed-and-reconciliation.md) — the first code to read and write the tables this record created
 - [Database schema](../database/schema.md)
 - [Database migrations](../database/migrations.md)
 - [Environments and configuration](../deployment/environments.md)

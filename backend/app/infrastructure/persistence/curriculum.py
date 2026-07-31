@@ -143,6 +143,17 @@ class Topic(UuidPrimaryKeyMixin, TimestampMixin, Base):
             "name",
             postgresql_nulls_not_distinct=True,
         ),
+        # A topic code is unique within its subject at every depth, not merely
+        # among siblings, so a code identifies one topic no matter where it sits
+        # in the tree. That is what lets the seed match on a code and rename the
+        # topic underneath it.
+        #
+        # This one keeps the DEFAULT null behaviour, deliberately opposite to the
+        # constraint above: `code` is optional, so an unnumbered curriculum
+        # leaves every code NULL. Under NULLS NOT DISTINCT a subject could hold
+        # only one such topic. Here each NULL stays distinct and only real
+        # duplicate codes are rejected.
+        UniqueConstraint("subject_id", "code"),
         # Reading a subject's topics in display order is the curriculum API's
         # primary access pattern; listed under Required Indexes in schema.md.
         Index(None, "subject_id", "parent_topic_id", "position"),

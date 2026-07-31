@@ -240,11 +240,12 @@ On a new local environment:
 
 1. Start Compose services — `docker compose up --build`.
 2. Apply Alembic migrations from the backend workflow — `cd backend && python -m alembic upgrade head`.
-3. Run the approved idempotent GATE CSE curriculum seed/import process. No seed tooling exists yet.
+3. Load the curated GATE CSE curriculum — `cd backend && python -m scripts.seed_curriculum`. It is
+   safe to repeat; see [the curriculum seed](../database/migrations.md#the-curriculum-seed).
 4. Confirm backend health and curriculum-read endpoints. No curriculum endpoints exist yet.
 
-Steps 1 and 2 work today. The application must not silently create schema changes at startup outside
-the Alembic migration workflow, so step 2 is never automatic.
+Steps 1 to 3 work today. The application must not silently create schema changes at startup outside
+the Alembic migration workflow, so step 2 is never automatic; step 3 is likewise always explicit.
 
 ## Security and Privacy Rules
 

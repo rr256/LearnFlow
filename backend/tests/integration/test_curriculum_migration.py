@@ -191,6 +191,100 @@ def test_two_root_topics_in_a_subject_cannot_share_a_name(session: Session):
     session.rollback()
 
 
+def test_two_topics_in_a_subject_cannot_share_a_code(session: Session):
+    subject = make_subject(session, make_version(session, make_program(session)))
+    session.add(
+        Topic(
+            subject_id=subject.id, code="deadlock", name="Deadlock", position=1, is_trackable=True
+        )
+    )
+    session.commit()
+
+    session.add(
+        Topic(
+            subject_id=subject.id,
+            code="deadlock",
+            name="Deadlock handling",
+            position=2,
+            is_trackable=True,
+        )
+    )
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+
+def test_a_subtopic_cannot_reuse_a_code_used_by_a_topic_under_another_parent(session: Session):
+    """Code uniqueness spans the whole subject, unlike name uniqueness, which
+    applies only among siblings."""
+    subject = make_subject(session, make_version(session, make_program(session)))
+    first_parent = make_topic(session, subject, name="Scheduling", position=1)
+    second_parent = make_topic(session, subject, name="Memory", position=2)
+
+    session.add(
+        Topic(
+            subject_id=subject.id,
+            parent_topic_id=first_parent.id,
+            code="overview",
+            name="Overview",
+            position=1,
+            is_trackable=True,
+        )
+    )
+    session.commit()
+
+    session.add(
+        Topic(
+            subject_id=subject.id,
+            parent_topic_id=second_parent.id,
+            code="overview",
+            name="Overview",
+            position=1,
+            is_trackable=True,
+        )
+    )
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+
+def test_two_subjects_may_use_the_same_topic_code(session: Session):
+    version = make_version(session, make_program(session))
+    first = make_subject(session, version, position=1)
+    second = make_subject(session, version, position=2)
+
+    session.add_all(
+        [
+            Topic(subject_id=first.id, code="basics", name="Basics", position=1, is_trackable=True),
+            Topic(
+                subject_id=second.id, code="basics", name="Basics", position=1, is_trackable=True
+            ),
+        ]
+    )
+    session.commit()
+
+    assert session.query(Topic).filter_by(code="basics").count() == 2
+
+
+def test_many_topics_in_a_subject_may_leave_the_code_null(session: Session):
+    """`code` is optional and the curated GATE CSE curriculum omits it entirely,
+    so this constraint keeps the default NULLS DISTINCT behaviour. Declaring it
+    NULLS NOT DISTINCT, as the name constraint does, would allow only one
+    uncoded topic per subject."""
+    subject = make_subject(session, make_version(session, make_program(session)))
+
+    session.add_all(
+        [
+            Topic(subject_id=subject.id, name="Deadlock", position=1, is_trackable=True),
+            Topic(subject_id=subject.id, name="File systems", position=2, is_trackable=True),
+            Topic(subject_id=subject.id, name="Paging", position=3, is_trackable=True),
+        ]
+    )
+    session.commit()
+
+    assert session.query(Topic).filter(Topic.code.is_(None)).count() == 3
+
+
 def test_a_subtopic_may_reuse_a_name_used_under_a_different_parent(session: Session):
     subject = make_subject(session, make_version(session, make_program(session)))
     first_parent = make_topic(session, subject, name="Scheduling", position=1)

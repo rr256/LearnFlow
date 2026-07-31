@@ -1,0 +1,232 @@
+{
+  "$comment": [
+    "Curated GATE Computer Science and Information Technology curriculum.",
+    "",
+    "Source: the GATE 2027 syllabus published by IIT Madras, the organising",
+    "institute -- CS_GATE2027_Syllabus.pdf for sections 1-10 and",
+    "GA_GATE2027_Syllabus.pdf for General Aptitude, which is part of the CS paper.",
+    "Both URLs are recorded in `source_reference` below.",
+    "",
+    "Transcription rules, applied uniformly so the file stays checkable against",
+    "the source:",
+    "  * One subject per official section. `position` is the official section",
+    "    number; General Aptitude is numbered separately in its own document and",
+    "    is appended last.",
+    "  * A subject `description` is the section's official text, verbatim.",
+    "  * Topics are that text split at the delimiter the section itself uses: the",
+    "    named area for Engineering Mathematics and General Aptitude, the",
+    "    semicolon for Computer Networks, the sentence elsewhere.",
+    "  * `is_trackable` is false for a topic that only groups subtopics and true",
+    "    for a topic a learner studies directly.",
+    "  * Wording is unchanged. The normalisations are U+2010 HYPHEN and U+2013 EN",
+    "    DASH to ASCII '-', so codes and names stay typeable, and a capital first",
+    "    letter where a split point falls mid-sentence.",
+    "",
+    "Two spacing artefacts in the 2027 source are reproduced as measured, not",
+    "tidied, so the file still matches the PDF. Glyph-width measurement of the",
+    "gaps puts them beyond doubt: a hyphen with no space measures ~0.0, a word",
+    "space on those lines measures 3.3-5.8.",
+    "  * Computer Networks reads 'IPv4 - Fragmentation' (spaces both sides) but",
+    "    'TCP- flow control' (no space before the hyphen).",
+    "  * Spatial Aptitude runs '...and grouping paper folding, cutting...' with no",
+    "    separator. The two are split at the line break the PDF itself puts there,",
+    "    matching how the 2026 document laid them out.",
+    "",
+    "Changes from the GATE 2026 syllabus, each verified against both PDFs:",
+    "  * Digital Logic, Computer Organization and Architecture, and Computer",
+    "    Networks were rewritten by the examiners.",
+    "  * General Aptitude now joins 'Mensuration and geometry' and 'Elementary",
+    "    statistics and probability' into one comma-separated item.",
+    "  * The other seven subjects are unchanged, word for word.",
+    "",
+    "`topic_relationships` is empty on purpose. The official syllabus states no",
+    "prerequisite or sequencing order between topics, and inventing one would",
+    "present an assistant's guess as curriculum. The seed supports relationships",
+    "so a curated, reviewed set can be added later without a code change."
+  ],
+  "program_code": "gate-cse",
+  "program_name": "GATE Computer Science and Information Technology",
+  "program_description": "The Computer Science and Information Technology (CS) paper of the Graduate Aptitude Test in Engineering.",
+  "version_label": "2027",
+  "version_status": "active",
+  "source_reference": "GATE 2027 CS and GA syllabus, IIT Madras (organising institute): https://gate2027.iitm.ac.in/static/doc/GATE2027_Syllabus/CS_GATE2027_Syllabus.pdf and https://gate2027.iitm.ac.in/static/doc/GATE2027_Syllabus/GA_GATE2027_Syllabus.pdf",
+  "subjects": [
+    {
+      "code": "engineering-mathematics",
+      "name": "Engineering Mathematics",
+      "description": "Discrete Mathematics: Propositional and first order logic. Sets, relations, functions, partial orders and lattices. Monoids, Groups. Graphs: connectivity, matching, colouring. Combinatorics: counting, recurrence relations, generating functions. Linear Algebra: Matrices, determinants, system of linear equations, eigenvalues and eigenvectors, LU decomposition. Calculus: Limits, continuity and differentiability, Maxima and minima, Mean value theorem, Integration. Probability and Statistics: Random variables, Uniform, normal, exponential, Poisson and binomial distributions. Mean, median, mode and standard deviation. Conditional probability and Bayes theorem.",
+      "topics": [
+        {
+          "name": "Discrete Mathematics",
+          "is_trackable": false,
+          "topics": [
+            { "name": "Propositional and first order logic" },
+            { "name": "Sets, relations, functions, partial orders and lattices" },
+            { "name": "Monoids, Groups" },
+            { "name": "Graphs: connectivity, matching, colouring" },
+            { "name": "Combinatorics: counting, recurrence relations, generating functions" }
+          ]
+        },
+        {
+          "name": "Linear Algebra",
+          "description": "Matrices, determinants, system of linear equations, eigenvalues and eigenvectors, LU decomposition."
+        },
+        {
+          "name": "Calculus",
+          "description": "Limits, continuity and differentiability, Maxima and minima, Mean value theorem, Integration."
+        },
+        {
+          "name": "Probability and Statistics",
+          "is_trackable": false,
+          "topics": [
+            { "name": "Random variables, Uniform, normal, exponential, Poisson and binomial distributions" },
+            { "name": "Mean, median, mode and standard deviation" },
+            { "name": "Conditional probability and Bayes theorem" }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "digital-logic",
+      "name": "Digital Logic",
+      "description": "Boolean algebra and minimization - algebraic technique, Karnaugh map, tabular method. Design of combinational and sequential circuits. Number representation and arithmetic (fixed and floating point).",
+      "topics": [
+        { "name": "Boolean algebra and minimization - algebraic technique, Karnaugh map, tabular method" },
+        { "name": "Design of combinational and sequential circuits" },
+        { "name": "Number representation and arithmetic (fixed and floating point)" }
+      ]
+    },
+    {
+      "code": "computer-organization-and-architecture",
+      "name": "Computer Organization and Architecture",
+      "description": "Instruction set and addressing modes. Design of arithmetic and logic unit (ALU). Design of control unit - hardwired and microprogrammed. Memory interfacing and hierarchy: performance, cache memory mapping. I/O interface (interrupt and DMA). Instruction pipelining, pipeline hazards.",
+      "topics": [
+        { "name": "Instruction set and addressing modes" },
+        { "name": "Design of arithmetic and logic unit (ALU)" },
+        { "name": "Design of control unit - hardwired and microprogrammed" },
+        { "name": "Memory interfacing and hierarchy: performance, cache memory mapping" },
+        { "name": "I/O interface (interrupt and DMA)" },
+        { "name": "Instruction pipelining, pipeline hazards" }
+      ]
+    },
+    {
+      "code": "programming-and-data-structures",
+      "name": "Programming and Data Structures",
+      "description": "Programming in C. Recursion. Arrays, stacks, queues, linked lists, trees, binary search trees, binary heaps, graphs.",
+      "topics": [
+        { "name": "Programming in C" },
+        { "name": "Recursion" },
+        { "name": "Arrays, stacks, queues, linked lists, trees, binary search trees, binary heaps, graphs" }
+      ]
+    },
+    {
+      "code": "algorithms",
+      "name": "Algorithms",
+      "description": "Searching, sorting, hashing. Asymptotic worst case time and space complexity. Algorithm design techniques: greedy, dynamic programming and divide-and-conquer. Graph traversals, minimum spanning trees, shortest paths.",
+      "topics": [
+        { "name": "Searching, sorting, hashing" },
+        { "name": "Asymptotic worst case time and space complexity" },
+        { "name": "Algorithm design techniques: greedy, dynamic programming and divide-and-conquer" },
+        { "name": "Graph traversals, minimum spanning trees, shortest paths" }
+      ]
+    },
+    {
+      "code": "theory-of-computation",
+      "name": "Theory of Computation",
+      "description": "Regular expressions and finite automata. Context-free grammars and push-down automata. Regular and context-free languages, pumping lemma. Turing machines and undecidability.",
+      "topics": [
+        { "name": "Regular expressions and finite automata" },
+        { "name": "Context-free grammars and push-down automata" },
+        { "name": "Regular and context-free languages, pumping lemma" },
+        { "name": "Turing machines and undecidability" }
+      ]
+    },
+    {
+      "code": "compiler-design",
+      "name": "Compiler Design",
+      "description": "Lexical analysis, parsing, syntax-directed translation. Runtime environments. Intermediate code generation. Local optimisation, Data flow analyses: constant propagation, liveness analysis, common sub expression elimination.",
+      "topics": [
+        { "name": "Lexical analysis, parsing, syntax-directed translation" },
+        { "name": "Runtime environments" },
+        { "name": "Intermediate code generation" },
+        { "name": "Local optimisation, Data flow analyses: constant propagation, liveness analysis, common sub expression elimination" }
+      ]
+    },
+    {
+      "code": "operating-system",
+      "name": "Operating System",
+      "description": "System calls, processes, threads, inter-process communication, concurrency and synchronization. Deadlock. CPU and I/O scheduling. Memory management and virtual memory. File systems.",
+      "topics": [
+        { "name": "System calls, processes, threads, inter-process communication, concurrency and synchronization" },
+        { "name": "Deadlock" },
+        { "name": "CPU and I/O scheduling" },
+        { "name": "Memory management and virtual memory" },
+        { "name": "File systems" }
+      ]
+    },
+    {
+      "code": "databases",
+      "name": "Databases",
+      "description": "ER-model. Relational model: relational algebra, tuple calculus, SQL. Integrity constraints, normal forms. File organization, indexing (e.g., B and B+ trees). Transactions and concurrency control.",
+      "topics": [
+        { "name": "ER-model" },
+        { "name": "Relational model: relational algebra, tuple calculus, SQL" },
+        { "name": "Integrity constraints, normal forms" },
+        { "name": "File organization, indexing (e.g., B and B+ trees)" },
+        { "name": "Transactions and concurrency control" }
+      ]
+    },
+    {
+      "code": "computer-networks",
+      "name": "Computer Networks",
+      "description": "Principles of Layering; Basics of switching (circuit, packet and virtual circuit) and performance metrics; Data link layer: error detection, Medium Access Control, Ethernet; Distance vector and link state routing; IPv4 - Fragmentation, CIDR Notation, Network Address Translation; TCP- flow control and congestion control, socket API; DNS and HTTP.",
+      "topics": [
+        { "name": "Principles of Layering" },
+        { "name": "Basics of switching (circuit, packet and virtual circuit) and performance metrics" },
+        { "name": "Data link layer: error detection, Medium Access Control, Ethernet" },
+        { "name": "Distance vector and link state routing" },
+        { "name": "IPv4 - Fragmentation, CIDR Notation, Network Address Translation" },
+        { "name": "TCP- flow control and congestion control, socket API" },
+        { "name": "DNS and HTTP" }
+      ]
+    },
+    {
+      "code": "general-aptitude",
+      "name": "General Aptitude",
+      "description": "Verbal Aptitude: Basic English grammar: tenses, articles, adjectives, prepositions, conjunctions, verb-noun agreement, and other parts of speech. Basic vocabulary: words, idioms, and phrases in context. Reading and comprehension, Narrative sequencing. Quantitative Aptitude: Data interpretation: data graphs (bar graphs, pie charts, and other graphs representing data), 2- and 3-dimensional plots, maps, and tables. Numerical computation and estimation: ratios, percentages, powers, exponents and logarithms, permutations and combinations, and series. Mensuration and geometry, Elementary statistics and probability. Analytical Aptitude: Logic: deduction and induction, Analogy, Numerical relations and reasoning. Spatial Aptitude: Transformation of shapes: translation, rotation, scaling, mirroring, assembling, and grouping paper folding, cutting, and patterns in 2 and 3 dimensions.",
+      "topics": [
+        {
+          "name": "Verbal Aptitude",
+          "is_trackable": false,
+          "topics": [
+            { "name": "Basic English grammar: tenses, articles, adjectives, prepositions, conjunctions, verb-noun agreement, and other parts of speech" },
+            { "name": "Basic vocabulary: words, idioms, and phrases in context" },
+            { "name": "Reading and comprehension, Narrative sequencing" }
+          ]
+        },
+        {
+          "name": "Quantitative Aptitude",
+          "is_trackable": false,
+          "topics": [
+            { "name": "Data interpretation: data graphs (bar graphs, pie charts, and other graphs representing data), 2- and 3-dimensional plots, maps, and tables" },
+            { "name": "Numerical computation and estimation: ratios, percentages, powers, exponents and logarithms, permutations and combinations, and series" },
+            { "name": "Mensuration and geometry, Elementary statistics and probability" }
+          ]
+        },
+        {
+          "name": "Analytical Aptitude",
+          "description": "Logic: deduction and induction, Analogy, Numerical relations and reasoning."
+        },
+        {
+          "name": "Spatial Aptitude",
+          "is_trackable": false,
+          "topics": [
+            { "name": "Transformation of shapes: translation, rotation, scaling, mirroring, assembling, and grouping" },
+            { "name": "Paper folding, cutting, and patterns in 2 and 3 dimensions" }
+          ]
+        }
+      ]
+    }
+  ],
+  "topic_relationships": []
+}
