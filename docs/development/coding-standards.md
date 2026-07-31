@@ -2,7 +2,7 @@
 title: LearnFlow Coding Standards
 status: approved
 owner: architecture-and-development
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - folder-structure.md
@@ -104,7 +104,9 @@ python scripts/validate_docs.py                                        # documen
 
 This set covers the checks that need nothing beyond Python and the pinned development dependencies. Container commands require a Docker installation and are documented in [Docker strategy](../deployment/docker.md) instead.
 
-CI runs every check in this set on each pull request, with one difference: the workflow runs `python -m pytest` while this local set adds `-W error`, so the local run is the stricter of the two. CI additionally validates the Compose topology and builds the backend image. See [CI/CD strategy](../deployment/ci-cd.md).
+CI runs every check in this set on each pull request, with one difference: the workflow runs `python -m pytest` while this local set adds `-W error`, so the local run is the stricter of the two.
+
+CI additionally runs two things this set does not: it validates the Compose topology and builds the backend image, and it runs the database migration tests against an ephemeral PostgreSQL service. Those migration tests are part of the suite above but skip unless `TEST_DATABASE_URL` names a reachable disposable database, so a plain local run does not exercise them. See [CI/CD strategy](../deployment/ci-cd.md).
 
 ## TypeScript and Frontend Standards
 

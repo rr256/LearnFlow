@@ -10,6 +10,8 @@ related:
   - ../development/tech-stack.md
   - ../development/folder-structure.md
   - ../roadmap/milestones.md
+  - ../database/migrations.md
+  - ../database/schema.md
 ---
 
 # LearnFlow Docker Strategy
@@ -37,19 +39,44 @@ Ollama runs on the host initially. The backend receives its endpoint and configu
 
 ## Implemented State
 
-`compose.yaml` currently defines the `backend` service only.
+`compose.yaml` currently defines the `backend` and `postgres` services.
 
 | Service | State |
 | --- | --- |
 | `backend` | Implemented — builds from `docker/backend.Dockerfile`; build verified in CI. |
-| `postgres` | Not implemented — no code reads `DATABASE_URL` or `POSTGRES_*`. |
+| `postgres` | Implemented — `postgres:18-alpine` with a named volume and a `pg_isready` health check. |
 | `chromadb` | Not implemented — no code reads `CHROMA_URL`. |
 | `frontend` | Not implemented — no `frontend/` application exists. |
 
 Each remaining service joins `compose.yaml` in the change that implements the code consuming it. This
 follows the rule in [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md) that a
-configuration variable is added when its consumer exists: a `postgres` service today would need
-`POSTGRES_*` values that nothing reads and a readiness check the backend cannot yet perform.
+configuration variable is added when its consumer exists. `postgres` joined when the backend gained a
+configured engine and an Alembic environment that read `DATABASE_URL`; `chromadb` and `frontend` are
+still waiting on theirs.
+
+### The `postgres` service
+
+| Decision | Value |
+| --- | --- |
+| Image | `postgres:18-alpine`, pinned to a major version so a rebuild cannot silently move the local database to a new major. The version floor is owned by [database schema](../database/schema.md), which requires PostgreSQL 15 or later. |
+| Persistent data | The named volume `postgres_data`. |
+| Health check | `pg_isready` against the configured user and database. |
+| Published port | `127.0.0.1:5432` only, so the database is unreachable from other devices. It is published at all so a contributor can run Alembic and the integration tests from the host. |
+| Credentials | `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`, each defaulting to `learnflow`. Local development values, not secrets. |
+
+The `backend` service waits for `postgres` to report healthy. That is convenience, not necessity:
+the backend creates its engine lazily and applies no schema at startup, so it boots whether or not
+the database is reachable. Waiting means the first request meets a database ready to accept
+connections.
+
+Nothing in the Compose setup applies migrations. `docker compose up` starts services; schema changes
+stay the explicit Alembic step described in [database migrations](../database/migrations.md).
+
+**Migrations are applied from the host, not from the backend container.** The image copies
+`backend/app` only, by the decision recorded above, so it contains neither `alembic.ini` nor
+`migrations/`. The `postgres` service publishes 5432 on loopback precisely so a contributor can run
+`python -m alembic upgrade head` and the integration tests against it. Contributors already need
+Python 3.14 for the backend, per [technology stack](../development/tech-stack.md).
 
 ### Backend image and service decisions
 
@@ -77,17 +104,22 @@ breaks the build is caught there.
 Two limits on what that proves:
 
 - **No container has been started.** CI validates and builds; it does not run `docker compose up`.
-  The health-check probe has therefore never executed, and no request has been served through a
-  container. Runtime behavior is unverified, as distinct from the build.
+  Neither health-check probe has therefore executed, no request has been served through a container,
+  and the backend has never connected to the `postgres` service. Runtime behavior is unverified, as
+  distinct from the build.
 - **The commands were not run locally when this setup was prepared**, because Docker was not
-  installed on that workstation. CI is the authoritative verification. Container commands are
-  deliberately outside the canonical
+  installed on that workstation. That was true again when the `postgres` service was added. CI is the
+  authoritative verification. Container commands are deliberately outside the canonical
   [local quality checks](../development/coding-standards.md#local-quality-checks), which cover the
   checks needing nothing beyond Python; running them locally is optional and needs a Docker
   installation.
 
-The Milestone 1 Compose item stays unticked for both of these reasons and because the topology covers
-four services; [milestones](../roadmap/milestones.md) records why.
+The migrations themselves are verified separately and more strongly: the CI `database` job applies
+them to a real PostgreSQL service container on every pull request. That job uses a GitHub Actions
+service rather than Compose, so it exercises the schema without exercising this topology.
+
+The Milestone 1 Compose item stays unticked for both of the reasons above and because the topology
+covers four services, two of which now exist; [milestones](../roadmap/milestones.md) records why.
 
 ## Service Responsibilities
 
@@ -148,6 +180,12 @@ developer's local `API_HOST=127.0.0.1` cannot reach the container and leave the 
 `APP_ENV`, `APP_LOG_LEVEL`, and `API_PORT` do interpolate from the shell or a local `.env` file, with
 the documented defaults applied when unset.
 
+`DATABASE_URL` is fixed in the same way and for the same reason. A developer's `.env` names
+`127.0.0.1` so host-side Alembic runs reach the published port; inside the container that address is
+the container itself. Compose therefore composes the backend's URL from the `POSTGRES_*` values and
+the `postgres` service name, so the two services cannot drift apart while the credentials stay in
+one place.
+
 ## Local Development Commands
 
 [README.md](../../README.md) documents the local container workflow. The commands are:
@@ -158,6 +196,9 @@ docker compose up --build
 
 # Start in the background
 docker compose up --build -d
+
+# Start only the database, for host-side Alembic or test runs
+docker compose up -d postgres
 
 # View service logs
 docker compose logs -f backend
@@ -197,12 +238,13 @@ Use `docker compose down -v` only with explicit care: it removes named volumes a
 
 On a new local environment:
 
-1. Start Compose services.
-2. Apply Alembic migrations from the backend workflow.
-3. Run the approved idempotent GATE CSE curriculum seed/import process.
-4. Confirm backend health and curriculum-read endpoints.
+1. Start Compose services — `docker compose up --build`.
+2. Apply Alembic migrations from the backend workflow — `cd backend && python -m alembic upgrade head`.
+3. Run the approved idempotent GATE CSE curriculum seed/import process. No seed tooling exists yet.
+4. Confirm backend health and curriculum-read endpoints. No curriculum endpoints exist yet.
 
-The application must not silently create schema changes at startup outside the Alembic migration workflow.
+Steps 1 and 2 work today. The application must not silently create schema changes at startup outside
+the Alembic migration workflow, so step 2 is never automatic.
 
 ## Security and Privacy Rules
 
@@ -230,4 +272,5 @@ The application must not silently create schema changes at startup outside the A
 - [Milestones](../roadmap/milestones.md) — why the Milestone 1 Compose item is still open
 - [Technology stack](../development/tech-stack.md)
 - [Database migrations](../database/migrations.md)
+- [Database schema](../database/schema.md) — the PostgreSQL version floor the `postgres` image must satisfy
 - [Provider pattern](../architecture/provider-pattern.md)

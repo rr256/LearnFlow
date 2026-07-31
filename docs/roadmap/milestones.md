@@ -10,6 +10,7 @@ related:
   - ../development/git-workflow.md
   - ../deployment/ci-cd.md
   - ../deployment/docker.md
+  - ../database/migrations.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -43,9 +44,9 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 - [ ] Repository skeleton follows `docs/development/folder-structure.md`.
 - [x] Backend starts through FastAPI application factory/composition root.
 - [x] `GET /health` returns a safe readiness response.
-- [ ] Docker Compose starts frontend, backend, PostgreSQL, and ChromaDB. The `backend` service and its image are implemented (`compose.yaml`, `docker/backend.Dockerfile`), and CI validates the topology and builds the image on every pull request — first passing on pull request #7. The item remains open on two counts: the other three services join Compose with the code that consumes them, and no container has been started yet, so `docker compose up` serving `GET /health` is still unverified. See [Docker strategy](../deployment/docker.md).
-- [x] Backend configuration is validated from environment variables.
-- [ ] Alembic initializes and applies an initial migration to a fresh PostgreSQL database.
+- [ ] Docker Compose starts frontend, backend, PostgreSQL, and ChromaDB. The `backend` and `postgres` services are implemented (`compose.yaml`, `docker/backend.Dockerfile`), and CI validates the topology and builds the image on every pull request — first passing on pull request #7. The item remains open on two counts: `chromadb` and `frontend` join Compose with the code that consumes them, and no container has been started yet, so `docker compose up` serving `GET /health` against the `postgres` service is still unverified. See [Docker strategy](../deployment/docker.md).
+- [x] Backend configuration is validated from environment variables. Now includes `DATABASE_URL`, which has no default and is required.
+- [x] Alembic initializes and applies an initial migration to a fresh PostgreSQL database. `20260731_01_create_curriculum_tables` creates the curriculum area; the CI `database` job applies it to an empty PostgreSQL service container, compares the models against the result, exercises the constraints, and downgrades back to empty on every pull request. The remaining schema areas are migrated with the milestones that use them, per [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md).
 - [ ] Curated GATE CSE curriculum seed/import is idempotent.
 - [ ] Curriculum API endpoints return data-driven program/subject/topic hierarchy.
 - [ ] Setup instructions work from a clean local environment.
@@ -121,8 +122,8 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 - [ ] Errors, logging, and health/readiness behavior are documented and tested where practical.
 - [ ] Database/resource backup and restore instructions are documented.
 - [ ] `.env.example`, `.gitignore`, Docker setup, and README are validated.
-- [x] CI configuration runs documentation, lint, backend test, and container build checks on pull requests and pushes to `main` (`.github/workflows/pull-request.yml`). The Python checks were verified locally when they were added; the container checks were verified in CI, where they first ran and passed on pull request #7.
-- [ ] CI also covers frontend and migration checks, once those artifacts exist.
+- [x] CI configuration runs the checks enumerated in [CI/CD strategy](../deployment/ci-cd.md) on pull requests and pushes to `main` (`.github/workflows/pull-request.yml`), covering documentation, lint, backend tests, database migrations, and the container build. The Python checks were verified locally when they were added; the container checks were verified in CI, where they first ran and passed on pull request #7; the database checks run only in CI, because that workstation has no PostgreSQL.
+- [ ] CI also covers frontend checks, once that artifact exists.
 - [ ] Major learner workflows have loading, empty, error, and success states.
 - [ ] Known limitations are documented rather than hidden.
 
@@ -152,4 +153,5 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 - [Git workflow](../development/git-workflow.md)
 - [CI/CD strategy](../deployment/ci-cd.md) — what CI verifies today and what remains pending
 - [Docker strategy](../deployment/docker.md) — which Compose services exist today
+- [Database migrations](../database/migrations.md) — the migrations applied so far
 - [Deferred ideas](future-ideas.md)

@@ -2,12 +2,14 @@
 title: LearnFlow Environments and Configuration
 status: approved
 owner: development-and-operations
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - docker.md
   - ci-cd.md
   - ../development/tech-stack.md
+  - ../database/migrations.md
+  - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
 ---
 
 # LearnFlow Environments and Configuration
@@ -89,14 +91,26 @@ binds to; the client-facing base URL is future frontend configuration.
 
 ### Database
 
-**Planned.** Added when persistence is implemented.
+**Implemented.** `DATABASE_URL` is read by `backend/app/composition/config.py`; the `POSTGRES_*`
+values create and are used to reach the Compose `postgres` service.
 
-```text
-DATABASE_URL
-POSTGRES_DB
-POSTGRES_USER
-POSTGRES_PASSWORD
-```
+| Variable | Default | Accepted values |
+| --- | --- | --- |
+| `DATABASE_URL` | *none — required* | A PostgreSQL URL including the driver, such as `postgresql+psycopg://user:password@host:5432/database`. Validated as a PostgreSQL DSN; another database's scheme is rejected. |
+| `POSTGRES_DB` | `learnflow` | Database name created by the `postgres` service. |
+| `POSTGRES_USER` | `learnflow` | Role created by the `postgres` service. |
+| `POSTGRES_PASSWORD` | `learnflow` | Local development password. Not a secret to protect, and never reused outside local development. |
+
+`DATABASE_URL` is the one variable with no default. Every other setting describes how the process
+itself runs and has a safe universal value; a database URL names an external system and carries
+credentials, so any default would be a guess pointing somewhere real. A missing value fails at
+startup naming the field. Note the consequence: `python -m app.main` needs configuration to start,
+where previously the documented defaults sufficed.
+
+`DATABASE_URL` is a capability-level setting under ADR-009 — it survives a change of relational
+database — while `POSTGRES_*` are vendor settings that do not. Compose builds the backend's
+`DATABASE_URL` from the `POSTGRES_*` values so the two cannot drift; see
+[Docker strategy](docker.md).
 
 ### RAG and Storage
 
@@ -147,24 +161,34 @@ The committed `.env.example` must:
 - Not contain developer-specific local paths.
 - Be updated in the same change that introduces or removes a configuration variable.
 
-The committed file therefore currently contains exactly the four implemented variables:
+The committed file therefore currently contains exactly the eight implemented variables:
 
 ```text
 APP_ENV=local
 APP_LOG_LEVEL=INFO
 API_HOST=127.0.0.1
 API_PORT=8000
+DATABASE_URL=postgresql+psycopg://learnflow:learnflow@127.0.0.1:5432/learnflow
+POSTGRES_DB=learnflow
+POSTGRES_USER=learnflow
+POSTGRES_PASSWORD=learnflow
 ```
 
-Planned entries such as `DATABASE_URL`, `AI_PROVIDER`, and `OLLAMA_BASE_URL` are catalogued in the
-groups above and join `.env.example` in the change that implements their consumer.
+That block is a transcript of the committed file, so the two change together or not at all.
+
+It also carries `TEST_DATABASE_URL` as a commented-out example. That variable is read by the test
+suite rather than by the application, and leaving it set would point the integration tests at a real
+database, so it is documented but not active by default.
+
+Planned entries such as `AI_PROVIDER` and `OLLAMA_BASE_URL` are catalogued in the groups above and
+join `.env.example` in the change that implements their consumer.
 
 ## Local Environment
 
 The local environment target uses:
 
 - Docker Compose services for frontend, backend, PostgreSQL, and ChromaDB. `compose.yaml` currently
-  defines the `backend` service only; see [Docker strategy](docker.md).
+  defines the `backend` and `postgres` services; see [Docker strategy](docker.md).
 - Host-machine Ollama for local generation/embedding models.
 - Local storage provider for learner-owned source resources.
 - Private local volumes for PostgreSQL, ChromaDB, and resource storage.
@@ -180,6 +204,21 @@ The test environment must be isolated from personal learner data.
 - Use temporary storage locations for file/resource tests.
 - Use fake/mocked AI/retrieval providers for deterministic domain/application tests.
 - Run live-provider integration tests only when explicitly configured and safe.
+
+#### `TEST_DATABASE_URL`
+
+**Implemented.** A test-harness variable, not application configuration: `backend/tests/integration/`
+reads it directly and `config.py` never sees it. It is catalogued here rather than with the
+application variables above for that reason.
+
+| Variable | Default | Accepted values |
+| --- | --- | --- |
+| `TEST_DATABASE_URL` | *none — tests skip when unset* | A PostgreSQL URL naming a **disposable** database. The migration tests create and drop its tables. |
+
+It deliberately does not fall back to `DATABASE_URL`. A fallback would run destructive schema tests
+against the development database the first time someone forgot to set it, which is exactly what the
+first rule above forbids. Unset means skip, and CI fails rather than skips by verifying the database
+is reachable before running the tests.
 
 ## Future Staging and Production Boundaries
 
@@ -221,8 +260,10 @@ Example: if `AI_PROVIDER=ollama`, the backend requires an Ollama endpoint and co
 - [Project context](../00-project-context.md)
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the decision this configuration serves
 - [ADR-009: Name and validate configuration variables explicitly](../adr/ADR-009-configuration-naming-and-validation.md) — the naming categories and validation approach this catalogue follows
+- [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — why `DATABASE_URL` has no default
 - [Docker strategy](docker.md)
 - [CI/CD](ci-cd.md)
+- [Database migrations](../database/migrations.md) — the workflow `DATABASE_URL` and `TEST_DATABASE_URL` serve
 - [Technology stack](../development/tech-stack.md)
 - [Non-functional requirements](../requirements/non-functional.md)
 - [Provider pattern](../architecture/provider-pattern.md)

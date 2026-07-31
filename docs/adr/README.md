@@ -2,7 +2,7 @@
 title: Architecture Decision Records
 status: approved
 owner: architecture
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - ADR-000-template.md
@@ -36,6 +36,12 @@ Two files in this directory are not decisions, so they are normal documentation 
 ## Accepted ADRs
 
 [ADR-001](ADR-001-clean-architecture.md) · [ADR-002](ADR-002-provider-pattern.md) · [ADR-003](ADR-003-postgresql-persistence.md) · [ADR-004](ADR-004-ollama-local-ai-provider.md) · [ADR-005](ADR-005-docker-compose-local-development.md) · [ADR-006](ADR-006-custom-agent-orchestration.md) · [ADR-007](ADR-007-documentation-and-adr-policy.md) · [ADR-008](ADR-008-assessment-and-mistake-evidence-model.md) · [ADR-009](ADR-009-configuration-naming-and-validation.md) · [ADR-010](ADR-010-feature-delivery-workflow.md)
+
+## Proposed ADRs
+
+[ADR-011](ADR-011-sqlalchemy-persistence-implementation.md)
+
+A proposed ADR records a drafted decision awaiting project-owner acceptance. Implement from an ADR only once it is accepted.
 
 The [architecture decision register](../architecture/decisions.md) maps each ADR to the decision it records.
 

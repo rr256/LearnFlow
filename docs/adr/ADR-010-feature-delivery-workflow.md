@@ -205,11 +205,13 @@ merging is the point at which that judgement is applied.
 This note records what has changed since the decision was accepted. The Decision, Consequences, and
 Alternatives above are the accepted text and are not rewritten as the pipeline grows.
 
-The workflow described above as two jobs now has three. A `containers` job was added with the backend
+The workflow described above as two jobs now has four. A `containers` job was added with the backend
 container setup and first passed on pull request #7, validating the Compose topology and building the
-backend image. This is the decision working as intended rather than a departure from it: the decision
-states that frontend, database, container, and security checks are each added in the change that
-introduces the artifact they verify.
+backend image. A `database` job was added with the persistence foundation; it applies the Alembic
+migrations to an ephemeral PostgreSQL service and runs the migration and schema tests. Both are the
+decision working as intended rather than a departure from it: the decision states that frontend,
+database, container, and security checks are each added in the change that introduces the artifact
+they verify.
 
 [CI/CD strategy](../deployment/ci-cd.md) is the current description of the pipeline and the jobs it
 runs. Consult it rather than this ADR for what CI does today; this ADR records why the pipeline is

@@ -8,3 +8,13 @@
 fastapi==0.140.0
 pydantic-settings==2.14.2
 uvicorn==0.51.0
+
+# Persistence. SQLAlchemy maps infrastructure models to PostgreSQL and Alembic
+# versions the schema; psycopg 3 is the driver. The synchronous execution model
+# is recorded in docs/adr/ADR-011-sqlalchemy-persistence-implementation.md.
+#
+# psycopg[binary] ships prebuilt wheels, so no local libpq or C toolchain is
+# needed on a contributor machine or in the container build.
+SQLAlchemy==2.0.51
+alembic==1.18.5
+psycopg[binary]==3.3.4

@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -35,6 +35,7 @@ learnflow/
 │   ├── requirements.txt         # Direct runtime dependencies
 │   ├── requirements-dev.txt     # Runtime plus test/lint tooling
 │   ├── pyproject.toml           # Python requirement, pytest and Ruff configuration
+│   ├── alembic.ini              # Alembic configuration; no database URL is stored in it
 │   ├── app/
 │   │   ├── domain/
 │   │   ├── application/
@@ -83,7 +84,7 @@ learnflow/
 | --- | --- |
 | `README.md` | Project introduction, quick start, and links to documentation. |
 | `CLAUDE.md` | Concise repository instructions for Claude Code and compatible implementation assistants. It links to `docs/00-project-context.md`; it does not duplicate the handbook. |
-| `compose.yaml` | Local service composition for frontend, backend, PostgreSQL, and ChromaDB. Currently defines the `backend` service only; see [Docker strategy](../deployment/docker.md). |
+| `compose.yaml` | Local service composition for frontend, backend, PostgreSQL, and ChromaDB. Currently defines the `backend` and `postgres` services; see [Docker strategy](../deployment/docker.md). |
 | `.dockerignore` | Build-context exclusions shared by every image: secrets, `.env` files, learner data, volumes, virtual environments, documentation, and CI configuration. |
 | `.env.example` | Safe environment-variable names/examples; no secrets. |
 | `.gitignore` | Excludes virtual environments, node modules, local data, secrets, generated artifacts, and model/index data. |
@@ -98,6 +99,7 @@ learnflow/
 | `requirements.txt` | Direct runtime dependencies only. Transitive packages are resolved by pip and are not pinned, so upgrading one dependency does not require reconciling unrelated pins. |
 | `requirements-dev.txt` | Includes `requirements.txt` and adds test and tooling dependencies. This is the file contributors install. |
 | `pyproject.toml` | Python version requirement, pytest configuration, and Ruff lint/format configuration. |
+| `alembic.ini` | Alembic configuration. It carries no `sqlalchemy.url`: the target database comes from `DATABASE_URL` through the application's validated settings, so no credential lives in a committed file. See [database migrations](../database/migrations.md). |
 
 ### `backend/app/domain/`
 
@@ -162,15 +164,19 @@ Business rules do not belong here.
 
 ### `backend/migrations/`
 
-Contains Alembic configuration and immutable migration revisions. Schema changes are documented in `docs/database/` and follow the migration workflow.
+Contains the Alembic environment (`env.py`), the revision template (`script.py.mako`), and immutable migration revisions under `versions/`. Schema changes are documented in `docs/database/` and follow the migration workflow.
+
+`env.py` imports every persistence model, because a model it does not import is invisible to autogenerate and would be silently omitted from a generated migration.
 
 ### `backend/tests/`
 
 | Folder | Test focus |
 | --- | --- |
-| `unit/` | Domain and application behavior with no live external dependencies. |
-| `integration/` | PostgreSQL, storage, provider-adapter, and RAG boundary tests. |
+| `unit/` | Domain and application behavior with no live external dependencies. Also holds persistence tests that only compile DDL, since those need no database. |
+| `integration/` | PostgreSQL, storage, provider-adapter, and RAG boundary tests. These need a live dependency and skip when it is not configured. |
 | `api/` | FastAPI request/response and contract tests. |
+
+The database tests under `integration/` read `TEST_DATABASE_URL` and skip when it is unset, so the default `python -m pytest` run needs no PostgreSQL. CI runs them against an ephemeral service container; see [CI/CD strategy](../deployment/ci-cd.md).
 
 ## Frontend Structure
 
@@ -255,9 +261,9 @@ project decisions: authority stays in `docs/` and the ADRs.
 
 ### `.github/`
 
-Contains GitHub configuration. `workflows/pull-request.yml` defines the backend, documentation, and
-container build checks described in [CI/CD strategy](../deployment/ci-cd.md). Workflow files must not
-contain credentials, tokens, or deployment steps.
+Contains GitHub configuration. `workflows/pull-request.yml` defines the checks enumerated in
+[CI/CD strategy](../deployment/ci-cd.md), which is their authoritative description. Workflow files
+must not contain credentials, tokens, or deployment steps.
 
 ## Local and Generated Data
 
