@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -43,7 +43,7 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 - [ ] Repository skeleton follows `docs/development/folder-structure.md`.
 - [x] Backend starts through FastAPI application factory/composition root.
 - [x] `GET /health` returns a safe readiness response.
-- [ ] Docker Compose starts frontend, backend, PostgreSQL, and ChromaDB. The `backend` service and its image are implemented (`compose.yaml`, `docker/backend.Dockerfile`), and CI validates the topology and image build on every pull request. The other three services join Compose with the code that consumes them; see [Docker strategy](../deployment/docker.md).
+- [ ] Docker Compose starts frontend, backend, PostgreSQL, and ChromaDB. The `backend` service and its image are implemented (`compose.yaml`, `docker/backend.Dockerfile`), and CI validates the topology and builds the image on every pull request — first passing on pull request #7. The item remains open on two counts: the other three services join Compose with the code that consumes them, and no container has been started yet, so `docker compose up` serving `GET /health` is still unverified. See [Docker strategy](../deployment/docker.md).
 - [x] Backend configuration is validated from environment variables.
 - [ ] Alembic initializes and applies an initial migration to a fresh PostgreSQL database.
 - [ ] Curated GATE CSE curriculum seed/import is idempotent.
@@ -121,7 +121,7 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 - [ ] Errors, logging, and health/readiness behavior are documented and tested where practical.
 - [ ] Database/resource backup and restore instructions are documented.
 - [ ] `.env.example`, `.gitignore`, Docker setup, and README are validated.
-- [x] CI configuration runs documentation, lint, backend test, and container build checks on pull requests and pushes to `main` (`.github/workflows/pull-request.yml`). The Python checks were verified locally when they were added; the container commands have not run locally, so their first execution is in CI.
+- [x] CI configuration runs documentation, lint, backend test, and container build checks on pull requests and pushes to `main` (`.github/workflows/pull-request.yml`). The Python checks were verified locally when they were added; the container checks were verified in CI, where they first ran and passed on pull request #7.
 - [ ] CI also covers frontend and migration checks, once those artifacts exist.
 - [ ] Major learner workflows have loading, empty, error, and success states.
 - [ ] Known limitations are documented rather than hidden.

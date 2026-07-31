@@ -2,7 +2,7 @@
 title: LearnFlow Git Workflow
 status: approved
 owner: development
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - coding-standards.md
@@ -72,7 +72,7 @@ Commit focused change(s)
         ↓
 Push branch and open a pull request
         ↓
-CI runs backend and documentation checks
+CI runs the checks in the CI/CD strategy
         ↓
 Review, then merge into main after approval
 ```

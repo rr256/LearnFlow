@@ -2,13 +2,14 @@
 title: LearnFlow Docker Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - environments.md
   - ci-cd.md
   - ../development/tech-stack.md
   - ../development/folder-structure.md
+  - ../roadmap/milestones.md
 ---
 
 # LearnFlow Docker Strategy
@@ -40,7 +41,7 @@ Ollama runs on the host initially. The backend receives its endpoint and configu
 
 | Service | State |
 | --- | --- |
-| `backend` | Implemented — builds from `docker/backend.Dockerfile`. |
+| `backend` | Implemented — builds from `docker/backend.Dockerfile`; build verified in CI. |
 | `postgres` | Not implemented — no code reads `DATABASE_URL` or `POSTGRES_*`. |
 | `chromadb` | Not implemented — no code reads `CHROMA_URL`. |
 | `frontend` | Not implemented — no `frontend/` application exists. |
@@ -66,11 +67,27 @@ configuration variable is added when its consumer exists: a `postgres` service t
 environments, documentation, and CI configuration out of every build context. No image contains a
 `.env` file; Compose supplies configuration as environment variables.
 
-**Not yet built anywhere.** The change that added these files was prepared on a machine without
-Docker, so the image has never been built and the Compose file has never been validated by Docker
-itself. "Implemented" above means the definitions exist and CI checks them on every pull request; the
-first execution of `docker compose config -q` and `docker build` is that CI run. Until it passes,
-treat both files as written but unbuilt. This is also why the Milestone 1 Compose item stays unticked.
+### Verification status
+
+**The build is verified in CI.** The `containers` job first ran on pull request #7 and passed:
+`docker compose config -q` validated the topology and `docker build -f docker/backend.Dockerfile .`
+built the image. It runs again on every pull request and every push to `main`, so a change that
+breaks the build is caught there.
+
+Two limits on what that proves:
+
+- **No container has been started.** CI validates and builds; it does not run `docker compose up`.
+  The health-check probe has therefore never executed, and no request has been served through a
+  container. Runtime behavior is unverified, as distinct from the build.
+- **The commands were not run locally when this setup was prepared**, because Docker was not
+  installed on that workstation. CI is the authoritative verification. Container commands are
+  deliberately outside the canonical
+  [local quality checks](../development/coding-standards.md#local-quality-checks), which cover the
+  checks needing nothing beyond Python; running them locally is optional and needs a Docker
+  installation.
+
+The Milestone 1 Compose item stays unticked for both of these reasons and because the topology covers
+four services; [milestones](../roadmap/milestones.md) records why.
 
 ## Service Responsibilities
 
@@ -210,6 +227,7 @@ The application must not silently create schema changes at startup outside the A
 - [Environments](environments.md)
 - [CI/CD strategy](ci-cd.md) — the container checks that run on every pull request
 - [Repository and folder structure](../development/folder-structure.md) — where `compose.yaml`, `docker/`, and `.dockerignore` live
+- [Milestones](../roadmap/milestones.md) — why the Milestone 1 Compose item is still open
 - [Technology stack](../development/tech-stack.md)
 - [Database migrations](../database/migrations.md)
 - [Provider pattern](../architecture/provider-pattern.md)
