@@ -68,6 +68,23 @@ def test_topic_uniqueness_covers_root_topics():
     )
 
 
+def test_topic_code_is_unique_within_its_subject():
+    ddl = compiled("topics")
+
+    assert "CONSTRAINT uq_topics_subject_id_code UNIQUE (subject_id, code)" in ddl
+
+
+def test_topic_code_uniqueness_keeps_nulls_distinct():
+    """The opposite of the name constraint, deliberately. `code` is optional and
+    the curated GATE CSE curriculum leaves it NULL throughout; under NULLS NOT
+    DISTINCT a subject could hold only one uncoded topic."""
+    ddl = compiled("topics")
+
+    code_constraint = next(line for line in ddl.splitlines() if "uq_topics_subject_id_code" in line)
+
+    assert "NULLS NOT DISTINCT" not in code_constraint
+
+
 def test_only_one_curriculum_version_per_program_can_be_active():
     index = next(
         index

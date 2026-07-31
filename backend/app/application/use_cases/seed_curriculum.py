@@ -28,7 +28,7 @@ a topic that learner progress may already reference.
 """
 
 import uuid
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from datetime import datetime
 
 from app.application.dto.curriculum_seed import (
@@ -414,7 +414,7 @@ def _validate(seed: CurriculumSeed) -> None:
         "subject code",
     )
     for subject in seed.subjects:
-        _validate_topics(subject.code, subject.topics, ())
+        _validate_subject_topics(subject)
 
     for relationship in seed.topic_relationships:
         if relationship.relationship_type not in TOPIC_RELATIONSHIP_TYPES:
@@ -424,16 +424,34 @@ def _validate(seed: CurriculumSeed) -> None:
             )
 
 
-def _validate_topics(
+def _validate_subject_topics(subject: SubjectSeed) -> None:
+    """Apply the two topic uniqueness rules, each at the scope the database uses.
+
+    They differ, and applying either at the other's scope would be wrong. Names
+    are unique among siblings -- `(subject_id, parent_topic_id, name)` -- so the
+    same name may appear under two different parents. Codes are unique across the
+    whole subject -- `(subject_id, code)` -- so a code identifies one topic
+    wherever it sits in the tree.
+    """
+    _validate_sibling_names(subject.code, subject.topics, ())
+    _reject_duplicates(_topic_codes(subject.topics), "topic code", f"subject {subject.code!r}")
+
+
+def _validate_sibling_names(
     subject_code: str, topics: Sequence[TopicSeed], trail: tuple[str, ...]
 ) -> None:
     where = f"subject {subject_code!r}" + (f" under {' > '.join(trail)}" if trail else "")
-    # Siblings share the (subject, parent, name) uniqueness rule the database
-    # enforces, so a duplicate here would fail on write rather than on review.
     _reject_duplicates((topic.name for topic in topics), "topic name", where)
-    _reject_duplicates((topic.code for topic in topics if topic.code), "topic code", where)
     for topic in topics:
-        _validate_topics(subject_code, topic.topics, trail + (topic.name,))
+        _validate_sibling_names(subject_code, topic.topics, trail + (topic.name,))
+
+
+def _topic_codes(topics: Sequence[TopicSeed]) -> Iterator[str]:
+    """Every code in the tree, at any depth, skipping topics that carry none."""
+    for topic in topics:
+        if topic.code:
+            yield topic.code
+        yield from _topic_codes(topic.topics)
 
 
 def _reject_duplicates(values: Iterable[str], label: str, where: str = "") -> None:

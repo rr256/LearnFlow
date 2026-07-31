@@ -10,6 +10,7 @@ related:
   - ../development/git-workflow.md
   - ../development/folder-structure.md
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
+  - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../deployment/environments.md
 ---
 
@@ -111,6 +112,7 @@ The applied revisions are:
 | Revision | Change |
 | --- | --- |
 | `20260731_01` | `create_curriculum_tables` — learning programs, curriculum versions, subjects, topics, and topic relationships. |
+| `20260731_02` | `add_topic_code_unique_constraint` — `uq_topics_subject_id_code`, so a topic code identifies one topic within its subject. Additive; safe on populated tables. |
 
 ## What Requires a Migration
 
@@ -226,6 +228,37 @@ The curriculum itself is data, not code: `backend/scripts/gate_cse_curriculum.js
 transcribed GATE CSE syllabus and records its official source and transcription rules in a
 `$comment` block. Loading a different program or a later syllabus is a new file, not a code change.
 
+#### Source of the bundled GATE CSE curriculum
+
+| | |
+| --- | --- |
+| Learning program | `gate-cse` — GATE Computer Science and Information Technology |
+| Curriculum version | `2026`, seeded `active` |
+| Organising institute | IIT Guwahati |
+| CS sections 1–10 | <https://gate2026.iitg.ac.in/doc/GATE2026_Syllabus/CS_2026_Syllabus.pdf> |
+| General Aptitude | <https://gate2026.iitg.ac.in/doc/GATE2026_Syllabus/GA_2026_Syllabus.pdf> |
+
+General Aptitude is published separately but is part of the CS paper, so it is seeded as an eleventh
+subject after the ten numbered CS sections. Both URLs are also stored in the version's
+`source_reference` column, so a seeded curriculum can be traced to its source from the database alone.
+
+The transcription rules — one subject per official section, topics split at the delimiter each
+section itself uses, wording unchanged — are recorded in the data file's `$comment` block so the file
+stays checkable against the two PDFs.
+
+A later syllabus year is a new data file with its own `version_label`. Because the seed refuses to
+activate a second version while another is active, the order is fixed — retire first, then activate:
+
+1. Re-seed the current year's file with `"version_status": "retired"`. Nothing else in it changes,
+   and its subjects and topics are rewritten as unchanged.
+2. Seed the new year's file as `"version_status": "active"`.
+
+Running step 2 first is refused, naming both versions. There is no single-run switchover, and no
+command retires a version that no seed file names.
+
+This path has not been exercised — only the 2026 curriculum exists. Treat the sequence above as the
+supported route, not as a rehearsed procedure.
+
 Repeatability comes from matching every record on a natural key and writing only what differs:
 
 | Record | Natural key | Enforced by |
@@ -233,15 +266,14 @@ Repeatability comes from matching every record on a natural key and writing only
 | Learning program | `code` | `uq_learning_programs_code` |
 | Curriculum version | `(learning_program_id, version_label)` | `uq_curriculum_versions_learning_program_id_version_label` |
 | Subject | `(curriculum_version_id, code)` | `uq_subjects_curriculum_version_id_code` |
-| Topic | `(subject_id, parent_topic_id, name)` | `uq_topics_subject_id_parent_topic_id_name` |
-| Topic | `(subject_id, code)`, when the seed gives a topic a code | The seed only — see below |
+| Topic | `(subject_id, code)`, when the topic carries a code | `uq_topics_subject_id_code` |
+| Topic | `(subject_id, parent_topic_id, name)` otherwise | `uq_topics_subject_id_parent_topic_id_name` |
 | Topic relationship | `(source_topic_id, target_topic_id, relationship_type)` | `pk_topic_relationships` |
 
-Every key above maps to a database constraint except the topic `code` key. `topics.code` is nullable
-and carries no uniqueness constraint, so that match is enforced by the seed alone: it rejects a file
-that reuses a topic code within a subject, but nothing stops another writer from creating a duplicate.
-Whether `(subject_id, code)` should become a database constraint is an open schema question, not a
-guarantee this seed already provides.
+Every key the seed matches on is enforced by the database, so the seed and the schema cannot disagree
+about what identifies a record. Note that the two topic rules have different scopes: a name is unique
+among siblings, so the same name may appear under two parents, while a code is unique across the
+whole subject at any depth. The seed validates a file at both scopes before writing.
 
 A second run of an unchanged file writes nothing and reports every record as unchanged.
 
@@ -259,6 +291,25 @@ than letting the partial unique index from
 
 The target database is `DATABASE_URL`, read through the application's validated settings, and the
 whole run is one transaction that commits only on success.
+
+#### Re-ordering subjects
+
+`(curriculum_version_id, position)` is unique and PostgreSQL checks it per statement, not at commit,
+so two subjects trading places would collide midway through the update even though the final state is
+valid.
+
+When any subject's position changes, the seed therefore moves every subject of that version out of
+the positive range first — `position` becomes `-position - 1`, which is injective and always negative
+— flushes, and then assigns the final positions. The order of the updates that follow stops mattering
+because every target position is free.
+
+A subject whose position is unchanged is still rewritten during this step. Vacating moved it too, so
+skipping it would leave it parked outside the range. It is still reported as unchanged, because its
+final state is what was already stored.
+
+This is a workaround for a per-statement constraint check, not a schema decision; the alternative
+would be a deferrable constraint, which
+[schema.md](schema.md#topics) does not specify.
 
 ## Environment Workflow
 
@@ -293,6 +344,7 @@ An AI assistant may propose or generate a migration, but it must not:
 - [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md) — establishes Alembic as the migration workflow
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — requires migrations to stay an explicit step, not a startup side effect
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — why the schema is migrated one area at a time
+- [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — the durable rationale for the seed's matching, update, and never-delete rules
 - [CI/CD strategy](../deployment/ci-cd.md) — the `database` job that runs these migrations on every pull request
 - [Environments and configuration](../deployment/environments.md) — the authoritative catalogue for `DATABASE_URL` and `TEST_DATABASE_URL`
 - [Database overview](overview.md)

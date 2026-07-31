@@ -445,6 +445,83 @@ def test_duplicate_sibling_topic_name_is_rejected():
         seed_into(repository, seed)
 
 
+def test_duplicate_topic_code_among_siblings_is_rejected():
+    repository = FakeCurriculumSeedRepository()
+    seed = build_seed(
+        subjects=(
+            SubjectSeed(
+                code="databases",
+                name="Databases",
+                topics=(
+                    TopicSeed(name="Indexing", code="idx"),
+                    TopicSeed(name="Storage", code="idx"),
+                ),
+            ),
+        )
+    )
+
+    with pytest.raises(InvalidCurriculumSeedError, match="Duplicate topic code"):
+        seed_into(repository, seed)
+
+
+def test_duplicate_topic_code_at_different_depths_is_rejected():
+    """`(subject_id, code)` is unique across the whole subject, so a code reused
+    under a different parent must be caught even though the names differ and the
+    two topics are not siblings."""
+    repository = FakeCurriculumSeedRepository()
+    seed = build_seed(
+        subjects=(
+            SubjectSeed(
+                code="databases",
+                name="Databases",
+                topics=(
+                    TopicSeed(name="Indexing", code="idx"),
+                    TopicSeed(
+                        name="Storage",
+                        is_trackable=False,
+                        topics=(TopicSeed(name="B+ trees", code="idx"),),
+                    ),
+                ),
+            ),
+        )
+    )
+
+    with pytest.raises(InvalidCurriculumSeedError, match="Duplicate topic code"):
+        seed_into(repository, seed)
+
+
+def test_two_subjects_may_reuse_the_same_topic_code():
+    repository = FakeCurriculumSeedRepository()
+    seed = build_seed(
+        subjects=(
+            SubjectSeed(code="a", name="A", topics=(TopicSeed(name="Basics", code="basics"),)),
+            SubjectSeed(code="b", name="B", topics=(TopicSeed(name="Basics", code="basics"),)),
+        )
+    )
+
+    result = seed_into(repository, seed)
+
+    assert result.topics.created == 2
+
+
+def test_topics_without_codes_do_not_collide():
+    """The curated GATE CSE curriculum leaves every topic code null."""
+    repository = FakeCurriculumSeedRepository()
+    seed = build_seed(
+        subjects=(
+            SubjectSeed(
+                code="databases",
+                name="Databases",
+                topics=(TopicSeed(name="Indexing"), TopicSeed(name="Storage")),
+            ),
+        )
+    )
+
+    result = seed_into(repository, seed)
+
+    assert result.topics.created == 2
+
+
 def test_the_same_topic_name_may_appear_under_different_parents():
     repository = FakeCurriculumSeedRepository()
     seed = build_seed(

@@ -89,7 +89,7 @@ database schema.
 - `GET /health`, an operational endpoint served outside `/api/v1`.
 - A backend container image and Docker Compose `backend` and `postgres` services. See
   [Docker strategy](docs/deployment/docker.md).
-- SQLAlchemy models and an Alembic migration for the curriculum tables — learning programs,
+- SQLAlchemy models and Alembic migrations for the curriculum tables — learning programs,
   curriculum versions, subjects, topics, and topic relationships. See
   [database schema](docs/database/schema.md).
 - An idempotent seed, `python -m scripts.seed_curriculum`, loading the curated GATE CSE curriculum —

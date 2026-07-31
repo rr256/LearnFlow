@@ -10,6 +10,7 @@ related:
   - ../domain/entities.md
   - migrations.md
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
+  - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -31,7 +32,7 @@ tables arrive in more than one migration.
 
 | Schema area | State |
 | --- | --- |
-| Curriculum | Implemented — migration `20260731_01_create_curriculum_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-curriculum-seed). |
+| Curriculum | Implemented — migrations `20260731_01_create_curriculum_tables` and `20260731_02_add_topic_code_unique_constraint`, populated by the idempotent seed described in [migrations](migrations.md#the-curriculum-seed). |
 | Learner planning | Not implemented — `learners`, `study_goals`, and `availability_slots` arrive with Milestone 2; `study_plans` and `plan_items` with Milestone 3. |
 | Progress and revision | Not implemented — `learner_topic_progress` and `study_activities` arrive with Milestone 2; `revision_records` with Milestone 3. |
 | Resources and RAG metadata | Not implemented — arrives with Milestone 4. |
@@ -155,7 +156,18 @@ Stores topics and optional nested subtopics.
 | `is_trackable` | boolean | Whether learner progress can be recorded directly. |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. |
 
-**Constraints:** unique `(subject_id, parent_topic_id, name)`, declared `NULLS NOT DISTINCT` so it also covers root topics — every root topic has a NULL parent, and PostgreSQL would otherwise treat each NULL as distinct and skip the check entirely. `is_trackable` is `NOT NULL` with no database default; the seed or use case creating a topic states it. Parent/child subject consistency is validated in application logic or a database trigger.
+**Constraints:** unique `(subject_id, parent_topic_id, name)`, declared `NULLS NOT DISTINCT` so it also covers root topics — every root topic has a NULL parent, and PostgreSQL would otherwise treat each NULL as distinct and skip the check entirely. Also unique `(subject_id, code)`, so a topic code identifies one topic anywhere in the subject's tree, not merely among siblings. `is_trackable` is `NOT NULL` with no database default; the seed or use case creating a topic states it. Parent/child subject consistency is validated in application logic or a database trigger.
+
+The two uniqueness rules treat NULL oppositely, deliberately:
+
+| Constraint | NULL handling | Why |
+| --- | --- | --- |
+| `uq_topics_subject_id_parent_topic_id_name` | `NULLS NOT DISTINCT` | A root topic's parent is NULL. Under the default, every root topic would escape the rule. |
+| `uq_topics_subject_id_code` | Default `NULLS DISTINCT` | `code` is optional, and a curriculum that numbers nothing leaves every code NULL. Under `NULLS NOT DISTINCT` a subject could hold only one such topic. |
+
+The code constraint is what lets the curriculum seed match a topic on its code and rename the topic
+underneath it; see [ADR-012](../adr/ADR-012-curriculum-seed-and-reconciliation.md). It arrived in
+migration `20260731_02`, after `20260731_01` created the table.
 
 ### `topic_relationships`
 
@@ -566,7 +578,7 @@ Any material change must update this document and be implemented through an Alem
 
 This is an **approved initial review of the curriculum schema**, not a fully discharged review of
 every input listed above. It approves the curriculum tables as created by migration
-`20260731_01_create_curriculum_tables`.
+`20260731_01_create_curriculum_tables` and amended by `20260731_02_add_topic_code_unique_constraint`.
 
 Covered by this review:
 
@@ -580,7 +592,7 @@ Together these produced the conventions and constraint decisions recorded above 
 
 | Review input | State |
 | --- | --- |
-| The final GATE CSE curriculum seed structure | **Reviewed 2026-07-31** — the tables carry the curated GATE CSE curriculum unchanged. See below. |
+| The final GATE CSE curriculum seed structure | **Reviewed 2026-07-31** — the curriculum fits the tables; one constraint was added by migration `20260731_02`. See below. |
 | The first API contracts | **Pending** — [endpoints](../api/endpoints.md) defines the curriculum endpoints CUR-001 to CUR-003 at intent level, but none is implemented and no request/response schema exists. Review against those schemas when they are written. |
 | The actual revision-scheduling rules | Not applicable to this area. |
 
@@ -593,16 +605,17 @@ only then.
 #### Seed-structure review outcome
 
 The curated curriculum — 11 subjects and 65 topics and subtopics, loaded by
-`backend/scripts/seed_curriculum.py` — fits the applied tables with no change required. What the
+`backend/scripts/seed_curriculum.py` — fits the applied tables, with one constraint added. What the
 review settled:
 
 - `subjects.code` holds the longest code in use, `computer-organization-and-architecture`, at 38
   characters, comfortably inside `varchar(64)`.
 - `topics.code` stays null throughout. The official syllabus names topics rather than numbering them,
   so the seed matches a topic on `(subject_id, parent_topic_id, name)` — the uniqueness rule this
-  table already declares. `code` remains available for a curriculum that needs renames to survive,
-  but note that no constraint makes it unique; see
-  [the curriculum seed](migrations.md#the-curriculum-seed).
+  table already declared. `code` remains available for a curriculum that needs renames to survive.
+  The review found that the seed could match on a code that no constraint enforced, so
+  `uq_topics_subject_id_code` was added in migration `20260731_02`. It is the one change this review
+  produced.
 - `topics.name` is `text`, which the syllabus needs: the longest topic name is 139 characters,
   because several official entries are a clause rather than a label.
 - Two levels are enough for this syllabus; the self-referencing `parent_topic_id` is not exercised
@@ -611,12 +624,15 @@ review settled:
   directly trackable; a leaf is.
 - `subjects.position` uniqueness holds, but only because the seed works around it: the constraint is
   checked per statement rather than deferred, so re-ordering needs the existing rows moved aside
-  first. No schema change was needed. [Migrations](migrations.md#the-curriculum-seed) is the
-  authoritative description of how the seed does it.
+  first. No schema change was needed.
+  [Re-ordering subjects](migrations.md#re-ordering-subjects) describes the step.
 - `curriculum_versions.published_at` is set when a version is seeded as active and is never
   overwritten afterwards, so a repeat run reports no change.
 
-Nothing here required a migration.
+One follow-up migration resulted — `20260731_02`, adding `uq_topics_subject_id_code` — created as a
+new revision rather than an edit to the applied one, as this document requires. The rules the review
+settled are recorded durably in
+[ADR-012](../adr/ADR-012-curriculum-seed-and-reconciliation.md).
 
 ## Related Documents
 
@@ -624,6 +640,7 @@ Nothing here required a migration.
 - [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md) — the decision this schema implements
 - [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — the quiz-topic, mistake-source, and evidence-boundary rules
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — the migration ordering and the constraint choices this document records
+- [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — why `uq_topics_subject_id_code` exists and how the curriculum tables are populated
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated
