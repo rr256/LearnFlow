@@ -2,7 +2,7 @@
 title: Architecture Decision Records
 status: approved
 owner: architecture
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - ADR-000-template.md
@@ -35,13 +35,7 @@ Two files in this directory are not decisions, so they are normal documentation 
 
 ## Accepted ADRs
 
-[ADR-001](ADR-001-clean-architecture.md) · [ADR-002](ADR-002-provider-pattern.md) · [ADR-003](ADR-003-postgresql-persistence.md) · [ADR-004](ADR-004-ollama-local-ai-provider.md) · [ADR-005](ADR-005-docker-compose-local-development.md) · [ADR-006](ADR-006-custom-agent-orchestration.md) · [ADR-007](ADR-007-documentation-and-adr-policy.md) · [ADR-008](ADR-008-assessment-and-mistake-evidence-model.md) · [ADR-009](ADR-009-configuration-naming-and-validation.md) · [ADR-010](ADR-010-feature-delivery-workflow.md) · [ADR-011](ADR-011-sqlalchemy-persistence-implementation.md) · [ADR-012](ADR-012-curriculum-seed-and-reconciliation.md)
-
-## Proposed ADRs
-
-Drafted and awaiting project-owner acceptance:
-
-[ADR-013](ADR-013-examination-schedule-and-study-goal.md)
+[ADR-001](ADR-001-clean-architecture.md) · [ADR-002](ADR-002-provider-pattern.md) · [ADR-003](ADR-003-postgresql-persistence.md) · [ADR-004](ADR-004-ollama-local-ai-provider.md) · [ADR-005](ADR-005-docker-compose-local-development.md) · [ADR-006](ADR-006-custom-agent-orchestration.md) · [ADR-007](ADR-007-documentation-and-adr-policy.md) · [ADR-008](ADR-008-assessment-and-mistake-evidence-model.md) · [ADR-009](ADR-009-configuration-naming-and-validation.md) · [ADR-010](ADR-010-feature-delivery-workflow.md) · [ADR-011](ADR-011-sqlalchemy-persistence-implementation.md) · [ADR-012](ADR-012-curriculum-seed-and-reconciliation.md) · [ADR-013](ADR-013-examination-schedule-and-study-goal.md)
 
 The [architecture decision register](../architecture/decisions.md) maps each ADR to the decision it records.
 

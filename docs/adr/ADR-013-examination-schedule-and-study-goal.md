@@ -1,8 +1,8 @@
 ---
 title: "ADR-013: Model an Examination Period as a Published Window of Reference Data"
-status: proposed
+status: accepted
 owner: architecture-and-data
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
@@ -24,7 +24,7 @@ related:
 
 ## Status
 
-Proposed — 2026-07-31
+Accepted — 2026-08-01
 
 ## Context
 
@@ -237,9 +237,10 @@ curriculum area's first-API-contract review as pending for the same reason.
   date rather than an opening one, so the period is recorded as beginning the day
   after regular registration closes.
 - The dates were supplied by the project owner from
-  <https://gate2027.iitm.ac.in/> and transcribed as given; they were not
-  independently fetched from the site during implementation. `source_checked_on`
-  records 2026-07-31 accordingly.
+  <https://gate2027.iitm.ac.in/> and transcribed as given. They were not
+  independently fetched during implementation, which `source_checked_on` recorded
+  as 2026-07-31 at the time. The project owner verified them against the official
+  IIT Madras source on 2026-08-01, and `source_checked_on` now records that date.
 - Local setup order is migrations, then `seed_curriculum`, then
   `seed_examination_schedule`, then `set_study_goal`. Each step refuses to run
   ahead of its predecessor with a message naming the command to run first.

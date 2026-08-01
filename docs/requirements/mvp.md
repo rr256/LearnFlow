@@ -2,12 +2,13 @@
 title: LearnFlow MVP Scope
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-29
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - functional.md
   - ../vision/vision.md
   - ../roadmap/milestones.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
 ---
 
 # LearnFlow MVP Scope
@@ -29,7 +30,7 @@ The MVP must be useful for daily study. It must also preserve clear extension po
 
 ### Learner profile and goal
 
-- Capture the learner's target examination date or target completion date.
+- Capture the learner's target examination schedule or target completion date.
 - Capture available study time and basic study preferences.
 - Support a GATE CSE learning program with subjects and topics.
 
@@ -102,7 +103,7 @@ The following are future features. They are intentionally not part of the MVP, b
 
 The MVP is complete when one learner can:
 
-1. Set a GATE CSE goal, target date, and available study time.
+1. Set a GATE CSE goal with a target examination schedule or completion date, and available study time.
 2. See a realistic roadmap and monthly, weekly, and daily study guidance.
 3. Track topic completion, confidence, and revision needs.
 4. Add and search relevant local study material.
@@ -120,6 +121,7 @@ Any proposed feature that is not listed in **Build Now** must be placed in the r
 - [Project context](../00-project-context.md)
 - [Product vision](../vision/vision.md)
 - [Functional requirements](functional.md)
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — what a target examination schedule is
 - [Technology stack](../development/tech-stack.md)
 - [Roadmap](../roadmap/roadmap.md)
 - [Deferred ideas](../roadmap/future-ideas.md)

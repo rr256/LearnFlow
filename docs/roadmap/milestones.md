@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -67,14 +67,26 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 
 **Outcome:** one learner can establish a GATE CSE goal and see meaningful topic progress.
 
-Part of this milestone's schema arrived early, in Milestone 1: `learners` and `study_goals` were
-created alongside the examination schedule they reference, because a goal with nothing to aim at is
-not persistable. `availability_slots` deliberately stayed behind — it would fix the `day_of_week`
+Part of this milestone arrived early, in Milestone 1: `learners` and `study_goals` were created
+alongside the examination schedule they reference, because a goal with nothing to aim at is not
+persistable, and the schedule seed that fills it shipped with them. Those items are checked below
+with their evidence. `availability_slots` deliberately stayed behind — it would fix the `day_of_week`
 numbering convention that no requirement yet constrains, which is what
 [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) exists to avoid.
 
 ### Definition of Done
 
+- [x] Published examination schedule seed/import is idempotent.
+  `backend/scripts/seed_examination_schedule.py` loads the GATE 2027 schedule — six dated periods
+  across registration, late registration, three examination weekends, and the results announcement —
+  from `gate_cse_examination_schedule.json`, matching every record on a natural key the database
+  enforces, writing only what differs, and never deleting. A repeat run writes nothing. It refuses to
+  run before the curriculum seed, naming the command to run first. The schedule keeps its official
+  source, the date that source was read, and a `provisional`/`confirmed` status, so a date is never
+  presented as settled while its source says it may change. Covered by unit tests against a fake and
+  by integration tests that apply the seed twice to an ephemeral PostgreSQL database in the CI
+  `database` job. See [the examination schedule seed](../database/migrations.md#the-examination-schedule-seed)
+  and [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
 - [ ] Learner profile/local identity is initialized safely. The `learners` table and the command that
   creates the single local learner exist, ahead of this milestone; the safe-initialization question
   is settled when an API and a frontend can reach it.

@@ -2,13 +2,14 @@
 title: "ADR-011: Implement PostgreSQL Persistence Synchronously and Migrate Per Milestone"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
   - ADR-005-docker-compose-local-development.md
   - ADR-009-configuration-naming-and-validation.md
   - ADR-012-curriculum-seed-and-reconciliation.md
+  - ADR-013-examination-schedule-and-study-goal.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../deployment/environments.md
@@ -52,6 +53,28 @@ The database-enforced single-active-version rule decided below is now also check
 it writes, so a rival active version is refused with a message naming both rather than surfacing as an
 integrity error. The partial unique index remains the authority; the application check only improves
 the diagnostic.
+
+*Note added 2026-08-01. The decision below is unchanged; this closes one of the open items it left.*
+
+**The default learner timezone is implemented.** It is `APP_DEFAULT_TIMEZONE`, a core-runtime
+configuration variable defaulting to `Asia/Kolkata`, validated at startup against the standard
+library's zone database. The composition root supplies it when a learner record is created;
+`learners.timezone` carries no database default, so no row can acquire a zone nobody chose. No
+dependency was added — `tzdata` already ships as a dependency of psycopg.
+
+This supersedes the first entry in the *Remaining open items for the project owner* list under
+[Implementation notes](#implementation-notes) below. The other two are untouched and remain open: the
+`day_of_week` numbering convention, needed by `availability_slots`, and numeric precision for score
+columns. Both belong to tables that do not exist yet.
+
+The rationale is recorded in [ADR-013](ADR-013-examination-schedule-and-study-goal.md), the change
+that created `learners` and therefore had to settle it, and the variable is catalogued in
+[environments and configuration](../deployment/environments.md#application).
+
+Migration `20260801_01_create_examination_schedule_and_learner_goal_tables` also brought `learners`
+and `study_goals` forward from Milestone 2 into Milestone 1, and added a seventh schema area for
+examination schedules. The "one schema area per milestone" ordering decision is unaffected: the
+milestone that first needed those tables created them, which is what this record prescribes.
 
 ## Context
 
@@ -211,6 +234,7 @@ constraint where practical.
 - [ADR-005: Use Docker Compose for local development](ADR-005-docker-compose-local-development.md) — why migrations stay an explicit step
 - [ADR-009: Name and validate configuration variables explicitly](ADR-009-configuration-naming-and-validation.md) — the category `DATABASE_URL` belongs to
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](ADR-012-curriculum-seed-and-reconciliation.md) — the first code to read and write the tables this record created
+- [ADR-013: Model an examination period as a published window of reference data](ADR-013-examination-schedule-and-study-goal.md) — settles the default learner timezone this record left open
 - [Database schema](../database/schema.md)
 - [Database migrations](../database/migrations.md)
 - [Environments and configuration](../deployment/environments.md)

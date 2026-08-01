@@ -2,7 +2,7 @@
 title: LearnFlow Project Context
 status: approved
 owner: project-governance
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 audience: all-contributors-and-ai-assistants
 read_before: any-design-or-implementation-task
 related:
@@ -79,9 +79,6 @@ Accepted ADRs:
 - [ADR-010 — Deliver features through pull requests with automated gates](adr/ADR-010-feature-delivery-workflow.md)
 - [ADR-011 — Implement PostgreSQL persistence synchronously and migrate per milestone](adr/ADR-011-sqlalchemy-persistence-implementation.md)
 - [ADR-012 — Load curriculum as reconciled reference data from a versioned file](adr/ADR-012-curriculum-seed-and-reconciliation.md)
-
-Proposed ADRs, drafted and awaiting acceptance:
-
 - [ADR-013 — Model an examination period as a published window of reference data](adr/ADR-013-examination-schedule-and-study-goal.md)
 
 ### Design and implementation

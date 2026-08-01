@@ -2,7 +2,7 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - overview.md
@@ -260,8 +260,9 @@ activate a second version while another is active, the order is fixed — retire
 Running step 2 first is refused, naming both versions. There is no single-run switchover, and no
 command retires a version that no seed file names.
 
-This path has not been exercised — only the 2026 curriculum exists. Treat the sequence above as the
-supported route, not as a rehearsed procedure.
+This path has not been exercised — GATE CSE 2027 is the only curriculum version that exists, and it
+is the seeded active one. Treat the sequence above as the supported route, not as a rehearsed
+procedure.
 
 Repeatability comes from matching every record on a natural key and writing only what differs:
 
@@ -341,7 +342,7 @@ new file rather than a code change.
 | Cycle | `2027`, seeded `provisional` |
 | Organising body | IIT Madras |
 | Source | <https://gate2027.iitm.ac.in/> |
-| Read on | 2026-07-31 |
+| Read on | 2026-08-01, verified against the official source |
 
 | Period | Dates |
 | --- | --- |
