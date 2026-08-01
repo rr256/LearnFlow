@@ -2,7 +2,7 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-01
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - overview.md
@@ -341,7 +341,7 @@ new file rather than a code change.
 | Cycle | `2027`, seeded `provisional` |
 | Organising body | IIT Madras |
 | Source | <https://gate2027.iitm.ac.in/> |
-| Read on | 2026-08-01 |
+| Read on | 2026-07-31 |
 
 | Period | Dates |
 | --- | --- |

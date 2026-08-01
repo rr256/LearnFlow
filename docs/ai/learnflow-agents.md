@@ -2,7 +2,7 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-01
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - ../architecture/overview.md

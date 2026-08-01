@@ -58,7 +58,7 @@ def make_schedule(
         name=f"GATE {cycle_label}",
         organising_body="IIT Madras",
         source_reference="https://gate2027.iitm.ac.in/",
-        source_checked_on=date(2026, 8, 1),
+        source_checked_on=date(2026, 7, 31),
         schedule_status=schedule_status,
     )
     session.add(schedule)
@@ -98,7 +98,7 @@ def test_a_program_cannot_hold_two_schedules_for_one_cycle(session: Session):
             cycle_label="2027",
             name="A rival GATE 2027",
             source_reference="https://example.invalid/",
-            source_checked_on=date(2026, 8, 1),
+            source_checked_on=date(2026, 7, 31),
             schedule_status="provisional",
         )
     )
@@ -127,7 +127,7 @@ def test_schedule_status_must_be_a_documented_value(session: Session):
             cycle_label="2027",
             name="GATE 2027",
             source_reference="https://gate2027.iitm.ac.in/",
-            source_checked_on=date(2026, 8, 1),
+            source_checked_on=date(2026, 7, 31),
             schedule_status="announced",
         )
     )
@@ -145,7 +145,7 @@ def test_a_schedule_cannot_omit_the_source_it_came_from(session: Session):
             cycle_label="2027",
             name="GATE 2027",
             source_reference=None,
-            source_checked_on=date(2026, 8, 1),
+            source_checked_on=date(2026, 7, 31),
             schedule_status="provisional",
         )
     )

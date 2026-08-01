@@ -2,7 +2,7 @@
 title: LearnFlow Environments and Configuration
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-01
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - docker.md

@@ -24,7 +24,7 @@ VALID_DOCUMENT = {
     "name": "GATE 2027",
     "organising_body": "IIT Madras",
     "source_reference": "https://gate2027.iitm.ac.in/",
-    "source_checked_on": "2026-08-01",
+    "source_checked_on": "2026-07-31",
     "schedule_status": "provisional",
     "periods": [
         {"period_type": "examination", "starts_on": "2027-02-06", "ends_on": "2027-02-07"},
@@ -41,7 +41,7 @@ def test_a_valid_document_becomes_a_seed():
 
     assert seed.program_code == "gate-cse"
     assert seed.cycle_label == "2027"
-    assert seed.source_checked_on == date(2026, 8, 1)
+    assert seed.source_checked_on == date(2026, 7, 31)
     assert seed.periods[0].starts_on == date(2027, 2, 6)
 
 
@@ -115,7 +115,7 @@ def test_a_timestamp_is_rejected_rather_than_truncated():
     """Which day a moment falls on depends on the zone reading it; a published
     calendar date has none."""
     with pytest.raises(ExaminationScheduleFileError):
-        build_examination_schedule(document(source_checked_on="2026-08-01T00:00:00+00:00"))
+        build_examination_schedule(document(source_checked_on="2026-07-31T00:00:00+00:00"))
 
 
 def test_a_missing_file_is_reported_with_its_path(tmp_path):

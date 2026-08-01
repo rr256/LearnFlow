@@ -34,7 +34,7 @@ def make_seed(**overrides) -> ExaminationScheduleSeed:
         "name": "GATE 2027",
         "organising_body": "IIT Madras",
         "source_reference": "https://gate2027.iitm.ac.in/",
-        "source_checked_on": date(2026, 8, 1),
+        "source_checked_on": date(2026, 7, 31),
         "schedule_status": "provisional",
         "periods": (
             ExaminationPeriodSeed("registration", date(2026, 8, 14), date(2026, 9, 21)),

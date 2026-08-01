@@ -46,7 +46,7 @@ from scripts.examination_schedule_file import (
     load_examination_schedule,
 )
 
-SEED_TIME = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
+SEED_TIME = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
 TIMEZONE = "Asia/Kolkata"
 
 
@@ -134,7 +134,7 @@ def test_bundled_schedule_is_provisional_and_names_its_source(
     assert schedule is not None
     assert schedule.schedule_status == "provisional"
     assert schedule.source_reference == "https://gate2027.iitm.ac.in/"
-    assert schedule.source_checked_on == date(2026, 8, 1)
+    assert schedule.source_checked_on == date(2026, 7, 31)
     assert schedule.organising_body == "IIT Madras"
 
 

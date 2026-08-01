@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-01
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - overview.md
@@ -723,7 +723,7 @@ new revision rather than an edit to the applied one, as this document requires. 
 settled are recorded durably in
 [ADR-012](../adr/ADR-012-curriculum-seed-and-reconciliation.md).
 
-### Examination schedule area — initial review approved 2026-08-01
+### Examination schedule area — initial review approved 2026-07-31
 
 This is an **approved initial review of the examination schedule tables** as created by migration
 `20260801_01`. It is not a fully discharged review of every input listed above.
@@ -758,7 +758,7 @@ What the review settled:
 | The first API contracts | **Pending** — no endpoint reads a schedule. Review against the schemas when they are written. |
 | The actual revision-scheduling rules | Not applicable to this area. |
 
-### Learner planning area — partial review approved 2026-08-01
+### Learner planning area — partial review approved 2026-07-31
 
 This review covers only `learners` and `study_goals`, the two tables migration `20260801_01` creates.
 `availability_slots`, `study_plans`, and `plan_items` are unreviewed and unimplemented.

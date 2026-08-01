@@ -2,7 +2,7 @@
 title: LearnFlow Database Overview
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-01
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - schema.md

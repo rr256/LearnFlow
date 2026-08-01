@@ -40,7 +40,7 @@ def make_schedule() -> ExaminationScheduleRecord:
         name="GATE 2027",
         organising_body="IIT Madras",
         source_reference="https://gate2027.iitm.ac.in/",
-        source_checked_on=date(2026, 8, 1),
+        source_checked_on=date(2026, 7, 31),
         schedule_status="provisional",
     )
 
@@ -142,7 +142,7 @@ def test_a_provisional_schedule_reports_that_its_dates_may_change(repository):
     assert summary.examination is not None
     assert summary.examination.dates_may_change is True
     assert summary.examination.source_reference == "https://gate2027.iitm.ac.in/"
-    assert summary.examination.source_checked_on == date(2026, 8, 1)
+    assert summary.examination.source_checked_on == date(2026, 7, 31)
 
 
 def test_a_confirmed_schedule_reports_that_its_dates_are_settled():

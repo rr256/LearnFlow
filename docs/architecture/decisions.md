@@ -2,7 +2,7 @@
 title: LearnFlow Architecture Decision Register
 status: approved
 owner: architecture
-last_updated: 2026-08-01
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - ../adr/README.md
