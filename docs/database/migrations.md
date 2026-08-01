@@ -231,6 +231,10 @@ The curriculum itself is data, not code: `backend/scripts/gate_cse_curriculum.js
 transcribed GATE CSE syllabus and records its official source and transcription rules in a
 `$comment` block. Loading a different program or a later syllabus is a new file, not a code change.
 
+The rows this seed writes are what the curriculum read endpoints CUR-001 to CUR-003 serve, so a
+re-seeded correction reaches a client on its next request with no further step. See
+[API endpoints](../api/endpoints.md#curriculum-endpoints).
+
 #### Source of the bundled GATE CSE curriculum
 
 | | |
@@ -437,6 +441,7 @@ An AI assistant may propose or generate a migration, but it must not:
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the rationale for the examination schedule seed and the study goal it feeds
 - [CI/CD strategy](../deployment/ci-cd.md) — the `database` job that runs these migrations on every pull request
 - [Environments and configuration](../deployment/environments.md) — the authoritative catalogue for `DATABASE_URL` and `TEST_DATABASE_URL`
+- [API endpoints](../api/endpoints.md) — the curriculum endpoints that read what the curriculum seed writes
 - [Database overview](overview.md)
 - [Database schema](schema.md)
 - [Repository and folder structure](../development/folder-structure.md) — where the seed tooling lives

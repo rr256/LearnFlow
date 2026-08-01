@@ -2,11 +2,12 @@
 title: LearnFlow API Conventions
 status: approved
 owner: architecture-and-api
-last_updated: 2026-07-30
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - endpoints.md
   - versioning.md
+  - ../adr/ADR-014-api-response-contract.md
   - ../architecture/clean-architecture.md
 ---
 
@@ -130,15 +131,15 @@ Do not return raw ORM/persistence models. API schemas are explicit contracts.
 
 ## Error Response Shape
 
-All expected API errors use a consistent envelope:
+All expected API errors use a consistent envelope. This is the whole of it — a client can rely on
+these three keys and no others:
 
 ```json
 {
   "error": {
-    "code": "resource_not_found",
+    "code": "not_found",
     "message": "The requested resource was not found.",
-    "details": [],
-    "request_id": "optional-correlation-id"
+    "details": []
   }
 }
 ```
@@ -148,7 +149,44 @@ All expected API errors use a consistent envelope:
 - `code` is stable and machine-readable.
 - `message` is safe and understandable for a learner/developer.
 - `details` is optional structured validation information; never expose secrets, stack traces, provider credentials, or raw database errors.
-- `request_id` is included when available to support diagnostics.
+- A correlation identifier is **not** part of the envelope. See [Correlation identifiers](#correlation-identifiers) below.
+
+### Error Codes
+
+`code` is part of the public contract, so each value is stable and documented before a client can depend on it. The catalogue and the rules around it are decided in [ADR-014](../adr/ADR-014-api-response-contract.md). These are the codes the API emits today:
+
+| Status | `code` | Meaning |
+| --- | --- | --- |
+| `404` | `not_found` | The addressed record does not exist, or the path matches no endpoint. |
+| `405` | `method_not_allowed` | The path exists but does not support the method used. |
+| `422` | `validation_error` | Request validation failed. `details` names each offending field. |
+| `500` | `internal_error` | An unexpected server failure. No internal detail is returned. |
+| any other | `request_failed` | Fallback for a status no endpoint yet returns deliberately. Give a status its own code here when an endpoint starts using it. |
+
+The `404` code is `not_found`, not `resource_not_found`. **Resource** is a canonical LearnFlow term for a learner's study material, and `/api/v1/resources` is reserved for it under RES-001 to RES-008; a generic code carrying that word would make one name mean two things. See [terminology](../domain/terminology.md) and [ADR-014](../adr/ADR-014-api-response-contract.md).
+
+Changing the code an existing status returns is a breaking change under [versioning](versioning.md#breaking-changes). Giving a status its own code where it previously fell back to `request_failed` is compatible, in the same sense as a new optional response field — no documented code changes meaning, and a client handling the fallback keeps working.
+
+`details` entries carry `field`, `message`, and `type`. `field` is the dotted request location, such as `query.limit` or `path.program_id`; `type` is the stable validation-rule name. The rejected value itself is never echoed back.
+
+Every error under `/api/v1` uses this envelope, and so does a `404` for a path no endpoint claims — a client that mistypes a URL must not receive a differently shaped body from one that requests a missing record. Operational endpoints are exempt from the `data` envelope on success, as described above, but their failures use this error envelope too.
+
+### Correlation Identifiers
+
+The error envelope carries no correlation identifier, and the example above shows every key an error
+response contains today.
+
+Nothing in the backend generates one. A `request_id` key was previously illustrated as "optional",
+which left it ambiguous whether a client should look for it; it never appeared in a response, because
+there was no value to put in it. Documenting a field the application does not emit is worse than
+documenting nothing — a client writes a branch that never runs, and a diagnostic workflow is built
+around an identifier that does not exist.
+
+A correlation identifier is added to this envelope **only in the change that makes the application
+actually emit one**, together with whatever generates and propagates it. Until then it is absent
+rather than `null`, because a `null` would tell a client the field exists and its value is unknown.
+Adding it later is a compatible change under [versioning](versioning.md#compatible-changes-within-a-major-version):
+a client that ignores unknown optional response fields is unaffected.
 
 ### Typical Status Codes
 
@@ -157,7 +195,8 @@ All expected API errors use a consistent envelope:
 | `400` | Invalid request state or malformed action not covered by validation. |
 | `401` | Authentication required when authentication is introduced. |
 | `403` | Authenticated identity lacks access to a learner-owned resource. |
-| `404` | Resource does not exist or is not visible to the caller. |
+| `404` | Record does not exist or is not visible to the caller. |
+| `405` | Path exists but does not support the method used. |
 | `409` | State conflict, such as invalid concurrent update. |
 | `422` | Request validation failed. |
 | `429` | Rate limit reached, if rate limiting is introduced. |
@@ -183,7 +222,7 @@ The local MVP has one learner and does not expose public registration/login flow
 
 ## Filtering, Sorting, and Pagination
 
-Collection endpoints use a consistent query style when needed:
+Collection endpoints use a consistent query style:
 
 ```text
 ?limit=25&offset=0
@@ -192,7 +231,11 @@ Collection endpoints use a consistent query style when needed:
 ?sort=-created_at
 ```
 
-- `limit` and `offset` are the MVP pagination convention.
+- `limit` and `offset` are the MVP pagination convention. A collection endpoint accepts both and returns the [`pagination` block](#success-response-shapes) **from its first version**, whatever the collection currently holds — a client cannot otherwise tell a complete collection from a truncated one, and "when it grows large enough" is a judgement that changes as the data does. Decided in [ADR-014](../adr/ADR-014-api-response-contract.md).
+- `limit` defaults to 25 and is bounded to 1–100. The bound is part of the contract, not a defensive detail: an unbounded `limit` is a request to materialise an entire table.
+- `offset` defaults to 0 and must be 0 or greater.
+- `pagination.total` counts every matching record, ignoring the window.
+- A `limit` or `offset` outside those bounds is a `422` `validation_error`.
 - Sort prefix `-` indicates descending order.
 - Endpoint documentation defines supported filters and sorts; unsupported query parameters should be rejected or ignored consistently.
 
@@ -249,6 +292,7 @@ Each endpoint entry in `endpoints.md` must define:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-014: Fix the public HTTP API response contract](../adr/ADR-014-api-response-contract.md) — the durable rationale for the envelope, the pagination block, and the error-code catalogue
 - [API endpoints](endpoints.md)
 - [API versioning](versioning.md)
 - [Clean Architecture](../architecture/clean-architecture.md)

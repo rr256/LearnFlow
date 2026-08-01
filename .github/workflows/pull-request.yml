@@ -132,9 +132,10 @@ jobs:
 
       # Applies every migration to an empty database, checks the models against
       # the resulting schema, exercises the documented constraints, and runs the
-      # downgrade back to empty. Also applies the curriculum seed twice, which is
-      # where its idempotency is verified against real rows.
-      - name: Run migration, schema, and seed tests
+      # downgrade back to empty. Also applies each seed twice, which is where its
+      # idempotency is verified against real rows, and serves the curriculum
+      # endpoints from the seeded database over HTTP.
+      - name: Run migration, schema, seed, and API tests
         run: python -m pytest tests/integration
 
   containers:

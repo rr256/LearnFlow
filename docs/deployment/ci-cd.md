@@ -2,7 +2,7 @@
 title: LearnFlow CI/CD Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - environments.md
@@ -12,6 +12,7 @@ related:
   - docker.md
   - ../adr/ADR-010-feature-delivery-workflow.md
   - ../database/migrations.md
+  - ../api/endpoints.md
 ---
 
 # LearnFlow CI/CD Strategy
@@ -98,7 +99,11 @@ The tests apply every migration, compare the SQLAlchemy models against the resul
 attempt the writes each documented constraint forbids, and downgrade back to empty. They also apply
 each seed to that database and apply it a second time, which is where idempotency is
 verified against real rows rather than a fake, and they run the whole local setup path — curriculum,
-examination schedule, study goal — end to end against the bundled data files. The constraints they exercise are defined in
+examination schedule, study goal — end to end against the bundled data files. They then build the
+application through the real composition root against that same database and read the
+[curriculum endpoints](../api/endpoints.md#curriculum-endpoints) over HTTP, so the query the API
+actually issues is verified against seeded rows rather than against a fake repository. The
+constraints they exercise are defined in
 [database schema](../database/schema.md) and the testing requirements in
 [database migrations](../database/migrations.md);
 [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) records why they exist.
@@ -242,6 +247,7 @@ conditions to each pending check in the *CI Responsibilities* table before addin
 - [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — the decision this pipeline implements
 - [Environments](environments.md)
 - [Docker strategy](docker.md) — the images and topology the `containers` job validates
+- [API endpoints](../api/endpoints.md) — the endpoints the `database` job reads over HTTP
 - [Git workflow](../development/git-workflow.md)
 - [Coding standards](../development/coding-standards.md)
 - [Documentation standards](../development/documentation-standards.md) — the rules the documentation job enforces

@@ -59,7 +59,15 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
   PostgreSQL database in the CI `database` job. See
   [the curriculum seed](../database/migrations.md#the-curriculum-seed) and
   [ADR-012](../adr/ADR-012-curriculum-seed-and-reconciliation.md).
-- [ ] Curriculum API endpoints return data-driven program/subject/topic hierarchy.
+- [x] Curriculum API endpoints return data-driven program/subject/topic hierarchy. CUR-001 to
+  CUR-003 are implemented under `/api/v1/curriculum`: a paginated program list, one program with its
+  active curriculum-version reference, and a version's subjects, topics, subtopics, and topic
+  relationships, ordered by the syllabus positions. Nothing in the hierarchy is hardcoded — the
+  responses are assembled from the seeded rows. Routes call an application use case through a
+  read-only repository port and touch no session. Covered by unit tests against a fake, API tests
+  over the real application factory, and integration tests that seed the bundled GATE CSE curriculum
+  into an ephemeral PostgreSQL database in the CI `database` job and read it back over HTTP. See
+  [endpoints](../api/endpoints.md#curriculum-endpoints).
 - [ ] Setup instructions work from a clean local environment.
 - [ ] Relevant tests/build checks pass.
 
