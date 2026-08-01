@@ -131,15 +131,15 @@ Do not return raw ORM/persistence models. API schemas are explicit contracts.
 
 ## Error Response Shape
 
-All expected API errors use a consistent envelope:
+All expected API errors use a consistent envelope. This is the whole of it — a client can rely on
+these three keys and no others:
 
 ```json
 {
   "error": {
     "code": "not_found",
     "message": "The requested resource was not found.",
-    "details": [],
-    "request_id": "optional-correlation-id"
+    "details": []
   }
 }
 ```
@@ -149,7 +149,7 @@ All expected API errors use a consistent envelope:
 - `code` is stable and machine-readable.
 - `message` is safe and understandable for a learner/developer.
 - `details` is optional structured validation information; never expose secrets, stack traces, provider credentials, or raw database errors.
-- `request_id` is included when available to support diagnostics.
+- A correlation identifier is **not** part of the envelope. See [Correlation identifiers](#correlation-identifiers) below.
 
 ### Error Codes
 
@@ -171,7 +171,22 @@ Changing the code an existing status returns is a breaking change under [version
 
 Every error under `/api/v1` uses this envelope, and so does a `404` for a path no endpoint claims — a client that mistypes a URL must not receive a differently shaped body from one that requests a missing record. Operational endpoints are exempt from the `data` envelope on success, as described above, but their failures use this error envelope too.
 
-`request_id` is omitted rather than sent empty: the backend generates no correlation identifier yet, and a `null` would tell a client that a value exists. It is added with the mechanism that produces it.
+### Correlation Identifiers
+
+The error envelope carries no correlation identifier, and the example above shows every key an error
+response contains today.
+
+Nothing in the backend generates one. A `request_id` key was previously illustrated as "optional",
+which left it ambiguous whether a client should look for it; it never appeared in a response, because
+there was no value to put in it. Documenting a field the application does not emit is worse than
+documenting nothing — a client writes a branch that never runs, and a diagnostic workflow is built
+around an identifier that does not exist.
+
+A correlation identifier is added to this envelope **only in the change that makes the application
+actually emit one**, together with whatever generates and propagates it. Until then it is absent
+rather than `null`, because a `null` would tell a client the field exists and its value is unknown.
+Adding it later is a compatible change under [versioning](versioning.md#compatible-changes-within-a-major-version):
+a client that ignores unknown optional response fields is unaffected.
 
 ### Typical Status Codes
 
