@@ -2,7 +2,7 @@
 title: LearnFlow Docker Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - environments.md
@@ -12,6 +12,7 @@ related:
   - ../roadmap/milestones.md
   - ../database/migrations.md
   - ../database/schema.md
+  - ../api/endpoints.md
 ---
 
 # LearnFlow Docker Strategy
@@ -242,10 +243,16 @@ On a new local environment:
 2. Apply Alembic migrations from the backend workflow — `cd backend && python -m alembic upgrade head`.
 3. Load the curated GATE CSE curriculum — `cd backend && python -m scripts.seed_curriculum`. It is
    safe to repeat; see [the curriculum seed](../database/migrations.md#the-curriculum-seed).
-4. Confirm backend health and curriculum-read endpoints. No curriculum endpoints exist yet.
+4. Confirm backend health and the curriculum-read endpoints — `GET /health`, then
+   `GET /api/v1/curriculum/programs`, which returns the program step 3 loaded. See
+   [API endpoints](../api/endpoints.md#curriculum-endpoints).
 
-Steps 1 to 3 work today. The application must not silently create schema changes at startup outside
+All four steps work today. The application must not silently create schema changes at startup outside
 the Alembic migration workflow, so step 2 is never automatic; step 3 is likewise always explicit.
+
+This is the shortest path to a running curriculum API, not the full local setup: loading the
+published examination schedule and binding the learner's study goal follow the curriculum seed, and
+[database migrations](../database/migrations.md#environment-workflow) owns that sequence in full.
 
 ## Security and Privacy Rules
 
@@ -272,6 +279,7 @@ the Alembic migration workflow, so step 2 is never automatic; step 3 is likewise
 - [Repository and folder structure](../development/folder-structure.md) — where `compose.yaml`, `docker/`, and `.dockerignore` live
 - [Milestones](../roadmap/milestones.md) — why the Milestone 1 Compose item is still open
 - [Technology stack](../development/tech-stack.md)
+- [API endpoints](../api/endpoints.md) — the endpoints step 4 of the local workflow confirms
 - [Database migrations](../database/migrations.md)
 - [Database schema](../database/schema.md) — the PostgreSQL version floor the `postgres` image must satisfy
 - [Provider pattern](../architecture/provider-pattern.md)

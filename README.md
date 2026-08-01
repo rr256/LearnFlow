@@ -44,7 +44,8 @@ python -m scripts.seed_curriculum    # load the GATE CSE curriculum; safe to rep
 The API is then published on the loopback interface only:
 
 ```bash
-curl http://127.0.0.1:8000/health   # {"status":"ok"}
+curl http://127.0.0.1:8000/health                       # {"status":"ok"}
+curl http://127.0.0.1:8000/api/v1/curriculum/programs   # the seeded learning programs
 ```
 
 `API_HOST` and `DATABASE_URL` are fixed inside the container — to `0.0.0.0` and to the `postgres`
@@ -78,8 +79,9 @@ migration tests are not part of that set: they need PostgreSQL, so they skip unl
 
 ## Project status
 
-Documentation and architecture foundation, a minimal FastAPI backend foundation, and the curriculum
-database schema.
+Documentation and architecture foundation, a minimal FastAPI backend foundation, the curriculum
+database schema, and the first read API over it. [Project context](docs/00-project-context.md) is
+the authoritative summary of what exists.
 
 **Implemented**
 
@@ -87,6 +89,10 @@ database schema.
 - Validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, `API_PORT`, and the
   required `DATABASE_URL`.
 - `GET /health`, an operational endpoint served outside `/api/v1`.
+- The curriculum read endpoints CUR-001 to CUR-003 under `/api/v1/curriculum`: the learning-program
+  list, one program with its active curriculum-version reference, and a version's subjects, topics,
+  subtopics, and topic relationships. Every response uses the documented `data` envelope, and every
+  failure the documented error envelope. See [API endpoints](docs/api/endpoints.md#curriculum-endpoints).
 - A backend container image and Docker Compose `backend` and `postgres` services. See
   [Docker strategy](docs/deployment/docker.md).
 - SQLAlchemy models and Alembic migrations for the curriculum tables — learning programs,
@@ -102,8 +108,9 @@ database schema.
 
 **Not implemented**
 
-Learner features, AI and RAG, the frontend, and external integrations. The curriculum tables are
-written by the seed but read by nothing: no endpoint exposes them, and the learner, progress,
-resource, and assessment tables arrive with the milestones that use them. Compose has no ChromaDB or
-frontend service. Nothing beyond the implemented items above should be inferred from the current
-repository contents.
+Learner features, AI and RAG, the frontend, and external integrations. The curriculum endpoints
+above are the only ones serving learner-facing data, and they only read — no endpoint writes
+anything. The
+progress, resource, and assessment tables arrive with the milestones that use them. Compose has no
+ChromaDB or frontend service. Nothing beyond the implemented items above should be inferred from the
+current repository contents.

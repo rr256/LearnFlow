@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - overview.md
@@ -682,14 +682,13 @@ Together these produced the conventions and constraint decisions recorded above 
 | Review input | State |
 | --- | --- |
 | The final GATE CSE curriculum seed structure | **Reviewed 2026-07-31** — the curriculum fits the tables; one constraint was added by migration `20260731_02`. See below. |
-| The first API contracts | **Pending** — [endpoints](../api/endpoints.md) defines the curriculum endpoints CUR-001 to CUR-003 at intent level, but none is implemented and no request/response schema exists. Review against those schemas when they are written. |
+| The first API contracts | **Reviewed 2026-08-01** — CUR-001 to CUR-003 are implemented and their schemas need no change to the tables. See below. |
 | The actual revision-scheduling rules | Not applicable to this area. |
 
-The remaining pending input arrives later in Milestone 1 and may find that the approved shape needs
-to change — a subject code longer than `varchar(64)`, say, or an ordering rule the `position`
-uniqueness forbids. That is a follow-up migration, never an edit to the applied one. Record the
-outcome of each pending review here when it happens, and treat the curriculum area as fully reviewed
-only then.
+No input is left pending, so **the curriculum area is fully reviewed**. Either review could have
+found that the approved shape needed to change — a subject code longer than `varchar(64)`, say, or
+an ordering rule the `position` uniqueness forbids. Such a finding is a follow-up migration, never an
+edit to an applied one.
 
 #### Seed-structure review outcome
 
@@ -722,6 +721,25 @@ One follow-up migration resulted — `20260731_02`, adding `uq_topics_subject_id
 new revision rather than an edit to the applied one, as this document requires. The rules the review
 settled are recorded durably in
 [ADR-012](../adr/ADR-012-curriculum-seed-and-reconciliation.md).
+
+#### API-contract review outcome
+
+The curriculum read endpoints CUR-001 to CUR-003, defined in [endpoints](../api/endpoints.md), are
+implemented and read these tables. **No schema change resulted.** What the review settled:
+
+- Every column an endpoint returns already exists. The API adds no field the tables cannot supply,
+  and asks for none they do not hold.
+- `topics.parent_topic_id` carries the whole hierarchy the tree endpoint returns. The API nests
+  subtopics in the application layer rather than storing a rendered tree, so a curriculum of any
+  depth needs no column.
+- `subjects.position` and `topics.position` are what the API orders by. The `index
+  topics(subject_id, parent_topic_id, position)` this area already creates serves that read.
+- The partial unique index on one active version per program is what lets a program report exactly
+  one `active_curriculum_version`; without it the API would have to pick between rivals.
+- No new index was needed. A page of learning programs orders by `code`, which is already unique,
+  and a single-learner installation holds one program.
+- `curriculum_versions.source_reference` stays nullable. The API returns it as a nullable field
+  rather than requiring one, unlike `examination_schedules.source_reference`.
 
 ### Examination schedule area — initial review approved 2026-07-31
 

@@ -2,12 +2,16 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - conventions.md
   - ../requirements/functional.md
   - ../domain/domain-model.md
+  - ../domain/entities.md
+  - ../database/schema.md
+  - ../database/migrations.md
+  - ../roadmap/milestones.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
 ---
 
@@ -40,6 +44,49 @@ Supports **FR-001 — Curated GATE CSE Learning Program**.
 | CUR-003 | `GET /api/v1/curriculum/versions/{curriculum_version_id}/tree` | Read subjects, topics, subtopics, and supported relationships. | Data-driven curriculum hierarchy. |
 
 The frontend must use these endpoints rather than embedding GATE CSE topic data in code.
+
+All three are **implemented**. Curriculum data is reference data, so none of them
+resolves a learner identity, none is learner-owned, and all three are synchronous. They read
+through the `ReadCurriculum` application use case and a read-only curriculum repository port; the
+curated rows they return are written by the seed described in
+[database migrations](../database/migrations.md#the-curriculum-seed).
+
+### CUR-001 — `GET /api/v1/curriculum/programs`
+
+Query parameters `limit` (1–100, default 25) and `offset` (0 or greater, default 0). Returns `200`
+with the `data` array and the `pagination` block described in
+[conventions](conventions.md#success-response-shapes). Each item carries `id`, `code`, `name`,
+`description`, and `active_curriculum_version`, which is `null` while a program has only draft or
+retired versions. Errors: `422` `validation_error` for a `limit` or `offset` outside those bounds.
+
+### CUR-002 — `GET /api/v1/curriculum/programs/{program_id}`
+
+`program_id` is a UUID. Returns `200` with one program under `data`, in the same shape CUR-001
+returns per item. Errors: `404` `resource_not_found` when no such program is stored; `422`
+`validation_error` when the path segment is not a UUID.
+
+### CUR-003 — `GET /api/v1/curriculum/versions/{curriculum_version_id}/tree`
+
+`curriculum_version_id` is a UUID. Returns `200` with `curriculum_version`, `subjects`, and
+`topic_relationships` under `data`. Each subject carries its root `topics`, and each topic nests its
+own `subtopics` to whatever depth the curriculum uses; `is_trackable` says whether learner progress
+can be recorded directly against a topic, which a topic that merely groups subtopics is not.
+Subjects and topics are ordered by `position`, the order the syllabus teaches them in.
+
+Relationships are listed beside the tree rather than inlined on a topic, because an edge relates two
+topics and nesting it under one would make the tree assert which end owns it.
+
+A version with no subjects returns an empty tree rather than an error, and a `draft` or `retired`
+version is readable — `curriculum_version.status` says which it is. Errors: `404`
+`resource_not_found` when no such version is stored; `422` `validation_error` when the path segment
+is not a UUID.
+
+Related entities: [learning program](../domain/entities.md#learning-program),
+[curriculum version](../domain/entities.md#curriculum-version),
+[subject](../domain/entities.md#subject), [topic](../domain/entities.md#topic), and
+[topic relationship](../domain/entities.md#topic-relationship). Related tables:
+[curriculum schema area](../database/schema.md#schema-areas). The rows they return are loaded by
+[the curriculum seed](../database/migrations.md#the-curriculum-seed).
 
 ## Learner Setup and Goal Endpoints
 
@@ -159,8 +206,10 @@ These are manual learner-data endpoints. The MVP does not include Testbook/Made 
 
 Implement in an order that enables one working learner flow:
 
-1. Operational health and curriculum reads.
-2. Learner setup and study-goal creation.
+1. Operational health and curriculum reads. **Done** — OPS-001 and CUR-001 to CUR-003.
+2. Learner setup and study-goal creation. Gated on the client that consumes it, per
+   [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md); the order below resumes once
+   those schemas can be written against a real caller.
 3. Progress reads/updates and basic study activities.
 4. Plan generation/read/update.
 5. Revision reads/updates.
@@ -177,4 +226,7 @@ Implement in an order that enables one working learner flow:
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)
 - [Domain model](../domain/domain-model.md)
+- [Domain entities](../domain/entities.md) — the entities the implemented endpoints return
 - [Database schema](../database/schema.md)
+- [Database migrations](../database/migrations.md) — the seed that loads the rows the curriculum endpoints serve
+- [Delivery milestones](../roadmap/milestones.md) — which endpoints each milestone delivers
