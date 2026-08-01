@@ -2,11 +2,12 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-29
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - domain-model.md
   - terminology.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../database/schema.md
 ---
 
@@ -74,13 +75,35 @@ Represents a learner-owned or curated study reference, such as a PDF, notes, PYQ
 
 **Key relationships:** may link to multiple subjects, topics, or subtopics; may later be ingested into the knowledge base.
 
+### Examination Schedule
+
+Represents the dated calendar an examining body publishes for one cycle of a learning program, such as GATE 2027.
+
+**Responsible for:** identifying the cycle, naming the body that published it and the source it was read from, recording when that source was read, and stating whether its dates are provisional or confirmed.
+
+**Key relationships:** belongs to a learning program; contains examination periods; referenced by the study goals aiming at it.
+
+It is reference data, like curriculum. It is curated from a named source rather than entered by a learner, and it is shared: two learners aiming at the same cycle read one schedule, not a copy each.
+
+### Examination Period
+
+Represents one dated span within an examination schedule.
+
+**Responsible for:** recording the kind of period — registration, late registration, the examination, or the results announcement — and the days it covers.
+
+**Key relationships:** belongs to exactly one examination schedule.
+
+A cycle may hold several periods of the same kind: an examination sat over three weekends is three examination periods, not one range spanning the gaps. A single-day event starts and ends on the same day. The examination window a plan is built against is derived from the examination periods alone.
+
 ### Study Goal
 
 Represents a learning target and planning constraints.
 
-**Responsible for:** recording the target exam/completion date, active learning program, availability, and planning preferences.
+**Responsible for:** recording what the learner is working toward — a published examination cycle, a target completion date, or both — together with the active learning program and curriculum version, availability, and planning preferences.
 
-**Key relationships:** belongs to a learner; drives study-plan generation.
+**Key relationships:** belongs to a learner; may reference an examination schedule; drives study-plan generation.
+
+A goal referencing an examination schedule holds a reference, not a copy of its dates, so a schedule the examining body revises reaches every goal at once. A goal aiming at neither an examination nor a target date is invalid.
 
 ### Study Plan
 
@@ -199,6 +222,7 @@ The following are important, but are not domain entities in this document:
 
 ```text
 Learner
+ ├── Study Goal ── Examination Schedule (optional)
  ├── Study Goal ── Study Plan ── Plan Item
  ├── Study Activity
  ├── Learner Topic Progress ── Topic
@@ -209,6 +233,7 @@ Learner
 Checkpoint Quiz ── Topic (one or more)
 
 Learning Program ── Curriculum Version ── Subject ── Topic
+Learning Program ── Examination Schedule ── Examination Period
 Topic ── Topic Relationship ── Topic
 Topic ── Learning Resource
 ```
@@ -217,6 +242,7 @@ Topic ── Learning Resource
 
 - [Project context](../00-project-context.md)
 - [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — quiz-topic cardinality, mistake sources, and evidence boundaries
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination schedule and period entities
 - [Domain model](domain-model.md)
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)

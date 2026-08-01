@@ -2,12 +2,13 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - conventions.md
   - ../requirements/functional.md
   - ../domain/domain-model.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -48,11 +49,18 @@ Supports **FR-002 — Initial Learner Setup**.
 | --- | --- | --- | --- |
 | LRN-001 | `GET /api/v1/learner/profile` | Read local learner profile/preferences. | Current learner summary. |
 | LRN-002 | `PATCH /api/v1/learner/profile` | Update learner display preferences/timezone. | Updated profile. |
-| GOAL-001 | `POST /api/v1/study-goals` | Create a study goal for a selected program/version and target date. | Goal data. |
+| GOAL-001 | `POST /api/v1/study-goals` | Create a study goal for a selected program/version, aiming at an examination cycle, a target date, or both. | Goal data, including the examination window when a cycle is named. |
 | GOAL-002 | `GET /api/v1/study-goals` | List the learner's goals. | Goal collection. |
 | GOAL-003 | `GET /api/v1/study-goals/{goal_id}` | Read one study goal. | Goal + availability summary. |
-| GOAL-004 | `PATCH /api/v1/study-goals/{goal_id}` | Update target date, status, or planning preferences. | Updated goal. |
+| GOAL-004 | `PATCH /api/v1/study-goals/{goal_id}` | Update the examination cycle, target date, status, or planning preferences. | Updated goal. |
 | GOAL-005 | `PUT /api/v1/study-goals/{goal_id}/availability` | Replace recurring weekly available study time. | Saved availability slots. |
+
+A goal aims at an examination cycle, a target date, or both, and never at neither — a rule the
+database enforces. A response reports an examination as a **window** spanning the published sitting
+days, together with the source it came from and whether those dates are still provisional; it never
+reports a single examination date the examining body has not published. None of these endpoints is
+implemented; their request and response schemas are written with the client that consumes them. See
+[ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
 
 ## Planning Endpoints
 
@@ -164,6 +172,7 @@ Implement in an order that enables one working learner flow:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — what a study goal aims at, and why the goal endpoints are deferred
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

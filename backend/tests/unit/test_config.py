@@ -13,6 +13,7 @@ def test_defaults_apply_when_nothing_is_configured():
     assert settings.app_log_level is LogLevel.info
     assert settings.api_host == "127.0.0.1"
     assert settings.api_port == 8000
+    assert settings.app_default_timezone == "Asia/Kolkata"
 
 
 def test_database_url_is_required(monkeypatch):
@@ -132,3 +133,21 @@ def test_port_boundaries_are_accepted(monkeypatch):
     for port in (1, 65535):
         monkeypatch.setenv("API_PORT", str(port))
         assert Settings(_env_file=None).api_port == port
+
+
+@pytest.mark.parametrize("value", ["Asia/Kolkata", "UTC", "Europe/Berlin", "America/New_York"])
+def test_a_known_timezone_is_accepted(monkeypatch, value):
+    monkeypatch.setenv("APP_DEFAULT_TIMEZONE", value)
+
+    assert Settings(_env_file=None).app_default_timezone == value
+
+
+@pytest.mark.parametrize("value", ["Asia/Calcutta_", "IST", "+05:30", "", "Mars/Olympus"])
+def test_an_unknown_timezone_is_rejected(monkeypatch, value):
+    """A typo would otherwise surface as a study plan whose days land a day out."""
+    monkeypatch.setenv("APP_DEFAULT_TIMEZONE", value)
+
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None)
+
+    assert "app_default_timezone" in str(excinfo.value)

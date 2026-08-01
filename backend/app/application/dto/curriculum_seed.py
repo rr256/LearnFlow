@@ -13,6 +13,8 @@ re-orders the curriculum without a second field that could disagree with it.
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from app.application.dto.seed_outcome import SeedOutcome
+
 CURRICULUM_VERSION_STATUSES: tuple[str, ...] = ("draft", "active", "retired")
 """Statuses `curriculum_versions.status` accepts, per docs/database/schema.md."""
 
@@ -77,32 +79,6 @@ class CurriculumSeed:
     published_at: datetime | None = None
     subjects: tuple[SubjectSeed, ...] = ()
     topic_relationships: tuple[TopicRelationshipSeed, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class SeedOutcome:
-    """How one kind of record fared: how many were written, and how many already matched."""
-
-    created: int = 0
-    updated: int = 0
-    unchanged: int = 0
-
-    @property
-    def changed(self) -> bool:
-        """Whether applying the seed wrote anything for this kind of record."""
-        return bool(self.created or self.updated)
-
-    def with_created(self) -> SeedOutcome:
-        """This outcome plus one created record."""
-        return SeedOutcome(self.created + 1, self.updated, self.unchanged)
-
-    def with_updated(self) -> SeedOutcome:
-        """This outcome plus one updated record."""
-        return SeedOutcome(self.created, self.updated + 1, self.unchanged)
-
-    def with_unchanged(self) -> SeedOutcome:
-        """This outcome plus one record that already matched the seed."""
-        return SeedOutcome(self.created, self.updated, self.unchanged + 1)
 
 
 @dataclass(frozen=True, slots=True)

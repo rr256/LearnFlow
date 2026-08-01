@@ -2,12 +2,13 @@
 title: LearnFlow Database Overview
 status: approved
 owner: architecture-and-data
-last_updated: 2026-07-29
+last_updated: 2026-07-31
 related:
   - ../00-project-context.md
   - schema.md
   - migrations.md
   - ../domain/domain-model.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../architecture/provider-pattern.md
 ---
 
@@ -29,6 +30,7 @@ PostgreSQL is not the primary store for original PDF/video files or vector embed
 PostgreSQL
 ├── Learner identity and preferences
 ├── Learning programs and curated curriculum structure
+├── Published examination schedules and their dated periods
 ├── Study goals, availability, plans, and plan items
 ├── Learner topic progress and learning evidence
 ├── Revision records
@@ -70,6 +72,12 @@ Learning Program
 ```
 
 The initial curated data is GATE CSE. The model must support future learning programs without requiring new core table designs.
+
+### Examination Schedule Data
+
+Stores the dated calendar an examining body publishes for one cycle of a learning program, such as GATE 2027, together with the source it was read from and whether its dates are still provisional.
+
+Like curriculum, this is curated reference data rather than learner data: it is loaded from a versioned file by an idempotent seed, and every learner aiming at the same cycle reads one shared schedule rather than a private copy. An examination is stored as one or more dated periods, never as a single date, so LearnFlow never records a sitting day the examining body has not published. See [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
 
 ### Learner Data
 
@@ -159,6 +167,7 @@ Those decisions belong in `schema.md`, `migrations.md`, and implementation-speci
 
 - [Project context](../00-project-context.md)
 - [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md) — the decision this document implements
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why examination schedules are shared reference data
 - [Domain model](../domain/domain-model.md)
 - [Domain entities](../domain/entities.md)
 - [Database schema](schema.md)

@@ -11,6 +11,7 @@ related:
   - migrations.md
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -33,16 +34,20 @@ tables arrive in more than one migration.
 | Schema area | State |
 | --- | --- |
 | Curriculum | Implemented — migrations `20260731_01_create_curriculum_tables` and `20260731_02_add_topic_code_unique_constraint`, populated by the idempotent seed described in [migrations](migrations.md#the-curriculum-seed). |
-| Learner planning | Not implemented — `learners`, `study_goals`, and `availability_slots` arrive with Milestone 2; `study_plans` and `plan_items` with Milestone 3. |
+| Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
+| Learner planning | Partly implemented — `learners` and `study_goals` arrive in the same migration `20260801_01`; `availability_slots` arrives with Milestone 2 and `study_plans` and `plan_items` with Milestone 3. |
 | Progress and revision | Not implemented — `learner_topic_progress` and `study_activities` arrive with Milestone 2; `revision_records` with Milestone 3. |
 | Resources and RAG metadata | Not implemented — arrives with Milestone 4. |
 | Assessment | Not implemented — arrives with Milestone 5. |
 | External evidence | Not implemented — arrives with Milestone 5. |
 
-A pending area's columns are an approved target, not a committed shape. Details this document
-records as undecided — the `day_of_week` numbering convention, the default learner timezone, and
-numeric precision for score and marks columns — are decided in the change that creates the table,
-not before.
+A pending area's columns are an approved target, not a committed shape. Two of the three details this
+document recorded as undecided remain so — the `day_of_week` numbering convention and numeric
+precision for score and marks columns — and are decided in the change that creates their table, not
+before. The third, the default learner timezone, was decided when `learners` was created: it comes
+from `APP_DEFAULT_TIMEZONE`, which defaults to `Asia/Kolkata`. See
+[ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) and the
+[configuration catalogue](../deployment/environments.md#application).
 
 SQLAlchemy models for implemented tables live in `backend/app/infrastructure/persistence/`.
 
@@ -64,6 +69,9 @@ SQLAlchemy models for implemented tables live in `backend/app/infrastructure/per
 ```text
 Curriculum
   learning_programs → curriculum_versions → subjects → topics → topic_relationships
+
+Examination schedule
+  learning_programs → examination_schedules → examination_periods
 
 Learner planning
   learners → study_goals → availability_slots / study_plans → plan_items
@@ -92,7 +100,7 @@ Stores a learner identity and local preferences.
 | --- | --- | --- |
 | `id` | uuid PK | Learner identifier. |
 | `display_name` | text nullable | Optional learner-facing name. |
-| `timezone` | text | IANA timezone; default configured local timezone. |
+| `timezone` | varchar(64) | IANA timezone name. Supplied by the composition root from `APP_DEFAULT_TIMEZONE`, which defaults to `Asia/Kolkata`; validated there as a real zone. No database default — a timestamp read in the wrong zone is wrong by a day at the boundary, which is where a study plan's dates land. |
 | `created_at` | timestamptz | Creation timestamp. |
 | `updated_at` | timestamptz | Last update timestamp. |
 
@@ -184,6 +192,69 @@ Stores prerequisite and sequencing relationships.
 
 **Constraints:** source and target must differ, enforced by a `CHECK`. `relationship_type` is constrained to the three documented values.
 
+### `examination_schedules`
+
+Stores the calendar an examining body publishes for one cycle of a learning program, such as GATE
+2027. Reference data, not learner data: every learner aiming at the cycle reads the same dates.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | Schedule identifier. |
+| `learning_program_id` | uuid FK | References `learning_programs.id`. |
+| `cycle_label` | varchar(64) | Stable cycle label within the program, e.g. `2027`. |
+| `name` | text | Display name, e.g. `GATE 2027`. |
+| `organising_body` | text nullable | Body publishing the schedule, e.g. `IIT Madras`. |
+| `source_reference` | text | Official source URL. |
+| `source_checked_on` | date | When the source was read and transcribed. |
+| `schedule_status` | varchar(32) | `provisional` or `confirmed`. |
+| `created_at`, `updated_at` | timestamptz | Audit timestamps. |
+
+**Constraints:** unique `(learning_program_id, cycle_label)`; `schedule_status` is constrained to the
+two documented values.
+
+`source_reference` is `NOT NULL`, unlike `curriculum_versions.source_reference`. A schedule exists
+only because a source published it, and a stored date with no traceable origin cannot be checked when
+the examining body revises it.
+
+`schedule_status` is where "liable to change" survives into the database. A schedule stays
+`provisional` while its source says the dates may still move, and becomes `confirmed` only when the
+examining body confirms them.
+
+### `examination_periods`
+
+Stores one dated period of a schedule. A period whose start and end are the same day is a single-day
+event, which is how a results announcement is stored.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | Period identifier. |
+| `examination_schedule_id` | uuid FK | References `examination_schedules.id`. |
+| `period_type` | varchar(32) | `registration`, `late_registration`, `examination`, or `results`. |
+| `starts_on` | date | First day of the period. |
+| `ends_on` | date | Last day of the period; equals `starts_on` for a single-day event. |
+| `created_at`, `updated_at` | timestamptz | Audit timestamps. |
+
+**Constraints:** unique `(examination_schedule_id, period_type, starts_on)`, named
+`uq_examination_periods_schedule_id_period_type_starts_on`; `ends_on >= starts_on`; `period_type` is
+constrained to the four documented values.
+
+A cycle holds several periods of one type — GATE 2027 is sat over three separate weekends — so the
+type alone does not identify a period, but a type and a start date do. That pair is the seed's
+natural key.
+
+The examination is never stored as a single date. An examining body publishes a range of sitting days
+and announces the specific paper's day much later, so one date column could hold only a guess. The
+three GATE 2027 weekends are three `examination` periods rather than one 6–21 February range: eleven
+days in that range hold no examination. The examination window a plan is built against is derived —
+first sitting day to last — from the `examination` periods alone, in the application, not stored.
+See [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
+
+This table carries the only two constraint names in the schema that do not read exactly as the
+naming convention would spell them. The convention would generate 68-character identifiers from this
+table name plus the full `examination_schedule_id` column, past PostgreSQL's 63-character limit,
+where a silently truncated name is one a downgrade cannot drop. Both abbreviate that one segment to
+`schedule_id`.
+
 ### `study_goals`
 
 Stores a learner's goal and planning target.
@@ -194,10 +265,23 @@ Stores a learner's goal and planning target.
 | `learner_id` | uuid FK | References `learners.id`. |
 | `learning_program_id` | uuid FK | References `learning_programs.id`. |
 | `curriculum_version_id` | uuid FK | References `curriculum_versions.id`. |
-| `target_date` | date | Target exam/completion date. |
-| `status` | text | `active`, `paused`, `completed`, or `archived`. |
-| `planning_preferences` | jsonb nullable | Non-core preferences, versioned carefully. |
+| `examination_schedule_id` | uuid FK nullable | References `examination_schedules.id`. A reference, not a copy of the dates. |
+| `target_date` | date nullable | Target completion date, for a learner following no published examination. |
+| `status` | varchar(32) | `active`, `paused`, `completed`, or `archived`. |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. |
+
+**Constraints:** at least one of `target_date` and `examination_schedule_id` is non-null, enforced by
+`ck_study_goals_aims_at_a_date_or_an_examination`; `status` is constrained to the four documented
+values.
+
+`target_date` was first documented here as a plain non-null date. It is nullable because a learner
+preparing for a published examination aims at a *window* whose specific paper day the examining body
+has not announced; storing one date would record a guess as the learner's deadline. Both columns are
+nullable so neither has to be invented, and the `CHECK` refuses a goal that aims at neither.
+
+`planning_preferences` (`jsonb nullable`) remains an approved target and is **not yet created**.
+Nothing reads it and its shape is undecided, so it arrives with the planning code that uses it, per
+[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md).
 
 ### `availability_slots`
 
@@ -532,9 +616,10 @@ Use named nullable foreign keys rather than a generic polymorphic `source_type`/
 ## Required Indexes
 
 Create indexes in addition to primary/unique keys for likely MVP access patterns. Each is created by
-the migration that creates its table; only the first is implemented today.
+the migration that creates its table; the two marked below are implemented today.
 
 - `topics(subject_id, parent_topic_id, position)` — implemented
+- `examination_periods(examination_schedule_id, starts_on)` — implemented
 - `learner_topic_progress(learner_id, topic_id)` unique
 - `study_plans(learner_id, study_goal_id, status, period_start)`
 - `plan_items(study_plan_id, scheduled_for, status)`
@@ -548,6 +633,10 @@ the migration that creates its table; only the first is implemented today.
 - `external_test_results(learner_id, taken_on desc)`
 - `external_test_topic_performance(topic_id, external_test_result_id)`
 - `mistake_evidence(learner_id, topic_id, resolved_at)`
+
+`learners` and `study_goals` need no index beyond their keys yet. A single-learner installation holds
+one learner and a handful of goals, so every access is a sequential scan of a few rows. Add one with
+the code whose access pattern justifies it.
 
 ## Referential-Integrity and Lifecycle Notes
 
@@ -634,6 +723,66 @@ new revision rather than an edit to the applied one, as this document requires. 
 settled are recorded durably in
 [ADR-012](../adr/ADR-012-curriculum-seed-and-reconciliation.md).
 
+### Examination schedule area — initial review approved 2026-07-31
+
+This is an **approved initial review of the examination schedule tables** as created by migration
+`20260801_01`. It is not a fully discharged review of every input listed above.
+
+Covered by this review:
+
+- The final GATE 2027 schedule seed structure — `backend/scripts/gate_cse_examination_schedule.json`,
+  six periods across four types, fits the tables with no change.
+- The planned SQLAlchemy mapping strategy.
+- Database constraints supported by the selected PostgreSQL and Alembic versions.
+
+What the review settled:
+
+- One `examination_schedules` row per program and cycle. `cycle_label` holds `2027`, far inside
+  `varchar(64)`.
+- The examination is periods, not a date. Three `examination` periods hold the GATE 2027 weekends;
+  `results` is a single-day period, so the range check is `>=` rather than `>`.
+- `(examination_schedule_id, period_type, starts_on)` is the natural key, because a cycle holds three
+  periods of the same type. It is enforced, as ADR-012 requires of every key a seed matches on.
+- Two constraint names had to be shortened by hand against PostgreSQL's 63-character limit, as
+  recorded under [`examination_periods`](#examination_periods) above. This is the first place in the
+  schema where the naming convention could not be applied verbatim; a unit test now fails any future
+  name that overruns.
+- `late_registration` is stored as a period beginning the day after regular registration closes,
+  which is the seed file's one inference; its `$comment` block and
+  [migrations](migrations.md#source-of-the-bundled-gate-2027-schedule) record why.
+
+**Remaining review inputs:**
+
+| Review input | State |
+| --- | --- |
+| The first API contracts | **Pending** — no endpoint reads a schedule. Review against the schemas when they are written. |
+| The actual revision-scheduling rules | Not applicable to this area. |
+
+### Learner planning area — partial review approved 2026-07-31
+
+This review covers only `learners` and `study_goals`, the two tables migration `20260801_01` creates.
+`availability_slots`, `study_plans`, and `plan_items` are unreviewed and unimplemented.
+
+What the review settled:
+
+- `learners.timezone` is `varchar(64)` and has no database default. The default value comes from
+  `APP_DEFAULT_TIMEZONE`, closing one of the three open items ADR-011 recorded.
+- `study_goals.target_date` becomes nullable, gaining `examination_schedule_id` and a `CHECK`
+  requiring at least one of the two. The rationale is in
+  [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
+- A goal references a schedule rather than copying its dates, so a corrected schedule reaches every
+  goal without a learner-data migration.
+- `planning_preferences` is deliberately not created.
+- No index beyond the keys, as recorded above.
+
+**Remaining review inputs:**
+
+| Review input | State |
+| --- | --- |
+| The first API contracts | **Pending** — GOAL-001 to GOAL-005 and LRN-001 are defined at intent level in [endpoints](../api/endpoints.md); none is implemented. |
+| The actual revision-scheduling rules | **Pending** — they constrain `study_plans` and `plan_items`, which arrive in Milestone 3. |
+| The `day_of_week` numbering convention | **Open** — needed by `availability_slots`, not created here. |
+
 ## Related Documents
 
 - [Project context](../00-project-context.md)
@@ -641,6 +790,7 @@ settled are recorded durably in
 - [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — the quiz-topic, mistake-source, and evidence-boundary rules
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — the migration ordering and the constraint choices this document records
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — why `uq_topics_subject_id_code` exists and how the curriculum tables are populated
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why the examination is periods rather than a date, and why `study_goals.target_date` is nullable
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated

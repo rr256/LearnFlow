@@ -53,7 +53,7 @@ CI verifies only stable, repeatable checks:
 | Documentation | Front-matter, Markdown link, and anchor validation. | Implemented — `scripts/validate_docs.py`. |
 | Backend | Dependency install, formatting/linting, type checks if configured, unit/API tests. | Implemented — Ruff lint, Ruff format check, pytest. |
 | Frontend | Dependency install, lint/type checks, unit/component tests when configured. | Not implemented — no `frontend/` exists. |
-| Database | Migration consistency checks, migration tests when migrations exist, and seed idempotency checks when seed tooling exists. | Implemented — migrations applied to an ephemeral PostgreSQL service, models compared against the resulting schema, constraints exercised, downgrade run, and the curriculum seed applied twice to confirm it is idempotent. |
+| Database | Migration consistency checks, migration tests when migrations exist, and seed idempotency checks when seed tooling exists. | Implemented — migrations applied to an ephemeral PostgreSQL service, models compared against the resulting schema, constraints exercised, downgrade run, and each seed applied twice to confirm it is idempotent. |
 | Containers | Compose topology validation and image build. | Implemented — backend image; the other services are added with their code. |
 | Security hygiene | Secret scanning and dependency review where supported. | Not implemented. |
 
@@ -96,8 +96,9 @@ connection in a separate step first and fails there if it cannot.
 
 The tests apply every migration, compare the SQLAlchemy models against the resulting schema,
 attempt the writes each documented constraint forbids, and downgrade back to empty. They also apply
-the curriculum seed to that database and apply it a second time, which is where its idempotency is
-verified against real rows rather than a fake. The constraints they exercise are defined in
+each seed to that database and apply it a second time, which is where idempotency is
+verified against real rows rather than a fake, and they run the whole local setup path — curriculum,
+examination schedule, study goal — end to end against the bundled data files. The constraints they exercise are defined in
 [database schema](../database/schema.md) and the testing requirements in
 [database migrations](../database/migrations.md);
 [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) records why they exist.

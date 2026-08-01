@@ -1,19 +1,20 @@
-"""Tests for the curriculum persistence mapping.
+"""Tests for the persistence mapping.
 
 These compile DDL for the PostgreSQL dialect rather than executing it, so they
 need no database and stay in the unit suite. They guard the properties the
-initial migration was hand-written against: table and constraint names, the two
+hand-written migrations were built against: table and constraint names, the
 constraints whose behaviour depends on a PostgreSQL-specific clause, and the
 column types docs/database/schema.md specifies.
 
-Whether the migration and these models actually agree is settled against a live
-database by tests/integration/test_curriculum_migration.py.
+Whether the migrations and these models actually agree is settled against a live
+database by tests/integration/test_curriculum_migration.py and
+tests/integration/test_examination_schedule_migration.py.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy import Boolean, DateTime, Integer, Uuid
+from sqlalchemy import Boolean, Date, DateTime, Integer, String, Uuid
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex, CreateTable
 
@@ -26,6 +27,13 @@ from app.infrastructure.persistence.curriculum import (
     Topic,
     TopicRelationship,
 )
+from app.infrastructure.persistence.examination_schedule import (
+    EXAMINATION_PERIOD_TYPES,
+    EXAMINATION_SCHEDULE_STATUSES,
+    ExaminationPeriod,
+    ExaminationSchedule,
+)
+from app.infrastructure.persistence.learner_planning import STUDY_GOAL_STATUSES, Learner, StudyGoal
 
 CURRICULUM_TABLES = (
     "learning_programs",
@@ -34,6 +42,18 @@ CURRICULUM_TABLES = (
     "topics",
     "topic_relationships",
 )
+
+EXAMINATION_TABLES = (
+    "examination_schedules",
+    "examination_periods",
+)
+
+LEARNER_PLANNING_TABLES = (
+    "learners",
+    "study_goals",
+)
+
+MAPPED_TABLES = CURRICULUM_TABLES + EXAMINATION_TABLES + LEARNER_PLANNING_TABLES
 
 
 def compiled(table_name: str) -> str:
@@ -46,12 +66,12 @@ def constraint_names(table_name: str) -> set[str]:
     return {constraint.name for constraint in table.constraints if constraint.name}
 
 
-def test_only_the_curriculum_tables_are_mapped():
-    """Learner, resource, and assessment tables arrive with their milestones."""
-    assert set(Base.metadata.tables) == set(CURRICULUM_TABLES)
+def test_only_the_migrated_tables_are_mapped():
+    """Resource, assessment, and the remaining planning tables arrive with their milestones."""
+    assert set(Base.metadata.tables) == set(MAPPED_TABLES)
 
 
-@pytest.mark.parametrize("table_name", CURRICULUM_TABLES)
+@pytest.mark.parametrize("table_name", MAPPED_TABLES)
 def test_every_table_has_a_conventionally_named_primary_key(table_name):
     assert f"pk_{table_name}" in constraint_names(table_name)
 
@@ -140,7 +160,7 @@ def test_every_timestamp_column_is_timezone_aware():
     correct in the migration.
     """
     naive: list[str] = []
-    for table_name in CURRICULUM_TABLES:
+    for table_name in MAPPED_TABLES:
         for column in Base.metadata.tables[table_name].columns:
             if isinstance(column.type, DateTime) and not column.type.timezone:
                 naive.append(f"{table_name}.{column.name}")
@@ -148,7 +168,7 @@ def test_every_timestamp_column_is_timezone_aware():
     assert naive == []
 
 
-@pytest.mark.parametrize("table_name", CURRICULUM_TABLES)
+@pytest.mark.parametrize("table_name", MAPPED_TABLES)
 def test_creation_timestamps_are_recorded(table_name):
     created_at = Base.metadata.tables[table_name].columns["created_at"]
 
@@ -180,7 +200,147 @@ def test_topic_ordering_and_trackability_use_the_documented_types():
     assert columns["is_trackable"].nullable is False
 
 
-def test_learner_owned_tables_are_absent():
-    """Guards the agreed scope: this change is the curriculum foundation only."""
-    for table_name in ("learners", "study_goals", "learner_topic_progress"):
+def test_the_remaining_schema_areas_are_absent():
+    """Guards the agreed scope. `availability_slots` and `study_plans` complete the
+    learner-planning area in later milestones; each waits for the code that reads
+    it, so no column fixes a convention before a requirement constrains it."""
+    for table_name in (
+        "availability_slots",
+        "study_plans",
+        "plan_items",
+        "learner_topic_progress",
+        "resources",
+        "checkpoint_quizzes",
+    ):
         assert table_name not in Base.metadata.tables
+
+
+# -- examination schedule ---------------------------------------------------
+
+
+def test_a_cycle_is_unique_within_its_learning_program():
+    ddl = compiled("examination_schedules")
+
+    assert (
+        "CONSTRAINT uq_examination_schedules_learning_program_id_cycle_label "
+        "UNIQUE (learning_program_id, cycle_label)" in ddl
+    )
+
+
+def test_examination_schedule_status_is_constrained_to_the_documented_values():
+    ddl = compiled("examination_schedules")
+
+    assert "ck_examination_schedules_schedule_status_is_known" in ddl
+    for status in EXAMINATION_SCHEDULE_STATUSES:
+        assert f"'{status}'" in ddl
+
+
+def test_a_schedule_must_name_the_source_it_came_from():
+    """A stored date with no traceable origin cannot be checked when it changes."""
+    columns = ExaminationSchedule.__table__.columns
+
+    assert columns["source_reference"].nullable is False
+    assert columns["source_checked_on"].nullable is False
+    assert isinstance(columns["source_checked_on"].type, Date)
+
+
+def test_examination_period_type_is_constrained_to_the_documented_values():
+    ddl = compiled("examination_periods")
+
+    assert "ck_examination_periods_period_type_is_known" in ddl
+    for period_type in EXAMINATION_PERIOD_TYPES:
+        assert f"'{period_type}'" in ddl
+
+
+def test_a_period_cannot_end_before_it_starts():
+    ddl = compiled("examination_periods")
+
+    assert "ck_examination_periods_ends_on_is_not_before_starts_on" in ddl
+    # `>=`, not `>`: a single-day event stores the same date twice.
+    assert "ends_on >= starts_on" in ddl
+
+
+def test_a_period_is_keyed_on_its_schedule_type_and_start_date():
+    """A cycle holds several periods of one type -- GATE 2027 is sat over three
+    weekends -- so the type alone cannot identify one."""
+    ddl = compiled("examination_periods")
+
+    assert (
+        "CONSTRAINT uq_examination_periods_schedule_id_period_type_starts_on "
+        "UNIQUE (examination_schedule_id, period_type, starts_on)" in ddl
+    )
+
+
+def test_every_constraint_name_fits_a_postgresql_identifier():
+    """PostgreSQL truncates past 63 characters, and a truncated name is one a
+    downgrade cannot drop. Two names on `examination_periods` are shortened by
+    hand for exactly this reason; this catches the next one."""
+    too_long = {
+        constraint.name
+        for table_name in MAPPED_TABLES
+        for constraint in Base.metadata.tables[table_name].constraints
+        if constraint.name and len(constraint.name) > 63
+    } | {
+        index.name
+        for table_name in MAPPED_TABLES
+        for index in Base.metadata.tables[table_name].indexes
+        if index.name and len(index.name) > 63
+    }
+
+    assert too_long == set()
+
+
+def test_examination_dates_are_date_only():
+    """A published calendar date carries no time and no zone to interpret one in."""
+    columns = ExaminationPeriod.__table__.columns
+
+    assert isinstance(columns["starts_on"].type, Date)
+    assert isinstance(columns["ends_on"].type, Date)
+
+
+# -- learner planning -------------------------------------------------------
+
+
+def test_a_learner_carries_a_bounded_timezone():
+    columns = Learner.__table__.columns
+
+    assert isinstance(columns["timezone"].type, String)
+    assert columns["timezone"].nullable is False
+    assert columns["timezone"].server_default is None
+
+
+def test_study_goal_status_is_constrained_to_the_documented_values():
+    ddl = compiled("study_goals")
+
+    assert "ck_study_goals_status_is_known" in ddl
+    for status in STUDY_GOAL_STATUSES:
+        assert f"'{status}'" in ddl
+
+
+def test_a_study_goal_must_aim_at_a_date_or_an_examination():
+    """Both columns are nullable so neither has to be invented, but a goal with
+    neither has no horizon to plan against."""
+    ddl = compiled("study_goals")
+    columns = StudyGoal.__table__.columns
+
+    assert columns["target_date"].nullable is True
+    assert columns["examination_schedule_id"].nullable is True
+    assert "ck_study_goals_aims_at_a_date_or_an_examination" in ddl
+    assert "target_date IS NOT NULL OR examination_schedule_id IS NOT NULL" in ddl
+
+
+def test_a_study_goal_references_a_schedule_rather_than_copying_its_dates():
+    """A revised schedule then reaches every goal pointing at it."""
+    columns = StudyGoal.__table__.columns
+
+    assert {key.column.table.name for key in columns["examination_schedule_id"].foreign_keys} == {
+        "examination_schedules"
+    }
+    assert "examination_starts_on" not in columns
+    assert "examination_ends_on" not in columns
+
+
+def test_learner_owned_records_carry_a_learner_id():
+    """Kept from the start so multiple accounts stay an authentication change."""
+    assert "learner_id" in StudyGoal.__table__.columns
+    assert "user_id" not in StudyGoal.__table__.columns

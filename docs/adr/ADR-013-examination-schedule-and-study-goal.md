@@ -1,0 +1,267 @@
+---
+title: "ADR-013: Model an Examination Period as a Published Window of Reference Data"
+status: accepted
+owner: architecture-and-data
+last_updated: 2026-08-01
+related:
+  - ../00-project-context.md
+  - ADR-003-postgresql-persistence.md
+  - ADR-009-configuration-naming-and-validation.md
+  - ADR-011-sqlalchemy-persistence-implementation.md
+  - ADR-012-curriculum-seed-and-reconciliation.md
+  - ../database/schema.md
+  - ../database/migrations.md
+  - ../domain/domain-model.md
+  - ../domain/entities.md
+  - ../domain/terminology.md
+  - ../requirements/functional.md
+  - ../api/endpoints.md
+  - ../deployment/environments.md
+  - ../architecture/decisions.md
+---
+
+# ADR-013: Model an Examination Period as a Published Window of Reference Data
+
+## Status
+
+Accepted — 2026-08-01
+
+## Context
+
+[FR-002](../requirements/functional.md) requires a learner to set a target
+examination date before planning begins, and
+[database/schema.md](../database/schema.md) approved `study_goals.target_date` as
+a single `date` to hold it.
+
+Implementing that against a real examination showed the column cannot hold what
+the source actually publishes. IIT Madras publishes GATE 2027 as a set of sitting
+days — 6–7, 13–14, and 20–21 February 2027 — and does not say which of them the
+Computer Science paper falls on. It also states that every date it publishes is
+liable to change. A single `target_date` therefore has no honest value to hold:
+any date inside the window is a guess, and a guess stored in a `date` column
+becomes a deadline the whole planner treats as fact.
+
+Four questions could not be avoided once that was clear, and none had an approved
+answer:
+
+1. **Where an examination calendar lives.** It describes the world, not the
+   learner, and every learner aiming at the same cycle must see the same dates.
+2. **How a period that is not one day is stored**, given that registration,
+   examination, and results are all ranges of different shapes.
+3. **How "liable to change" survives into the database**, rather than being lost
+   between the source and the row.
+4. **What a study goal aims at** once a single target date is no longer always
+   available.
+
+A fifth question arrives with the same change: creating `learners` forces the
+**default learner timezone**, which
+[ADR-011](ADR-011-sqlalchemy-persistence-implementation.md) records as an open
+item for the project owner.
+
+## Decision
+
+### An examination schedule is reference data, seeded with its provenance
+
+Two tables, in a new *Examination schedule* schema area:
+`examination_schedules` holds one published calendar per learning program and
+cycle — `gate-cse` and `2027` — with its organising body, source URL, the date
+the source was read, and its confirmation status. `examination_periods` holds its
+dated periods.
+
+This follows [ADR-012](ADR-012-curriculum-seed-and-reconciliation.md): like the
+curriculum, a schedule is curated data with a traceable source, loaded by an
+idempotent seed rather than typed in by a learner. `source_reference` is `NOT
+NULL`, unlike the curriculum's, because a stored date with no traceable origin
+cannot be checked when the examining body revises it.
+
+### The examination is stored as dated periods, never as one date
+
+A period carries `period_type`, `starts_on`, and `ends_on`. GATE 2027's three
+sitting weekends are three `examination` periods, not one 6–21 February range:
+eleven of the days in that range hold no examination, and a window spanning them
+would misstate what was published. A period whose start and end are the same day
+is a single-day event, which is how the results announcement is stored.
+
+The examination window a plan is built against is derived — first sitting day to
+last — from the `examination` periods alone. Registration and results periods
+bracket the examination rather than being it, and including them would widen the
+window by months. The derivation lives in the use case, not the repository or a
+stored column.
+
+`period_type` covers `registration`, `late_registration`, `examination`, and
+`results`. All four are persisted: the registration deadlines are the nearest
+actionable dates a learner has, and documenting them while storing only the
+examination would leave the product unable to surface them.
+
+### `schedule_status` carries "liable to change" into the database
+
+A schedule is `provisional` until the examining body confirms its dates, and
+`confirmed` afterwards. The bundled GATE 2027 schedule is `provisional`, because
+its source says so. Every report that prints the dates prints the qualification
+with them.
+
+### A study goal aims at an examination cycle, a target date, or both
+
+`study_goals.target_date` becomes nullable and gains a nullable
+`examination_schedule_id`, with a `CHECK` requiring at least one of them. A
+learner preparing for a published examination need not invent a date; a learner
+following no examination need not invent a cycle; a goal with neither has no
+horizon to plan against and is refused.
+
+The goal stores a **reference** to the schedule, never a copy of its dates, so a
+re-seeded correction reaches every goal at once and no goal can drift from the
+published source.
+
+### The default learner timezone is `APP_DEFAULT_TIMEZONE`, defaulting to `Asia/Kolkata`
+
+Core runtime under [ADR-009](ADR-009-configuration-naming-and-validation.md): it
+describes how this installation runs, selects no adapter, and names no vendor. It
+is validated at startup as a real IANA zone through the standard library's
+`zoneinfo`, which needs no new dependency — `tzdata` already ships as a
+dependency of psycopg.
+
+This settles one of the three open items ADR-011 left to the project owner. The
+`day_of_week` numbering convention and numeric precision for score columns remain
+open; the tables that need them are not created here.
+
+### Reconciliation is an application use case, and there is no HTTP surface yet
+
+The matching rules live in
+`backend/app/application/use_cases/seed_examination_schedule.py` and
+`set_study_goal.py`, behind repository ports. Two composition-root commands —
+`scripts/seed_examination_schedule.py` and `scripts/set_study_goal.py` — read
+configuration and open a database.
+
+No endpoint is added. [endpoints.md](../api/endpoints.md) defines GOAL-001 to
+GOAL-005 and LRN-001 at intent level; their request and response schemas are
+written when the frontend that consumes them exists, so a contract is not fixed
+ahead of its first caller.
+
+## Consequences
+
+### Positive
+
+- The product can state what is actually known — an examination window, from a
+  named source, read on a known date, still liable to change — instead of a date
+  nobody published.
+- A revised schedule is a data-file edit and a re-seed; every goal pointing at it
+  follows, with no learner-record migration.
+- Another learning program's calendar is a new data file, not a code change, and
+  a program whose examination is one day stores one period.
+- The registration deadlines are queryable, so the product can surface the
+  nearest action rather than only the distant one.
+- A goal cannot exist without a horizon, enforced by the database rather than by
+  convention.
+
+### Negative
+
+- Deriving the window on every read costs a query for the periods. At six rows
+  per cycle this does not matter; a stored window would be faster and would drift.
+- A period whose sitting day moves reads as a new period alongside the old one,
+  because the natural key includes the start date. Nothing is deleted, so a
+  schedule revised repeatedly accumulates superseded rows. Retiring them needs a
+  separate, deliberate mechanism that does not exist yet — the same gap ADR-012
+  records for curriculum.
+- Two constraint names on `examination_periods` are shortened by hand, because
+  the naming convention would generate 68-character identifiers that PostgreSQL
+  truncates at 63. They are the first constraints in the repository that do not
+  read exactly as the convention would spell them.
+- `study_goals.target_date` is now nullable, so every future reader must handle
+  its absence rather than relying on the column.
+
+### Neutral
+
+- `examination_schedules` and `study_goals` are written but read by nothing but
+  the commands that write them. The API arrives with the frontend in Milestone 2.
+- This brings `learners` and `study_goals` forward from Milestone 2 into
+  Milestone 1. `availability_slots` stays behind, because it would force the
+  `day_of_week` convention that no requirement yet constrains.
+- `study_goals.planning_preferences` is not created, for the same reason: nothing
+  reads it, and its shape is undecided.
+
+## Alternatives considered
+
+### Keep `target_date` as a single non-null date
+
+The approved shape, and the simplest for a planner to consume.
+
+**Not selected:** there is no date to put in it. The learner would either pick a
+day inside a window they cannot yet know, or the system would default to the
+window's first day — recording a guess as a deadline, which is precisely what the
+window model exists to prevent.
+
+### Store the window as two columns on `study_goals`
+
+`target_period_start` and `target_period_end`, with a source reference and a
+provisional flag alongside them.
+
+**Not selected:** it makes every learner keep a private copy of published data.
+Two learners aiming at the same examination could hold different dates, a
+correction would have to be applied goal by goal, and the provenance would be
+duplicated per row rather than held once where it can be checked.
+
+### One reference table with explicit date columns
+
+`registration_opens_on`, `examination_starts_on`, `examination_ends_on`, and so
+on: one row per cycle, no child table.
+
+**Not selected:** a single examination start and end cannot express three
+separate weekends without claiming the eleven days between them, and each
+additional kind of date the institute publishes would be a schema migration
+rather than a data edit.
+
+### Extend the curriculum seed file and use case
+
+One data file, one command, one provenance block for a program-year.
+
+**Not selected:** it widens a file format governed by an accepted ADR, and it
+couples two things that change on different cadences. A syllabus is stable for a
+year; a provisional schedule is expected to be corrected. Retiring a syllabus
+version would also drag the schedule with it.
+
+### Add the study-goal endpoints in this change
+
+The learner could set a goal over HTTP immediately.
+
+**Not selected:** it fixes public request and response contracts before any
+client exists to validate them against, and `schema.md` already records the
+curriculum area's first-API-contract review as pending for the same reason.
+
+## Implementation notes
+
+- Migration `20260801_01_create_examination_schedule_and_learner_goal_tables`
+  creates all four tables. It is additive and creates them empty.
+- `backend/scripts/gate_cse_examination_schedule.json` holds the GATE 2027 dates.
+  Its `$comment` block records the source, the transcription rules, and the one
+  inference the file makes: the source publishes a late-registration *closing*
+  date rather than an opening one, so the period is recorded as beginning the day
+  after regular registration closes.
+- The dates were supplied by the project owner from
+  <https://gate2027.iitm.ac.in/> and transcribed as given. They were not
+  independently fetched during implementation, which `source_checked_on` recorded
+  as 2026-07-31 at the time. The project owner verified them against the official
+  IIT Madras source on 2026-08-01, and `source_checked_on` now records that date.
+- Local setup order is migrations, then `seed_curriculum`, then
+  `seed_examination_schedule`, then `set_study_goal`. Each step refuses to run
+  ahead of its predecessor with a message naming the command to run first.
+- Open for a later decision, and deliberately not settled here: how superseded
+  examination periods are retired, whether a study goal may exist for more than
+  one learning program at a time, and the request/response schemas for GOAL-001
+  to GOAL-005.
+
+## Related Documents
+
+- [Project context](../00-project-context.md)
+- [ADR-003: Use PostgreSQL for structured persistence](ADR-003-postgresql-persistence.md)
+- [ADR-009: Name and validate configuration variables explicitly](ADR-009-configuration-naming-and-validation.md) — the category `APP_DEFAULT_TIMEZONE` belongs to
+- [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](ADR-011-sqlalchemy-persistence-implementation.md) — the per-milestone ordering this change follows, and the open item it settles
+- [ADR-012: Load curriculum as reconciled reference data from a versioned file](ADR-012-curriculum-seed-and-reconciliation.md) — the seed rules this record reuses
+- [Database schema](../database/schema.md) — the tables and constraints this record decides
+- [Database migrations](../database/migrations.md) — the seed's commands and operational rules
+- [Domain model](../domain/domain-model.md) — the examination schedule concept
+- [Domain entities](../domain/entities.md)
+- [Terminology](../domain/terminology.md) — the canonical terms this record introduces
+- [Functional requirements](../requirements/functional.md) — FR-002, the requirement this record reinterprets
+- [API endpoints](../api/endpoints.md) — GOAL-001 to GOAL-005 and LRN-001, deferred by this record
+- [Environments and configuration](../deployment/environments.md) — the `APP_DEFAULT_TIMEZONE` catalogue entry
+- [Architecture decision register](../architecture/decisions.md) — DEC-026

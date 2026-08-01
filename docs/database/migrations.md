@@ -2,7 +2,7 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - overview.md
@@ -11,6 +11,7 @@ related:
   - ../development/folder-structure.md
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../deployment/environments.md
 ---
 
@@ -113,6 +114,7 @@ The applied revisions are:
 | --- | --- |
 | `20260731_01` | `create_curriculum_tables` — learning programs, curriculum versions, subjects, topics, and topic relationships. |
 | `20260731_02` | `add_topic_code_unique_constraint` — `uq_topics_subject_id_code`, so a topic code identifies one topic within its subject. Additive; safe on populated tables. |
+| `20260801_01` | `create_examination_schedule_and_learner_goal_tables` — examination schedules and their dated periods, plus the first two learner-planning tables, `learners` and `study_goals`. Creates four empty tables; adds nothing to an existing one. |
 
 ## What Requires a Migration
 
@@ -189,8 +191,9 @@ Before accepting a migration:
 
 `backend/tests/integration/` automates the first, third, and fifth of these: it applies the
 migrations to an empty database, compares the models against the resulting schema, attempts the
-writes each documented constraint forbids, and downgrades back to empty. The curriculum seed is
-exercised against the same database, including a repeat run that must write nothing. The tests read
+writes each documented constraint forbids, and downgrades back to empty. Both seeds are exercised
+against the same database, each including a repeat run that must write nothing, and the whole local
+setup path — curriculum, schedule, goal — runs end to end against the bundled data files. The tests read
 `TEST_DATABASE_URL` and skip when it is unset, so they never touch development or learner data;
 [environments and configuration](../deployment/environments.md) records why it has no fallback. The
 CI `database` job supplies an ephemeral PostgreSQL service and fails if that database is
@@ -257,8 +260,9 @@ activate a second version while another is active, the order is fixed — retire
 Running step 2 first is refused, naming both versions. There is no single-run switchover, and no
 command retires a version that no seed file names.
 
-This path has not been exercised — only the 2026 curriculum exists. Treat the sequence above as the
-supported route, not as a rehearsed procedure.
+This path has not been exercised — GATE CSE 2027 is the only curriculum version that exists, and it
+is the seeded active one. Treat the sequence above as the supported route, not as a rehearsed
+procedure.
 
 Repeatability comes from matching every record on a natural key and writing only what differs:
 
@@ -312,6 +316,85 @@ This is a workaround for a per-statement constraint check, not a schema decision
 would be a deferrable constraint, which
 [schema.md](schema.md#topics) does not specify.
 
+### The examination schedule seed
+
+`backend/scripts/seed_examination_schedule.py` applies the same rules to the examination calendar an
+examining body publishes. Run it from `backend/`, after the migrations **and after the curriculum
+seed** — a schedule belongs to a learning program the curriculum seed creates, and seeding one first
+is refused with a message naming the command to run:
+
+```bash
+python -m scripts.seed_examination_schedule             # the bundled GATE 2027 schedule
+python -m scripts.seed_examination_schedule --dry-run   # report what would change, then roll back
+python -m scripts.seed_examination_schedule --file <path>
+```
+
+The schedule is data, not code: `backend/scripts/gate_cse_examination_schedule.json` holds the
+published GATE 2027 dates and records its official source, its transcription rules, and its one
+inference in a `$comment` block. A different examination cycle, or another program's calendar, is a
+new file rather than a code change.
+
+#### Source of the bundled GATE 2027 schedule
+
+| | |
+| --- | --- |
+| Learning program | `gate-cse` |
+| Cycle | `2027`, seeded `provisional` |
+| Organising body | IIT Madras |
+| Source | <https://gate2027.iitm.ac.in/> |
+| Read on | 2026-08-01, verified against the official source |
+
+| Period | Dates |
+| --- | --- |
+| Registration | 14 August 2026 – 21 September 2026 |
+| Late registration | 22 September 2026 – 30 September 2026 |
+| Examination | 6–7, 13–14, and 20–21 February 2027, as three separate periods |
+| Results | 19 March 2027 |
+
+**These dates are liable to change.** The source says so, which is why the schedule is seeded
+`provisional` rather than `confirmed`. Re-seed with `"schedule_status": "confirmed"` once the
+organising institute confirms them.
+
+The source publishes a *closing* date for late registration rather than an opening one, so the period
+is recorded as beginning the day after regular registration closes. That is the file's one inference,
+and its `$comment` block says so. The day the Computer Science paper itself is sat is not published;
+no period names it.
+
+Repeatability comes from the same match-then-compare rule as the curriculum:
+
+| Record | Natural key | Enforced by |
+| --- | --- | --- |
+| Examination schedule | `(learning_program_id, cycle_label)` | `uq_examination_schedules_learning_program_id_cycle_label` |
+| Examination period | `(examination_schedule_id, period_type, starts_on)` | `uq_examination_periods_schedule_id_period_type_starts_on` |
+
+A period is keyed on its start date because a cycle holds three `examination` periods. A corrected
+*end* date therefore updates a period in place, while a sitting moved to a different *day* reads as a
+new period alongside the old one. **The seed never deletes**, so a schedule revised repeatedly
+accumulates superseded periods; retiring them is a deliberate, separately approved change, exactly as
+for curriculum.
+
+### Setting the local learner's study goal
+
+`backend/scripts/set_study_goal.py` binds the local learner to a curriculum and an examination goal.
+Run it from `backend/`, after both seeds:
+
+```bash
+python -m scripts.set_study_goal                          # GATE CSE, GATE 2027
+python -m scripts.set_study_goal --display-name "Asha"
+python -m scripts.set_study_goal --no-examination --target-date 2027-06-30
+python -m scripts.set_study_goal --dry-run
+```
+
+It creates the local learner on first run, with the timezone from `APP_DEFAULT_TIMEZONE`, and leaves
+an existing learner untouched afterwards — renaming a learner is a profile change with its own
+workflow. It is idempotent: it matches the learner's active goal for the program, writes only what
+differs, and never rewrites a goal that is paused, completed, or archived.
+
+The goal stores a *reference* to the examination schedule, never a copy of its dates, so a re-seeded
+correction reaches it without a learner-data migration. The examination window it reports spans the
+first and last published sitting days. See
+[ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
+
 ## Environment Workflow
 
 ### Local development
@@ -320,8 +403,13 @@ would be a deferrable constraint, which
 2. Apply the current Alembic migration head: `cd backend && python -m alembic upgrade head`.
 3. Load or refresh the curated curriculum: `cd backend && python -m scripts.seed_curriculum`. It is
    safe to repeat; see [the curriculum seed](#the-curriculum-seed).
-4. Run application and migration tests. The migration tests need `TEST_DATABASE_URL` pointing at a
+4. Load or refresh the published examination schedule: `python -m scripts.seed_examination_schedule`.
+   Also safe to repeat; see [the examination schedule seed](#the-examination-schedule-seed).
+5. Set the learner's goal: `python -m scripts.set_study_goal`. Safe to repeat.
+6. Run application and migration tests. The migration tests need `TEST_DATABASE_URL` pointing at a
    separate disposable database, never the one from step 1.
+
+Each step refuses to run ahead of its predecessor, naming the command to run first.
 
 ### Future shared/cloud environments
 
@@ -346,6 +434,7 @@ An AI assistant may propose or generate a migration, but it must not:
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — requires migrations to stay an explicit step, not a startup side effect
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — why the schema is migrated one area at a time
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — the durable rationale for the seed's matching, update, and never-delete rules
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the rationale for the examination schedule seed and the study goal it feeds
 - [CI/CD strategy](../deployment/ci-cd.md) — the `database` job that runs these migrations on every pull request
 - [Environments and configuration](../deployment/environments.md) — the authoritative catalogue for `DATABASE_URL` and `TEST_DATABASE_URL`
 - [Database overview](overview.md)

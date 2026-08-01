@@ -2,12 +2,13 @@
 title: LearnFlow Functional Requirements
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-29
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - mvp.md
   - ../vision/vision.md
   - ../domain/domain-model.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
 ---
 
 # LearnFlow Functional Requirements
@@ -47,7 +48,7 @@ LearnFlow must allow a learner to create a study baseline before planning begins
 
 ### Acceptance criteria
 
-- The learner can set a target exam/completion date.
+- The learner can set a target examination schedule or completion date.
 - The learner can set available study time and basic planning preferences.
 - The learner can confirm GATE CSE as the active learning program.
 - The learner can start with no previous progress and still receive an initial plan.
@@ -193,6 +194,7 @@ Each implementation task, API contract, data-model change, and test should link 
 
 - [Product vision](../vision/vision.md)
 - [MVP scope](mvp.md)
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — what a target examination schedule is, and why FR-002 does not ask for a single date
 - [Domain model](../domain/domain-model.md)
 - [API endpoints](../api/endpoints.md)
 - [Roadmap](../roadmap/roadmap.md)
