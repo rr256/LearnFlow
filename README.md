@@ -32,13 +32,15 @@ docker compose logs -f backend   # follow backend logs
 docker compose down              # stop, preserving named volumes
 ```
 
-Apply the database schema once the services are up, then load the curated curriculum. Neither step
-runs automatically:
+Apply the database schema once the services are up, then load the curated data. No step runs
+automatically, and each refuses to run ahead of its predecessor:
 
 ```bash
 cd backend
-python -m alembic upgrade head       # create the tables
-python -m scripts.seed_curriculum    # load the GATE CSE curriculum; safe to repeat
+python -m alembic upgrade head                # create the tables
+python -m scripts.seed_curriculum             # load the GATE CSE curriculum; safe to repeat
+python -m scripts.seed_examination_schedule   # load the published GATE 2027 schedule; safe to repeat
+python -m scripts.set_study_goal              # bind the local learner to both
 ```
 
 The API is then published on the loopback interface only:
@@ -67,6 +69,8 @@ python -m app.main                          # serves on API_HOST / API_PORT
 python -m uvicorn app.main:app --reload      # reload workflow, own --host/--port
 python -m alembic upgrade head               # apply the database schema
 python -m scripts.seed_curriculum            # load the curated curriculum, idempotently
+python -m scripts.seed_examination_schedule  # load the published examination schedule, idempotently
+python -m scripts.set_study_goal             # bind the local learner to both
 ```
 
 Python 3.14 is required, and `DATABASE_URL` must be set — the backend will not start without it.
@@ -79,38 +83,49 @@ migration tests are not part of that set: they need PostgreSQL, so they skip unl
 
 ## Project status
 
-Documentation and architecture foundation, a minimal FastAPI backend foundation, the curriculum
-database schema, and the first read API over it. [Project context](docs/00-project-context.md) is
-the authoritative summary of what exists.
+Documentation and architecture foundation, a minimal FastAPI backend foundation, the curriculum and
+examination-schedule database schema with the curated data that fills both, the learner's study
+goal, and the first read API over the curriculum.
+[Project context](docs/00-project-context.md) is the authoritative summary of what exists.
 
 **Implemented**
 
 - A FastAPI application served through a composition-root application factory.
-- Validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `API_HOST`, `API_PORT`, and the
-  required `DATABASE_URL`.
+- Validated startup configuration for `APP_ENV`, `APP_LOG_LEVEL`, `APP_DEFAULT_TIMEZONE`,
+  `API_HOST`, `API_PORT`, and the required `DATABASE_URL`.
 - `GET /health`, an operational endpoint served outside `/api/v1`.
 - The curriculum read endpoints CUR-001 to CUR-003 under `/api/v1/curriculum`: the learning-program
   list, one program with its active curriculum-version reference, and a version's subjects, topics,
   subtopics, and topic relationships. Every response uses the documented `data` envelope, and every
-  failure the documented error envelope. See [API endpoints](docs/api/endpoints.md#curriculum-endpoints).
+  failure the documented error envelope. See [API endpoints](docs/api/endpoints.md#curriculum-endpoints)
+  and [ADR-014](docs/adr/ADR-014-api-response-contract.md).
 - A backend container image and Docker Compose `backend` and `postgres` services. See
   [Docker strategy](docs/deployment/docker.md).
-- SQLAlchemy models and Alembic migrations for the curriculum tables — learning programs,
-  curriculum versions, subjects, topics, and topic relationships. See
-  [database schema](docs/database/schema.md).
+- SQLAlchemy models and Alembic migrations for the curriculum tables — learning programs, curriculum
+  versions, subjects, topics, and topic relationships — the examination schedule tables, and
+  `learners` and `study_goals`. See [database schema](docs/database/schema.md).
 - An idempotent seed, `python -m scripts.seed_curriculum`, loading the curated GATE CSE curriculum —
   11 subjects, 65 topics and subtopics, transcribed from the official syllabus. It matches records on
   a natural key, writes only what differs, and never deletes, so repeat runs are safe. See
   [the curriculum seed](docs/database/migrations.md#the-curriculum-seed).
+- A second idempotent seed, `python -m scripts.seed_examination_schedule`, loading the published GATE
+  2027 schedule as dated periods with its official source and its `provisional`/`confirmed` status.
+  See [the examination schedule seed](docs/database/migrations.md#the-examination-schedule-seed).
+- `python -m scripts.set_study_goal`, which binds the local learner to the active curriculum version
+  and the published examination window. An examination is stored as a window, never as a single
+  guessed date; see [ADR-013](docs/adr/ADR-013-examination-schedule-and-study-goal.md).
 - Continuous integration on pull requests: backend tests, Ruff lint and format checks,
   documentation validation, database migration checks, and container build validation. See
   [CI/CD strategy](docs/deployment/ci-cd.md).
 
 **Not implemented**
 
-Learner features, AI and RAG, the frontend, and external integrations. The curriculum endpoints
-above are the only ones serving learner-facing data, and they only read — no endpoint writes
-anything. The
-progress, resource, and assessment tables arrive with the milestones that use them. Compose has no
-ChromaDB or frontend service. Nothing beyond the implemented items above should be inferred from the
-current repository contents.
+AI and RAG, the frontend, external integrations, and every learner feature beyond choosing a
+curriculum and an examination goal. The curriculum endpoints above are the only ones serving
+learner-facing data, and they only read — no endpoint writes anything. The examination schedule and
+the study goal are reachable only through the commands above; the learner and study-goal endpoints
+are deferred until the client that consumes them exists, per
+[ADR-013](docs/adr/ADR-013-examination-schedule-and-study-goal.md). The progress, resource, and
+assessment tables arrive with the milestones that use them. Compose has no ChromaDB or frontend
+service. Nothing beyond the implemented items above should be inferred from the current repository
+contents.

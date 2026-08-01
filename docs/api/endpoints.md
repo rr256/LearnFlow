@@ -13,6 +13,7 @@ related:
   - ../database/migrations.md
   - ../roadmap/milestones.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-014-api-response-contract.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -62,7 +63,7 @@ retired versions. Errors: `422` `validation_error` for a `limit` or `offset` out
 ### CUR-002 — `GET /api/v1/curriculum/programs/{program_id}`
 
 `program_id` is a UUID. Returns `200` with one program under `data`, in the same shape CUR-001
-returns per item. Errors: `404` `resource_not_found` when no such program is stored; `422`
+returns per item. Errors: `404` `not_found` when no such program is stored; `422`
 `validation_error` when the path segment is not a UUID.
 
 ### CUR-003 — `GET /api/v1/curriculum/versions/{curriculum_version_id}/tree`
@@ -78,7 +79,7 @@ topics and nesting it under one would make the tree assert which end owns it.
 
 A version with no subjects returns an empty tree rather than an error, and a `draft` or `retired`
 version is readable — `curriculum_version.status` says which it is. Errors: `404`
-`resource_not_found` when no such version is stored; `422` `validation_error` when the path segment
+`not_found` when no such version is stored; `422` `validation_error` when the path segment
 is not a UUID.
 
 Related entities: [learning program](../domain/entities.md#learning-program),
@@ -222,6 +223,7 @@ Implement in an order that enables one working learner flow:
 
 - [Project context](../00-project-context.md)
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — what a study goal aims at, and why the goal endpoints are deferred
+- [ADR-014: Fix the public HTTP API response contract](../adr/ADR-014-api-response-contract.md) — the envelope, pagination block, and error codes every endpoint here returns
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

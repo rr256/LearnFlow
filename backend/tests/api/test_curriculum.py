@@ -81,7 +81,7 @@ def test_reading_an_unknown_program_returns_the_documented_not_found_error(curri
 
     assert response.status_code == 404
     error = response.json()["error"]
-    assert error["code"] == "resource_not_found"
+    assert error["code"] == "not_found"
     assert error["details"] == []
 
 
@@ -138,7 +138,7 @@ def test_reading_an_unknown_curriculum_version_returns_not_found(curriculum_clie
     response = curriculum_client.get(f"{CURRICULUM}/versions/{uuid.uuid4()}/tree")
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "resource_not_found"
+    assert response.json()["error"]["code"] == "not_found"
 
 
 # -- versioning ------------------------------------------------------------

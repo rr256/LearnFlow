@@ -45,14 +45,14 @@ def test_not_found_uses_the_documented_envelope(curriculum_client):
 
     assert set(body) == {"error"}
     assert set(body["error"]) == {"code", "message", "details"}
-    assert body["error"]["code"] == "resource_not_found"
+    assert body["error"]["code"] == "not_found"
 
 
 def test_an_unrouted_path_reports_a_message_a_reader_can_act_on(curriculum_client):
     """Starlette's bare `Not Found` is a status name, not an explanation."""
     body = curriculum_client.get("/api/v1/does-not-exist").json()
 
-    assert body["error"]["code"] == "resource_not_found"
+    assert body["error"]["code"] == "not_found"
     assert body["error"]["message"] == "The requested resource was not found."
 
 

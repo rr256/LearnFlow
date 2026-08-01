@@ -797,7 +797,7 @@ What the review settled:
 
 | Review input | State |
 | --- | --- |
-| The first API contracts | **Pending** — GOAL-001 to GOAL-005 and LRN-001 are defined at intent level in [endpoints](../api/endpoints.md); none is implemented. |
+| The first API contracts | **Pending** — LRN-001, LRN-002, and GOAL-001 to GOAL-005 are defined at intent level in [endpoints](../api/endpoints.md); none is implemented, and all seven are deferred by [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) until the client that consumes them exists. |
 | The actual revision-scheduling rules | **Pending** — they constrain `study_plans` and `plan_items`, which arrive in Milestone 3. |
 | The `day_of_week` numbering convention | **Open** — needed by `availability_slots`, not created here. |
 

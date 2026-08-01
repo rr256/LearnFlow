@@ -33,7 +33,11 @@ from starlette.status import (
 
 _logger = logging.getLogger(__name__)
 
-RESOURCE_NOT_FOUND: Final = "resource_not_found"
+# `not_found` rather than `resource_not_found`: `resource` is a canonical
+# LearnFlow term for a learner's study material, and `/api/v1/resources` is
+# reserved for it. A generic code carrying that word would name two concepts.
+# See ADR-014 and docs/domain/terminology.md.
+NOT_FOUND: Final = "not_found"
 METHOD_NOT_ALLOWED: Final = "method_not_allowed"
 VALIDATION_ERROR: Final = "validation_error"
 INTERNAL_ERROR: Final = "internal_error"
@@ -43,7 +47,7 @@ REQUEST_FAILED: Final = "request_failed"
 # return. A status with no entry falls back to REQUEST_FAILED; give it its own
 # code here when an endpoint starts returning it deliberately.
 ERROR_CODES_BY_STATUS: Final[dict[int, str]] = {
-    HTTP_404_NOT_FOUND: RESOURCE_NOT_FOUND,
+    HTTP_404_NOT_FOUND: NOT_FOUND,
     HTTP_405_METHOD_NOT_ALLOWED: METHOD_NOT_ALLOWED,
     HTTP_422_UNPROCESSABLE_CONTENT: VALIDATION_ERROR,
     HTTP_500_INTERNAL_SERVER_ERROR: INTERNAL_ERROR,

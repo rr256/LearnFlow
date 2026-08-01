@@ -9,6 +9,7 @@ related:
   - ADR-009-configuration-naming-and-validation.md
   - ADR-011-sqlalchemy-persistence-implementation.md
   - ADR-012-curriculum-seed-and-reconciliation.md
+  - ADR-014-api-response-contract.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../domain/domain-model.md
@@ -25,6 +26,39 @@ related:
 ## Status
 
 Accepted — 2026-08-01
+
+## Implementation status
+
+*Note added 2026-08-01, later the same day. The decision below is unchanged, and in particular the
+deferral it records still stands.*
+
+**The learner and study-goal endpoints remain deferred.** LRN-001, LRN-002, and GOAL-001 to GOAL-005
+are still unimplemented, for exactly the reason recorded under *Reconciliation is an application use
+case, and there is no HTTP surface yet*: their request and response schemas are written when the
+client that consumes them exists, so a public contract is not fixed ahead of its first caller. The
+examination schedule and the study goal are still written and read only by
+`scripts.seed_examination_schedule` and `scripts.set_study_goal`. No examination-schedule endpoint
+exists either; an examination window reaches a client through a goal response, and there is no goal
+response yet.
+
+**What has changed is elsewhere.** The curriculum read endpoints CUR-001 to CUR-003 are implemented.
+Two consequences for this record, neither altering its decision:
+
+- **One statement here is now stale.** Under [Alternatives considered](#add-the-study-goal-endpoints-in-this-change),
+  the reason for not adding the goal endpoints cites `schema.md` as recording "the curriculum area's
+  first-API-contract review as pending for the same reason". That review has since been discharged —
+  the curriculum area is fully reviewed, and it required no schema change. The *argument* is
+  unaffected: the curriculum endpoints could be written because their client-facing shape follows
+  from curated reference data, whereas a study goal's does not. Only the supporting example has
+  moved on.
+- **The response contract these endpoints will use is now fixed.** [ADR-014](ADR-014-api-response-contract.md)
+  decides the envelope, the collection pagination shape, and the error-code catalogue, so when the
+  goal endpoints are finally shaped, only their fields are open — not how a response or a failure is
+  wrapped. That narrows what the deferred decision still has to settle.
+
+The learner-planning area's own first-API-contract review in
+[database/schema.md](../database/schema.md) stays **pending**, as it must while these endpoints do
+not exist.
 
 ## Context
 
@@ -256,6 +290,7 @@ curriculum area's first-API-contract review as pending for the same reason.
 - [ADR-009: Name and validate configuration variables explicitly](ADR-009-configuration-naming-and-validation.md) — the category `APP_DEFAULT_TIMEZONE` belongs to
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](ADR-011-sqlalchemy-persistence-implementation.md) — the per-milestone ordering this change follows, and the open item it settles
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](ADR-012-curriculum-seed-and-reconciliation.md) — the seed rules this record reuses
+- [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the envelope and error contract the deferred goal endpoints will answer in
 - [Database schema](../database/schema.md) — the tables and constraints this record decides
 - [Database migrations](../database/migrations.md) — the seed's commands and operational rules
 - [Domain model](../domain/domain-model.md) — the examination schedule concept

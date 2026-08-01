@@ -2,15 +2,17 @@
 title: "ADR-012: Load Curriculum as Reconciled Reference Data from a Versioned File"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-07-31
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
   - ADR-011-sqlalchemy-persistence-implementation.md
+  - ADR-014-api-response-contract.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../domain/domain-model.md
   - ../requirements/functional.md
+  - ../api/endpoints.md
   - ../architecture/decisions.md
 ---
 
@@ -19,6 +21,35 @@ related:
 ## Status
 
 Accepted — 2026-07-31
+
+## Implementation status
+
+*Note added 2026-08-01. The decision below is unchanged; this records what now reads what this seed
+writes.*
+
+**The curriculum API has arrived.** CUR-001 to CUR-003 serve the learning programs, one program with
+its active curriculum version, and a curriculum version's subjects, topics, subtopics, and topic
+relationships, all read from the rows this seed produces. This supersedes the first *Neutral*
+consequence recorded below — "The curriculum tables are now written but still read by nothing" — and
+discharges its expectation that the API would arrive later in Milestone 1.
+
+What this confirms about the decision, none of it altering it:
+
+- **Stable identifiers earned their keep.** Because a re-run matches on a natural key and updates in
+  place, the UUIDs the API returns survive a re-seed. A client that stored a topic identifier still
+  resolves it after the syllabus is corrected, which is the property the never-delete rule exists to
+  protect.
+- **A correction reaches a client with no further step.** Re-running the seed changes the rows the
+  endpoints read; nothing is cached or projected in between.
+- **`is_trackable` is now visible to a client**, and the seed's rule for it — a topic that groups
+  subtopics is not directly trackable, a leaf is — is what the API reports.
+- **The second *Neutral* consequence stands unchanged.** Topic relationships are still empty for GATE
+  CSE; the endpoint returns an empty list, which is the honest report of a syllabus that states no
+  prerequisite order.
+
+The retirement gap this record leaves open is untouched: a subject or topic dropped from the source
+still keeps its row, and it is now also still served by the API. Retiring one needs the deliberate
+mechanism this record says does not yet exist.
 
 ## Context
 
@@ -211,6 +242,8 @@ text where a reviewer reads code rather than data. JSON also needs no new depend
 - [Project context](../00-project-context.md)
 - [ADR-003: Use PostgreSQL for structured persistence](ADR-003-postgresql-persistence.md)
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](ADR-011-sqlalchemy-persistence-implementation.md) — created the tables this seed fills
+- [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the contract the endpoints reading these rows answer in
+- [API endpoints](../api/endpoints.md) — CUR-001 to CUR-003, which serve what this seed writes
 - [Database schema](../database/schema.md) — the constraints this record relies on
 - [Database migrations](../database/migrations.md) — the seed's commands and operational rules
 - [Domain model](../domain/domain-model.md) — curriculum is curated and verified

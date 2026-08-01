@@ -119,7 +119,7 @@ def test_reading_an_unseeded_curriculum_version_returns_not_found(client):
     response = client.get(f"{CURRICULUM}/versions/00000000-0000-4000-8000-000000000000/tree")
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "resource_not_found"
+    assert response.json()["error"]["code"] == "not_found"
 
 
 def _count_topics(subjects: list[dict]) -> int:

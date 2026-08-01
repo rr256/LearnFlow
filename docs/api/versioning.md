@@ -2,11 +2,12 @@
 title: LearnFlow API Versioning
 status: approved
 owner: architecture-and-api
-last_updated: 2026-07-29
+last_updated: 2026-08-01
 related:
   - ../00-project-context.md
   - conventions.md
   - endpoints.md
+  - ../adr/ADR-014-api-response-contract.md
   - ../development/git-workflow.md
 ---
 
@@ -91,6 +92,7 @@ When an API change is made:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
+- [ADR-014: Fix the public HTTP API response contract](../adr/ADR-014-api-response-contract.md) — the response and error contract these rules classify changes to
 - [API conventions](conventions.md)
 - [API endpoint catalog](endpoints.md)
 - [Database migrations](../database/migrations.md)

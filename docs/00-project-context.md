@@ -80,6 +80,7 @@ Accepted ADRs:
 - [ADR-011 — Implement PostgreSQL persistence synchronously and migrate per milestone](adr/ADR-011-sqlalchemy-persistence-implementation.md)
 - [ADR-012 — Load curriculum as reconciled reference data from a versioned file](adr/ADR-012-curriculum-seed-and-reconciliation.md)
 - [ADR-013 — Model an examination period as a published window of reference data](adr/ADR-013-examination-schedule-and-study-goal.md)
+- [ADR-014 — Fix the public HTTP API response contract](adr/ADR-014-api-response-contract.md)
 
 ### Design and implementation
 

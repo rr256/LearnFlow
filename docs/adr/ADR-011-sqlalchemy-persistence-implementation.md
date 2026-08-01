@@ -10,8 +10,10 @@ related:
   - ADR-009-configuration-naming-and-validation.md
   - ADR-012-curriculum-seed-and-reconciliation.md
   - ADR-013-examination-schedule-and-study-goal.md
+  - ADR-014-api-response-contract.md
   - ../database/schema.md
   - ../database/migrations.md
+  - ../api/endpoints.md
   - ../deployment/environments.md
   - ../deployment/ci-cd.md
   - ../architecture/decisions.md
@@ -75,6 +77,37 @@ Migration `20260801_01_create_examination_schedule_and_learner_goal_tables` also
 and `study_goals` forward from Milestone 2 into Milestone 1, and added a seventh schema area for
 examination schedules. The "one schema area per milestone" ordering decision is unaffected: the
 milestone that first needed those tables created them, which is what this record prescribes.
+
+*Note added 2026-08-01, later the same day. The decision below is unchanged; this records the
+arrival of the API half and supersedes the two statements naming it as still to come.*
+
+**HTTP endpoints now read the curriculum tables.** CUR-001 to CUR-003 serve the learning programs,
+one program with its active curriculum version, and a curriculum version's subjects, topics,
+subtopics, and topic relationships. This supersedes both the sentence above — "The seed half has
+arrived; the API half has not. No HTTP endpoint reads the curriculum tables yet" — and the *Neutral*
+consequence recorded under [Consequences](#neutral), which said the curriculum tables existed with
+nothing reading them. Neither statement is true any longer, and the *Neutral* consequence is now
+discharged in full.
+
+Three points of fact, none altering the decision:
+
+- The synchronous execution model chosen here now serves HTTP requests, not only the seed. A
+  `sqlalchemy.orm.Session` is opened per request by the composition root and closed when the response
+  has been produced. FastAPI runs the synchronous route in its worker threadpool exactly as this
+  record anticipated, and nothing has required an asynchronous variant.
+- Reads go through a second, read-only port, `CurriculumRepository`, rather than through the seed
+  port. `expire_on_commit=False` on the session factory continues to matter for the reason recorded
+  when it was chosen: a record stays readable while it is mapped to a response.
+- **No schema change resulted.** The API-contract review that `database/schema.md` held open for the
+  curriculum area is now discharged, and it found that every column an endpoint returns already
+  exists. The curriculum area is fully reviewed.
+
+The two remaining open items are untouched and stay open: the `day_of_week` numbering convention,
+needed by `availability_slots`, and numeric precision for score columns. Both belong to tables that
+do not exist yet.
+
+The response contract those endpoints answer in is recorded in
+[ADR-014](ADR-014-api-response-contract.md).
 
 ## Context
 
@@ -235,6 +268,8 @@ constraint where practical.
 - [ADR-009: Name and validate configuration variables explicitly](ADR-009-configuration-naming-and-validation.md) — the category `DATABASE_URL` belongs to
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](ADR-012-curriculum-seed-and-reconciliation.md) — the first code to read and write the tables this record created
 - [ADR-013: Model an examination period as a published window of reference data](ADR-013-examination-schedule-and-study-goal.md) — settles the default learner timezone this record left open
+- [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the contract the first endpoints reading these tables answer in
+- [API endpoints](../api/endpoints.md) — CUR-001 to CUR-003, the first endpoints to read these tables
 - [Database schema](../database/schema.md)
 - [Database migrations](../database/migrations.md)
 - [Environments and configuration](../deployment/environments.md)
