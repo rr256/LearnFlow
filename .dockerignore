@@ -52,6 +52,12 @@ backend/scripts/
 backend/requirements-dev.txt
 backend/pyproject.toml
 
+# --- Frontend files not needed to build the image ---------------------------
+# Tests and their runner configuration are never executed inside an image; the
+# frontend job in CI runs them. `next build` does not read them either.
+frontend/tests/
+frontend/vitest.config.mts
+
 # --- Node.js and Next.js ----------------------------------------------------
 node_modules/
 .next/

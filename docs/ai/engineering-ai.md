@@ -2,7 +2,7 @@
 title: LearnFlow Engineering AI Workflow
 status: approved
 owner: project-governance
-last_updated: 2026-07-30
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - prompts.md
@@ -82,7 +82,7 @@ If documentation, code, and a chat instruction conflict, stop and report the con
 | Product/MVP scope | `00-project-context.md`, `vision/vision.md`, `requirements/` |
 | Backend/domain use case | `00-project-context.md`, `domain/`, `architecture/`, relevant API/database docs |
 | Database change | `00-project-context.md`, `domain/`, `database/`, `architecture/decisions.md` |
-| Frontend feature | `00-project-context.md`, `requirements/`, `api/`, `development/folder-structure.md` |
+| Frontend feature | The row for *Frontend* in [Required reading by task](../00-project-context.md#required-reading-by-task), which is the authoritative list |
 | RAG/AI work | `00-project-context.md`, `rag/`, `ai/`, `architecture/provider-pattern.md` |
 | Docker/deployment work | `00-project-context.md`, `deployment/`, `development/tech-stack.md` |
 | Documentation/ADR work | `00-project-context.md`, `development/documentation-standards.md`, `adr/` |
@@ -153,7 +153,7 @@ so the same gates apply on every task instead of being re-derived from prose.
 | 3 | **Stop for decisions.** See below. |
 | 4 | Create one focused branch from an updated `main`, using a prefix from the [git workflow](../development/git-workflow.md). |
 | 5 | Implement inside the agreed scope, following the coding standards and folder structure. |
-| 6 | Add or update tests, then run the backend commands in the canonical [local quality checks](../development/coding-standards.md#local-quality-checks). |
+| 6 | Add or update tests, then run the backend and frontend commands in the canonical [local quality checks](../development/coding-standards.md#local-quality-checks) — whichever of the two the change touches. |
 | 7 | Update every document the change affects, in the same change. |
 | 8 | Run the remaining commands in that same canonical set: the `scripts/` lint and format checks, and the documentation validator. |
 | 9 | Run the `documentation-reviewer` agent and report its findings. |

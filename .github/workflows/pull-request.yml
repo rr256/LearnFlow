@@ -2,11 +2,12 @@
 #
 # Runs the deterministic checks documented in docs/deployment/ci-cd.md:
 # backend tests, Ruff lint and format, documentation validation, database
-# migration checks, and container build validation.
+# migration checks, frontend lint/type/test/build, and container build
+# validation.
 #
-# Frontend and security-scanning jobs are deliberately absent until the
-# artifacts they check exist. Do not add a check here that is not
-# deterministic, documented, and runnable locally by the same command.
+# The security-scanning job is deliberately absent until the artifact it checks
+# exists. Do not add a check here that is not deterministic, documented, and
+# runnable locally by the same command.
 
 name: pull-request
 
@@ -83,6 +84,49 @@ jobs:
       - name: Validate documentation front matter and links
         run: python scripts/validate_docs.py
 
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    # LearnFlow is local-first (NFR-001); no CI run reports build data outward.
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` installs exactly the committed lockfile and fails if
+      # package.json and the lockfile disagree, which `npm install` would
+      # silently reconcile.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check types
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      # The production build is a check in its own right: it fails on a type
+      # error Next.js reports that `tsc` alone does not, and on a route that
+      # cannot render. Every curriculum route is dynamic, so it reaches no API.
+      - name: Build
+        run: npm run build
+
   database:
     name: Database migration checks
     runs-on: ubuntu-latest
@@ -154,3 +198,6 @@ jobs:
       # registry; publication requires an approved deployment strategy first.
       - name: Build backend image
         run: docker build -f docker/backend.Dockerfile .
+
+      - name: Build frontend image
+        run: docker build -f docker/frontend.Dockerfile .

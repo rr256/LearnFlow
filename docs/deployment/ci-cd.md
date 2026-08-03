@@ -2,7 +2,7 @@
 title: LearnFlow CI/CD Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-01
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - environments.md
@@ -27,15 +27,14 @@ The MVP does not require public deployment. Continuous integration protects code
 
 ### Continuous Integration
 
-CI configuration is implemented and covers the backend, the documentation set, the database
-migrations, and the container build. All four jobs run on every pull request targeting `main` and on
-every push to `main`; the workflow applies no path filters, so a documentation-only change runs the
-backend, database, and container jobs too. See [Implemented Workflow](#implemented-workflow) below.
+CI configuration is implemented and covers the backend, the frontend, the documentation set, the
+database migrations, and the container builds. All five jobs run on every pull request targeting
+`main` and on every push to `main`; the workflow applies no path filters, so a documentation-only
+change runs the backend, frontend, database, and container jobs too. See
+[Implemented Workflow](#implemented-workflow) below.
 
-Two limits apply to the current state:
+One limit applies to the current state:
 
-- **Frontend checks are not implemented.** No `frontend/` application exists to check; see the
-  *CI Responsibilities* table below.
 - **Branch protection is not configured.** CI results inform review, but nothing technically prevents
   a merge while a check is failing. Branch protection is a repository setting rather than a
   repository file, and is recorded as a deferred decision in the
@@ -53,32 +52,51 @@ CI verifies only stable, repeatable checks:
 | --- | --- | --- |
 | Documentation | Front-matter, Markdown link, and anchor validation. | Implemented — `scripts/validate_docs.py`. |
 | Backend | Dependency install, formatting/linting, type checks if configured, unit/API tests. | Implemented — Ruff lint, Ruff format check, pytest. |
-| Frontend | Dependency install, lint/type checks, unit/component tests when configured. | Not implemented — no `frontend/` exists. |
+| Frontend | Dependency install, lint/type checks, unit/component tests when configured. | Implemented — `npm ci`, ESLint, `tsc --noEmit`, Vitest, and the production build. |
 | Database | Migration consistency checks, migration tests when migrations exist, and seed idempotency checks when seed tooling exists. | Implemented — migrations applied to an ephemeral PostgreSQL service, models compared against the resulting schema, constraints exercised, downgrade run, and each seed applied twice to confirm it is idempotent. |
-| Containers | Compose topology validation and image build. | Implemented — backend image; the other services are added with their code. |
+| Containers | Compose topology validation and image build. | Implemented — backend and frontend images; the remaining service is added with its code. |
 | Security hygiene | Secret scanning and dependency review where supported. | Not implemented. |
 
 Do not add a CI check merely because it is common. Every check must be deterministic, documented, and fast enough to provide useful feedback. Add each pending check in the change that introduces the artifact it verifies.
 
 ## Implemented Workflow
 
-`.github/workflows/pull-request.yml` defines four independent jobs:
+`.github/workflows/pull-request.yml` defines five independent jobs:
 
 | Job | Working directory | Commands |
 | --- | --- | --- |
 | `backend` | `backend/` | `python -m pip install -r requirements-dev.txt`, `python -m ruff check .`, `python -m ruff format --check .`, `python -m pytest` |
 | `documentation` | repository root | `python -m pip install -r backend/requirements-dev.txt`, `python -m ruff check --config backend/pyproject.toml scripts/`, `python -m ruff format --check --config backend/pyproject.toml scripts/`, `python scripts/validate_docs.py` |
+| `frontend` | `frontend/` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` |
 | `database` | `backend/` | `python -m pip install -r requirements-dev.txt`, a database-reachability check, `python -m pytest tests/integration` |
-| `containers` | repository root | `docker compose config -q`, `docker build -f docker/backend.Dockerfile .` |
+| `containers` | repository root | `docker compose config -q`, `docker build -f docker/backend.Dockerfile .`, `docker build -f docker/frontend.Dockerfile .` |
 
-The `backend`, `documentation`, and `database` jobs run on Python 3.14. The `containers` job uses the
-Docker tooling preinstalled on the runner and needs no Python setup.
+The `backend`, `documentation`, and `database` jobs run on Python 3.14. The `frontend` job runs on
+Node 24 and installs from `frontend/package-lock.json`. The `containers` job uses the Docker tooling
+preinstalled on the runner and needs no language setup.
 
-Every Python verification command above also appears in the canonical
+Every Python and Node verification command above also appears in the canonical
 [local quality checks](../development/coding-standards.md#local-quality-checks), with one deliberate
 difference: the canonical local set runs `python -m pytest -W error`, treating warnings as errors,
 while CI runs `python -m pytest`. The local set is therefore the stricter of the two. The `pip
-install` steps are dependency installation, not checks.
+install` and `npm ci` steps are dependency installation, not checks.
+
+### The frontend job
+
+`npm ci` installs exactly the committed lockfile and fails when it disagrees with `package.json`,
+which `npm install` would silently reconcile — so a dependency change that was never locked cannot
+pass here.
+
+`npm run build` is a check rather than a packaging step: it fails on a type error Next.js reports
+that `tsc` alone does not, and on a route that cannot render. It reaches no API, because every
+curriculum route is `force-dynamic` and nothing is fetched while prerendering. The job therefore
+starts no service and needs no backend. `NEXT_TELEMETRY_DISABLED` is set for the same local-first
+reason it is set in the image; see [Docker strategy](docker.md#the-frontend-service).
+
+The frontend tests stub `fetch` and assert against the documented response envelope, so they verify
+how the client handles the contract rather than whether a live backend honours it. Nothing yet reads
+the real API from the frontend in CI, in the way the `database` job reads the curriculum endpoints
+over HTTP for the backend.
 
 The `database` job's integration tests are the one part of the suite the canonical local set does not
 fully run: they skip unless `TEST_DATABASE_URL` names a reachable database, which needs a local
@@ -113,10 +131,12 @@ run without extra tooling. Container commands need a working Docker installation
 when Docker is available, per [Docker strategy](docker.md).
 
 The `containers` job first ran on pull request #7 and passed, so the Compose topology and the backend
-image build are verified in CI. It has not been run locally: the change that introduced it was
-prepared without a Docker installation, and CI remains the authoritative verification for container
-checks. Note what the job does not cover — it validates and builds, but starts no container, so the
-health check and the service's runtime behavior are unverified. See [Docker strategy](docker.md).
+image build are verified in CI; the frontend image build joined it with the frontend application. It
+has not been run locally: neither the change that introduced it nor the change that added the
+frontend service had a Docker installation available, and CI remains the authoritative verification
+for container checks. Note what the job does not cover — it validates and builds, but starts no
+container, so the health checks and the services' runtime behavior are unverified. See
+[Docker strategy](docker.md).
 
 Properties that keep the workflow trustworthy:
 
@@ -148,17 +168,14 @@ remain the responsibility of the `documentation-reviewer` agent and human review
 
 ## Target Pipeline
 
-The implemented workflow runs everything below except the frontend stage, as four independent
-parallel jobs. The frontend stage describes the intended shape of the pipeline once that artifact
-exists; it does not exist today.
+The implemented workflow runs everything below, as five independent parallel jobs.
 
 ```text
 Checkout source                                          # implemented
       ↓
 Validate documentation, run backend checks/tests,
-run migration checks, and validate the container build   # implemented, in parallel
-      ↓
-Run frontend checks and tests                            # pending a frontend
+run frontend checks/tests, run migration checks,
+and validate the container builds                        # implemented, in parallel
       ↓
 Report pass/fail results                                 # implemented
 ```
@@ -170,13 +187,13 @@ Stages run in parallel when they have no shared state and use isolated test envi
 Current rules:
 
 - Feature branches must pass CI before merging to `main`.
-- All four jobs run on every pull request and every push to `main`, whatever the change touches.
+- All five jobs run on every pull request and every push to `main`, whatever the change touches.
 - A failing check must be understood before merge, or merged only on an explicit project-owner
   decision. Because branch protection is not configured, this is a convention that reviewers uphold
   rather than a restriction GitHub enforces.
 - Database changes require schema-documentation review, and run migration tests in the `database` job.
 - Container and Compose changes are covered by the `containers` job, which validates the topology and
-  builds the backend image.
+  builds the backend and frontend images.
 
 ## Test Data and Secrets
 
@@ -199,7 +216,7 @@ The `database` job implements these rules:
 
 ## Container Build Policy
 
-The `containers` job implements this policy for the backend image:
+The `containers` job implements this policy for the backend and frontend images:
 
 - Build images in CI to catch dependency/build failures.
 - Avoid pushing images to a public registry until a deployment strategy is approved.
@@ -238,8 +255,11 @@ A check joins CI only when all of the following hold for the area it covers:
 - `.env.example` and `.gitignore` prevent obvious secret/local-data leakage.
 - The check runs without manual local state.
 
-The backend foundation satisfied all four, which is why the workflow above exists. Apply the same four
-conditions to each pending check in the *CI Responsibilities* table before adding it.
+The backend foundation satisfied all four, which is why the workflow above exists. The frontend
+satisfied them when it arrived: `frontend/package.json` and its lockfile are committed, five
+documented commands run against them, `.gitignore` already excluded `node_modules/` and `.next/`, and
+none of the checks needs a running service. Apply the same four conditions to each pending check in
+the *CI Responsibilities* table before adding it.
 
 ## Related Documents
 

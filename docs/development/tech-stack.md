@@ -2,7 +2,7 @@
 title: LearnFlow Technology Stack
 status: approved
 owner: architecture-and-development
-last_updated: 2026-07-31
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - ../architecture/overview.md
@@ -39,7 +39,9 @@ Versions are pinned in implementation dependency files after compatibility is te
 | Backend testing | Pytest | Domain, application, integration, and API tests. | Natural Python testing ecosystem. | Standard project tooling; exact plugins selected later. |
 | Backend lint/format | Ruff | Linting, formatting, and import sorting for Python. | One fast tool replaces separate formatter, import sorter, and linter. | Tooling choice; reversible without affecting application code. |
 | Backend configuration | pydantic-settings | Loads and validates environment configuration at startup. | Reuses the Pydantic validation already present through FastAPI; fails fast with field-level errors. | Confined to the composition root; see [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md). |
-| Frontend testing | TypeScript/React test tooling | Component and user-flow verification. | Needed for reliable learner-facing behavior. | Exact framework selected with frontend scaffold. |
+| Frontend testing | Vitest + React Testing Library | Component and API-client verification. | Vitest reuses the bundler pipeline Next.js already implies, so tests need no second transform configuration; Testing Library queries by role and accessible name, which tests the markup a learner actually reaches. | Test-runner choice; reversible without affecting application code. |
+| Frontend lint | ESLint with `eslint-config-next` | Linting for TypeScript, React, and Next.js, including the `jsx-a11y` accessibility rules. | Ships with the framework and needs no separate accessibility tooling to lint markup. | Tooling choice; reversible without affecting application code. |
+| Frontend styling | CSS Modules | Component-scoped styles. | Built into Next.js, so styles stay beside their component with no styling dependency and no build-tool configuration. | Confined to component files; a styling framework remains addable later. |
 | API documentation | FastAPI/OpenAPI output plus repository docs | Machine-readable API schemas and human architecture docs. | Keeps frontend contracts and documentation aligned. | API contract remains independent of documentation renderer. |
 | Continuous integration | GitHub Actions | Runs the checks enumerated in [CI/CD strategy](../deployment/ci-cd.md) on pull requests and pushes to `main`. | Already hosted where the repository lives; needs no additional service or credential. | Workflow files are small and portable. |
 | Documentation validation | PyYAML in `scripts/validate_docs.py` | Parses documentation front matter for the checks defined in [mechanical validation](documentation-standards.md#mechanical-validation). | A real YAML parser rejects malformed front matter that a hand-rolled subset parser would accept. | Development-only dependency; never enters the application runtime. See [ADR-010](../adr/ADR-010-feature-delivery-workflow.md). |
@@ -62,7 +64,7 @@ The backend business logic does not directly depend on provider SDKs. Concrete i
 
 ```text
 Docker Compose
-├── frontend service      pending a frontend application
+├── frontend service      implemented
 ├── backend service       implemented
 ├── PostgreSQL service    implemented
 └── ChromaDB service      pending retrieval code
@@ -73,6 +75,8 @@ Host machine
 
 The backend receives service endpoints and model names through environment configuration. Ollama remains on the host initially because local models can be large and are already installed on the learner's machine.
 
+The frontend calls the backend from its own server, not from the browser. Learner-facing pages render as React Server Components, so the API address is server-side configuration that never reaches a client bundle, and the API needs no cross-origin allow-list. See [Docker strategy](../deployment/docker.md#the-frontend-service).
+
 ## Development Environment Requirements
 
 Contributors need:
@@ -80,7 +84,7 @@ Contributors need:
 - Git.
 - Docker Desktop / Docker Compose.
 - Python 3.14 (the backend declares `requires-python = ">=3.14,<3.15"` in `backend/pyproject.toml`).
-- Node.js runtime compatible with the frontend dependency lock/configuration.
+- Node.js 24 or later (the frontend declares `engines.node = ">=24.0.0"` in `frontend/package.json`; CI and the frontend image both use Node 24).
 - Ollama plus configured models for RAG/mentor features.
 
 PostgreSQL and ChromaDB should be supplied through Docker for normal local development. Contributors do not need separate native installations for them.
