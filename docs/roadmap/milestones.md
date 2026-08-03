@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-01
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -15,6 +15,7 @@ related:
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -45,10 +46,14 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 
 ### Definition of Done
 
-- [ ] Repository skeleton follows `docs/development/folder-structure.md`.
+- [ ] Repository skeleton follows `docs/development/folder-structure.md`. `backend/`, `frontend/`,
+  `docker/`, `scripts/`, `.github/`, and `.claude/` all exist with the responsibilities that document
+  assigns them. What is still absent is absent by that document's own rule that a folder is created
+  when its first file needs it: `frontend/public/`, and the backend infrastructure subfolders for
+  providers, storage, and RAG.
 - [x] Backend starts through FastAPI application factory/composition root.
 - [x] `GET /health` returns a safe readiness response.
-- [ ] Docker Compose starts frontend, backend, PostgreSQL, and ChromaDB. The `backend` and `postgres` services are implemented (`compose.yaml`, `docker/backend.Dockerfile`), and CI validates the topology and builds the image on every pull request — first passing on pull request #7. The item remains open on two counts: `chromadb` and `frontend` join Compose with the code that consumes them, and no container has been started yet, so `docker compose up` serving `GET /health` against the `postgres` service is still unverified. See [Docker strategy](../deployment/docker.md).
+- [ ] Docker Compose starts frontend, backend, PostgreSQL, and ChromaDB. The `frontend`, `backend`, and `postgres` services are implemented (`compose.yaml`, `docker/frontend.Dockerfile`, `docker/backend.Dockerfile`), and CI validates the topology and builds both images on every pull request. The backend image build and the topology validation first passed on pull request #7; the frontend image build and the `frontend` service definition reach CI for the first time on the pull request that adds them. The item remains open on two counts: `chromadb` joins Compose with the code that consumes it, and no container has been started yet, so `docker compose up` serving `GET /health` against the `postgres` service, and the frontend calling the backend over the Compose network, are still unverified. See [Docker strategy](../deployment/docker.md).
 - [x] Backend configuration is validated from environment variables. Now includes `DATABASE_URL`, which has no default and is required.
 - [x] Alembic initializes and applies an initial migration to a fresh PostgreSQL database. `20260731_01_create_curriculum_tables` creates the curriculum area, `20260731_02_add_topic_code_unique_constraint` amends it, and `20260801_01_create_examination_schedule_and_learner_goal_tables` adds the examination schedule area and the first two learner-planning tables; the CI `database` job applies them to an empty PostgreSQL service container, compares the models against the result, exercises the constraints, and downgrades back to empty on every pull request. The remaining schema areas are migrated with the milestones that use them, per [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md).
 - [x] Curated GATE CSE curriculum seed/import is idempotent. `backend/scripts/seed_curriculum.py`
@@ -77,8 +82,10 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
 
 Part of this milestone arrived early, in Milestone 1: `learners` and `study_goals` were created
 alongside the examination schedule they reference, because a goal with nothing to aim at is not
-persistable, and the schedule seed that fills it shipped with them. Those items are checked below
-with their evidence. `availability_slots` deliberately stayed behind — it would fix the `day_of_week`
+persistable, and the schedule seed that fills it shipped with them. The curriculum-browsing item
+arrived early too, with the frontend foundation — the curriculum read endpoints already existed, so
+a read-only view of them needed nothing this milestone had yet to deliver. Those items are checked
+below with their evidence. `availability_slots` deliberately stayed behind — it would fix the `day_of_week`
 numbering convention that no requirement yet constrains, which is what
 [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) exists to avoid.
 
@@ -105,7 +112,17 @@ numbering convention that no requirement yet constrains, which is what
   `day_of_week` numbering convention that is still an open decision. The goal aims at an examination
   *window* rather than a guessed date; see
   [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
-- [ ] Learner can browse curriculum in the frontend without hardcoded topic data.
+- [x] Learner can browse curriculum in the frontend without hardcoded topic data. `/curriculum` lists
+  the learning programs from CUR-001, and `/curriculum/programs/{id}` reads one program from CUR-002
+  and renders its active version's subjects, topics, nested subtopics, and topic relationships from
+  CUR-003. No GATE CSE content appears in frontend code, and the frontend does not reorder what the
+  backend returns — syllabus order is a curriculum rule. Loading, empty, error, and not-found states
+  are all handled, with each loading boundary placed below the call that decides `404` so a mistyped
+  program id still answers `404` rather than `200`. Covered
+  by component and API-client tests, and exercised end to end against the
+  production build with a contract-shaped stub API: the rendered hierarchy, a `404` for an unknown
+  program id, and the API-unreachable panel were each confirmed. **Not yet exercised against the real
+  backend**, which needs PostgreSQL; see [Docker strategy](../deployment/docker.md#verification-status).
 - [ ] Learner can record material status, learning stage, and study activity.
 - [ ] Progress overview shows subject/topic progress and priority focus areas.
 - [ ] Supportive learning-stage labels and next actions are used in UI.
@@ -168,7 +185,10 @@ numbering convention that no requirement yet constrains, which is what
 - [ ] Database/resource backup and restore instructions are documented.
 - [ ] `.env.example`, `.gitignore`, Docker setup, and README are validated.
 - [x] CI configuration runs the checks enumerated in [CI/CD strategy](../deployment/ci-cd.md) on pull requests and pushes to `main` (`.github/workflows/pull-request.yml`), covering documentation, lint, backend tests, database migrations, and the container build. The Python checks were verified locally when they were added; the container checks were verified in CI, where they first ran and passed on pull request #7; the database checks run only in CI, because that workstation has no PostgreSQL.
-- [ ] CI also covers frontend checks, once that artifact exists.
+- [x] CI also covers frontend checks, once that artifact exists. The `frontend` job runs `npm ci`,
+  ESLint, `tsc --noEmit`, Vitest, and the production build on Node 24, and the `containers` job now
+  builds the frontend image too. All five were verified locally before they were added, except the
+  image build, which needs Docker; see [CI/CD strategy](../deployment/ci-cd.md#the-frontend-job).
 - [ ] Major learner workflows have loading, empty, error, and success states.
 - [ ] Known limitations are documented rather than hidden.
 
@@ -201,4 +221,5 @@ numbering convention that no requirement yet constrains, which is what
 - [Database migrations](../database/migrations.md) — the migrations applied so far and the seeds that fill them
 - [Database schema](../database/schema.md) — which schema areas exist today
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why part of Milestone 2's schema arrived in Milestone 1
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the frontend decisions behind the items above, including the loading-boundary rule
 - [Deferred ideas](future-ideas.md)

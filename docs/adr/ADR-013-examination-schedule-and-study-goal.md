@@ -2,7 +2,7 @@
 title: "ADR-013: Model an Examination Period as a Published Window of Reference Data"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-01
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
@@ -10,6 +10,7 @@ related:
   - ADR-011-sqlalchemy-persistence-implementation.md
   - ADR-012-curriculum-seed-and-reconciliation.md
   - ADR-014-api-response-contract.md
+  - ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../domain/domain-model.md
@@ -59,6 +60,39 @@ Two consequences for this record, neither altering its decision:
 The learner-planning area's own first-API-contract review in
 [database/schema.md](../database/schema.md) stays **pending**, as it must while these endpoints do
 not exist.
+
+### Implementation status — 2026-08-03
+
+**A frontend client now exists.** A Next.js application serves a read-only curriculum view over
+CUR-001 to CUR-003, per [ADR-015](ADR-015-frontend-foundation-and-server-rendered-api-access.md).
+
+That matters here because of what this record's deferral rests on: the endpoints wait until "the
+frontend that consumes them exists", so a public contract is not fixed ahead of its first caller.
+A frontend application now exists; a screen that would consume these endpoints does not.
+
+**The deferral is therefore due for re-evaluation, and it is the next decision in this area** rather
+than a position that continues by default. Two things should be weighed when it is taken, neither
+settled here:
+
+- The client that exists is read-only and consumes curriculum reference data only. It has no learner
+  setup, no goal screen, and no authentication, so it is not yet a caller whose needs would shape
+  LRN-001, LRN-002, or GOAL-001 to GOAL-005. Whether the deferral's condition means an application
+  exists or a *screen for these endpoints* exists is precisely what has to be settled.
+- What a caller would fix is now narrower than when this record was accepted.
+  [ADR-014](ADR-014-api-response-contract.md) already decides the envelope, the collection pagination
+  shape, and the error catalogue, so only the fields remain open.
+
+**One further statement above is now overtaken.** The Neutral consequence "`examination_schedules`
+and `study_goals` are written but read by nothing but the commands that write them. The API arrives
+with the frontend in Milestone 2" assumed the two would arrive together. The frontend has arrived
+without them, which is the situation this note exists to record. The first sentence of that bullet
+still holds. As with the 2026-08-01 note, the accepted text is left as written.
+
+**Nothing about the deferral changed in the change that added the frontend.** No learner or
+study-goal endpoint was added, no schema for one was written, and the examination schedule and study
+goal are still reached only by `scripts.seed_examination_schedule` and `scripts.set_study_goal`. The
+learner-planning area's first-API-contract review in [database/schema.md](../database/schema.md)
+accordingly stays **pending**.
 
 ## Context
 
@@ -291,6 +325,7 @@ curriculum area's first-API-contract review as pending for the same reason.
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](ADR-011-sqlalchemy-persistence-implementation.md) — the per-milestone ordering this change follows, and the open item it settles
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](ADR-012-curriculum-seed-and-reconciliation.md) — the seed rules this record reuses
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the envelope and error contract the deferred goal endpoints will answer in
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the client whose existence reopens the deferral above
 - [Database schema](../database/schema.md) — the tables and constraints this record decides
 - [Database migrations](../database/migrations.md) — the seed's commands and operational rules
 - [Domain model](../domain/domain-model.md) — the examination schedule concept

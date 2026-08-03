@@ -1,0 +1,37 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.header {
+  border-bottom: 1px solid var(--colour-border);
+  background-color: var(--colour-surface-muted);
+}
+
+.headerInner {
+  margin: 0 auto;
+  max-width: var(--measure);
+  padding: var(--space-4);
+}
+
+.wordmark {
+  font-size: 1.125rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--colour-text);
+}
+
+.tagline {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.main {
+  flex: 1;
+  margin: 0 auto;
+  max-width: var(--measure);
+  padding: var(--space-8) var(--space-4);
+  width: 100%;
+}

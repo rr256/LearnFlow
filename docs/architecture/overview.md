@@ -2,13 +2,14 @@
 title: LearnFlow Architecture Overview
 status: approved
 owner: architecture
-last_updated: 2026-07-29
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - clean-architecture.md
   - provider-pattern.md
   - dependency-rules.md
   - ../development/tech-stack.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
 ---
 
 # LearnFlow Architecture Overview
@@ -72,6 +73,8 @@ The web application is the learner-facing interface.
 - Render data returned by the backend; it must not hardcode GATE CSE subjects or topics.
 
 **Does not own:** learning business rules, provider-specific logic, database access, or direct calls to Ollama/ChromaDB.
+
+**How it reaches the backend** is decided by [ADR-015](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md): learner-facing pages render on the Next.js server, so the server makes every API call and the browser makes none. The API address is server-side configuration, and the API carries no cross-origin allow-list for as long as that holds. Consult that record before adding a browser-side call.
 
 ### Backend API
 
@@ -245,6 +248,7 @@ The backend must receive the Ollama endpoint through configuration. Containerize
 - [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why external systems sit behind ports
 - [ADR-003: Use PostgreSQL for structured persistence](../adr/ADR-003-postgresql-persistence.md) — the structured-data choice
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the generation and embedding choice
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — how the web application above reaches the backend
 - [Clean Architecture](clean-architecture.md)
 - [Provider pattern](provider-pattern.md)
 - [Dependency rules](dependency-rules.md)

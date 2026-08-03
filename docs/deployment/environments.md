@@ -2,7 +2,7 @@
 title: LearnFlow Environments and Configuration
 status: approved
 owner: development-and-operations
-last_updated: 2026-07-31
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - docker.md
@@ -11,6 +11,7 @@ related:
   - ../database/migrations.md
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
 ---
 
 # LearnFlow Environments and Configuration
@@ -85,9 +86,12 @@ added for it — `tzdata` already ships as a dependency of psycopg. See
 [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md), which settles it as one of the open
 items [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) recorded.
 
-`API_CORS_ALLOWED_ORIGINS` is a planned core-runtime setting for when CORS middleware is introduced.
-It carries the `API_` prefix because a CORS allow-list governs how the API process serves requests;
-it selects no capability adapter and names no vendor.
+`API_CORS_ALLOWED_ORIGINS` remains a planned core-runtime setting for when CORS middleware is
+introduced. It carries the `API_` prefix because a CORS allow-list governs how the API process serves
+requests; it selects no capability adapter and names no vendor. **The frontend did not fire that
+trigger.** Its learner-facing pages render as React Server Components, so the Next.js server calls
+the API and the browser never does; there is no cross-origin request to allow. A future
+browser-side call is what introduces both the middleware and this variable.
 
 `APP_LOG_LEVEL` is matched case-insensitively — `debug`, `Debug`, and `DEBUG` are all accepted — and
 normalised internally to the uppercase canonical form. Write it uppercase in `.env` files and
@@ -98,7 +102,34 @@ application on that address. The `python -m uvicorn app.main:app` form takes its
 uvicorn's own arguments instead; use it for reload workflows and ASGI tooling.
 
 `API_BASE_URL` is **not** a backend variable. `API_HOST`/`API_PORT` are the address the backend
-binds to; the client-facing base URL is future frontend configuration.
+binds to; the client-facing base URL is frontend configuration, catalogued below.
+
+### Frontend
+
+**Implemented.** Read by `frontend/lib/config.ts` today.
+
+| Variable | Default | Accepted values |
+| --- | --- | --- |
+| `API_BASE_URL` | `http://127.0.0.1:8000` | An absolute `http` or `https` URL naming the LearnFlow API. A trailing slash is trimmed. |
+
+It is core runtime under [ADR-009](../adr/ADR-009-configuration-naming-and-validation.md): it
+describes how the frontend process runs, selects no capability adapter, and names no vendor. ADR-009
+fixed the name when it separated the address a client calls from the address the backend binds to.
+
+**It is read on the server only, and deliberately carries no `NEXT_PUBLIC_` prefix**, which is what
+would place a value in a browser bundle. Learner-facing pages render as React Server Components, so
+the API address never leaves the server — satisfying the rule above that frontend-visible values
+expose no infrastructure endpoints.
+
+The default is safe because it names no external system a browser can reach and carries no
+credential: it is the backend as published on the host loopback interface, which is what a host-side
+`npm run dev` needs. Compose overrides it with a fixed value naming the `backend` service, for the
+same reason `DATABASE_URL` is fixed there; see [Docker strategy](docker.md#the-frontend-service). The
+value is validated when it is read, so a malformed URL fails with a message naming the variable
+rather than surfacing later as a failed request.
+
+Next.js reads `.env` files from the frontend project directory rather than the repository root, so a
+host-side run takes this value from `frontend/.env.local` or the shell. `.gitignore` excludes both.
 
 ### Database
 
@@ -172,7 +203,7 @@ The committed `.env.example` must:
 - Not contain developer-specific local paths.
 - Be updated in the same change that introduces or removes a configuration variable.
 
-The committed file therefore currently contains exactly the nine implemented variables:
+The committed file therefore currently contains exactly the ten implemented variables:
 
 ```text
 APP_ENV=local
@@ -180,6 +211,7 @@ APP_LOG_LEVEL=INFO
 APP_DEFAULT_TIMEZONE=Asia/Kolkata
 API_HOST=127.0.0.1
 API_PORT=8000
+API_BASE_URL=http://127.0.0.1:8000
 DATABASE_URL=postgresql+psycopg://learnflow:learnflow@127.0.0.1:5432/learnflow
 POSTGRES_DB=learnflow
 POSTGRES_USER=learnflow
@@ -200,7 +232,7 @@ join `.env.example` in the change that implements their consumer.
 The local environment target uses:
 
 - Docker Compose services for frontend, backend, PostgreSQL, and ChromaDB. `compose.yaml` currently
-  defines the `backend` and `postgres` services; see [Docker strategy](docker.md).
+  defines the `frontend`, `backend`, and `postgres` services; see [Docker strategy](docker.md).
 - Host-machine Ollama for local generation/embedding models.
 - Local storage provider for learner-owned source resources.
 - Private local volumes for PostgreSQL, ChromaDB, and resource storage.
@@ -275,6 +307,7 @@ Example: if `AI_PROVIDER=ollama`, the backend requires an Ollama endpoint and co
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — why `DATABASE_URL` has no default
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why `APP_DEFAULT_TIMEZONE` exists and what sets its default
 - [Docker strategy](docker.md)
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the decision that made `API_BASE_URL` server-side frontend configuration
 - [CI/CD](ci-cd.md)
 - [Database migrations](../database/migrations.md) — the workflow `DATABASE_URL` and `TEST_DATABASE_URL` serve
 - [Technology stack](../development/tech-stack.md)

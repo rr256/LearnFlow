@@ -1,9 +1,9 @@
 # LearnFlow local development services.
 #
-# Currently defines the backend and postgres services. The approved target
-# topology in docs/deployment/docker.md also includes chromadb and frontend;
-# each joins this file in the change that implements the code consuming it, so
-# no service here is unused or unconfigurable. Ollama runs on the host.
+# Currently defines the frontend, backend, and postgres services. The approved
+# target topology in docs/deployment/docker.md also includes chromadb; it joins
+# this file in the change that implements the code consuming it, so no service
+# here is unused or unconfigurable. Ollama runs on the host.
 #
 #   docker compose up --build        start, building images as needed
 #   docker compose up -d postgres    database only, for host-side Alembic/tests
@@ -16,6 +16,44 @@
 name: learnflow
 
 services:
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    environment:
+      # Fixed, not interpolated, for the same reason as the backend's
+      # DATABASE_URL: a developer's .env names the backend's published loopback
+      # port, which inside this container is the container itself. The port
+      # still follows API_PORT so the two services cannot drift apart.
+      #
+      # This is read on the Next.js server only. The curriculum views render as
+      # server components, so no API address reaches a browser.
+      API_BASE_URL: http://backend:${API_PORT:-8000}
+    # Published on the loopback interface only, so the application is not
+    # exposed to other devices on the local network.
+    ports:
+      - "127.0.0.1:3000:3000"
+    # `fetch` is global in Node 24, so the image needs no health-probe package.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          fetch("http://127.0.0.1:3000/")
+            .then((response) => process.exit(response.ok ? 0 : 1))
+            .catch(() => process.exit(1));
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    # The frontend renders per request and needs no API at startup, so this is
+    # convenience rather than necessity: waiting means the first page a learner
+    # opens meets a backend ready to answer.
+    depends_on:
+      backend:
+        condition: service_healthy
+
   backend:
     build:
       context: .

@@ -1,0 +1,100 @@
+/*
+ * Global element styles.
+ *
+ * Everything component-specific lives in a CSS Module beside its component.
+ * This file holds only the document-level reset, the colour tokens, and the
+ * focus and skip-link behaviour that keyboard navigation depends on.
+ */
+
+:root {
+  --colour-surface: #ffffff;
+  --colour-surface-muted: #f4f5f7;
+  --colour-border: #d5d8dd;
+  --colour-text: #1b1d21;
+  --colour-text-muted: #4c5058;
+  --colour-accent: #1f4fd8;
+  --colour-accent-contrast: #ffffff;
+  --colour-notice-border: #b8791f;
+  --colour-notice-surface: #fdf6e9;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  --radius: 0.375rem;
+  --measure: 70ch;
+}
+
+/*
+ * Honours the reader's system setting. Both palettes keep body text at or above
+ * a 7:1 contrast ratio against their surface.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --colour-surface: #16181c;
+    --colour-surface-muted: #1f2228;
+    --colour-border: #3a3f47;
+    --colour-text: #f1f2f4;
+    --colour-text-muted: #b9bec7;
+    --colour-accent: #8fb0ff;
+    --colour-accent-contrast: #16181c;
+    --colour-notice-border: #d7a54a;
+    --colour-notice-surface: #2a2317;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--colour-surface);
+  color: var(--colour-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  margin: 0 0 var(--space-3);
+}
+
+a {
+  color: var(--colour-accent);
+}
+
+/* Never remove the focus ring: it is the only cue a keyboard user has. */
+:focus-visible {
+  outline: 3px solid var(--colour-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Visible only once focused, so a keyboard user can jump past the header
+ * without tabbing through it, and a pointer user never sees it.
+ */
+.skip-link {
+  position: absolute;
+  left: var(--space-4);
+  top: var(--space-4);
+  z-index: 10;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  background-color: var(--colour-accent);
+  color: var(--colour-accent-contrast);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}

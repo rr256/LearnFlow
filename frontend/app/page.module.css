@@ -1,0 +1,11 @@
+.lead {
+  color: var(--colour-text-muted);
+  font-size: 1.0625rem;
+  margin: 0 0 var(--space-6);
+}
+
+.actions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

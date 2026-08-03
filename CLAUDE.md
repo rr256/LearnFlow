@@ -69,15 +69,29 @@ An examination is stored as a dated **window**, never as a single guessed date, 
 schedule keeps its source and its `provisional`/`confirmed` status. See
 [`docs/adr/ADR-013-examination-schedule-and-study-goal.md`](docs/adr/ADR-013-examination-schedule-and-study-goal.md).
 
-Local containers — `compose.yaml` defines the `backend` and `postgres` services; ChromaDB and the
-frontend join them with the code that uses them:
+## Frontend quick reference
+
+```bash
+cd frontend
+npm ci                                          # install the committed lockfile
+npm run dev                                     # http://localhost:3000
+```
+
+Node.js 24 or later is required. Next.js + TypeScript, App Router, CSS Modules. The frontend calls the
+API from its own server — learner-facing pages are React Server Components, so the browser never
+reaches the backend, no CORS configuration exists, and `API_BASE_URL` is server-side only. Today it
+serves a read-only curriculum view over CUR-001 to CUR-003 and writes nothing.
+
+Local containers — `compose.yaml` defines the `frontend`, `backend`, and `postgres` services;
+ChromaDB joins them with the code that uses it:
 
 ```bash
 docker compose up --build                       # build and start
 docker compose logs -f backend                  # follow logs
 docker compose down                             # stop, preserving volumes
 docker compose config -q                        # validate the topology
-docker build -f docker/backend.Dockerfile .      # validate the image build
+docker build -f docker/backend.Dockerfile .     # validate the backend image build
+docker build -f docker/frontend.Dockerfile .    # validate the frontend image build
 ```
 
 `docker compose down -v` deletes named volumes and is destructive — `postgres_data` holds learner
@@ -99,6 +113,12 @@ cd backend
 python -m pytest -W error                                              # tests; warnings fail the run
 python -m ruff check .                                                 # backend lint
 python -m ruff format --check .                                        # backend formatting
+cd ../frontend
+npm ci                                                                 # install the committed lockfile
+npm run lint                                                           # frontend lint
+npm run typecheck                                                      # frontend types
+npm test                                                               # frontend tests
+npm run build                                                          # frontend production build
 cd ..
 python -m ruff check --config backend/pyproject.toml scripts/          # repository scripts lint
 python -m ruff format --check --config backend/pyproject.toml scripts/ # repository scripts formatting
@@ -106,7 +126,8 @@ python scripts/validate_docs.py                                        # documen
 ```
 
 CI runs these same checks on every pull request, except that the workflow runs `python -m pytest`
-without `-W error`; see [`docs/deployment/ci-cd.md`](docs/deployment/ci-cd.md). Changes reach `main`
+without `-W error`, and additionally builds both container images; see
+[`docs/deployment/ci-cd.md`](docs/deployment/ci-cd.md). Changes reach `main`
 through a pull request, per
 [`docs/development/git-workflow.md`](docs/development/git-workflow.md).
 

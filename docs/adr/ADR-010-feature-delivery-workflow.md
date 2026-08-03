@@ -2,7 +2,7 @@
 title: "ADR-010: Deliver Features Through Pull Requests With Automated Gates"
 status: accepted
 owner: development-and-operations
-last_updated: 2026-07-31
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - ../deployment/ci-cd.md
@@ -216,6 +216,21 @@ they verify.
 [CI/CD strategy](../deployment/ci-cd.md) is the current description of the pipeline and the jobs it
 runs. Consult it rather than this ADR for what CI does today; this ADR records why the pipeline is
 shaped the way it is, and is not updated each time a job is added.
+
+### Implementation status — 2026-08-03
+
+A `frontend` job was added with the frontend application, and the `containers` job gained a second
+image build. Like the jobs before them, these are the decision working as intended: a check joins the
+pipeline in the change that introduces the artifact it verifies.
+
+**The note above states a job count as of 2026-07-31, and that count is no longer current.** It is
+left as written, because a dated note records what was true on its date and an accepted ADR is not
+rewritten as if history changed. Do not read a job count out of this record at all.
+
+[CI/CD strategy](../deployment/ci-cd.md) is the sole authority for which jobs exist, what each runs,
+and what has actually been verified. This ADR records why delivery is shaped around a pull request
+with automated gates; it does not track the pipeline's contents, and no future note here should
+restate them.
 
 ## Related Documents
 

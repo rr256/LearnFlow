@@ -2,7 +2,7 @@
 title: LearnFlow Coding Standards
 status: approved
 owner: architecture-and-development
-last_updated: 2026-07-31
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - folder-structure.md
@@ -12,6 +12,7 @@ related:
   - documentation-standards.md
   - ../deployment/ci-cd.md
   - ../adr/ADR-010-feature-delivery-workflow.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
 ---
 
 # LearnFlow Coding Standards
@@ -91,6 +92,12 @@ cd backend
 python -m pytest -W error                                              # tests; warnings fail the run
 python -m ruff check .                                                 # backend lint
 python -m ruff format --check .                                        # backend formatting
+cd ../frontend
+npm ci                                                                 # install the committed lockfile
+npm run lint                                                           # frontend lint
+npm run typecheck                                                      # frontend types
+npm test                                                               # frontend tests
+npm run build                                                          # frontend production build
 cd ..
 python -m ruff check --config backend/pyproject.toml scripts/          # repository scripts lint
 python -m ruff format --check --config backend/pyproject.toml scripts/ # repository scripts formatting
@@ -100,13 +107,15 @@ python scripts/validate_docs.py                                        # documen
 - Every command must pass. Do not suppress a check, weaken an assertion, or skip a test to make one pass.
 - `-W error` treats warnings as errors, so a deprecation surfaces in the change that introduced it rather than later.
 - Ruff configuration lives in `backend/pyproject.toml`. `scripts/` sits outside `backend/`, so its invocations name that configuration explicitly; both trees are held to the same rules.
+- `npm ci` installs exactly what `frontend/package-lock.json` records and fails when it disagrees with `package.json`, where `npm install` would quietly reconcile the two. Run it after pulling a change that touches frontend dependencies; otherwise the four checks below it are enough.
+- `npm run build` is a check, not just a packaging step: it fails on a type error Next.js reports that `tsc` alone does not, and on a route that cannot render. Every curriculum route is dynamic, so it reaches no API and needs no running backend.
 - The documentation validator enforces the mechanical rules in [documentation standards](documentation-standards.md) and runs from the repository root.
 
-This set covers the checks that need nothing beyond Python and the pinned development dependencies. Container commands require a Docker installation and are documented in [Docker strategy](../deployment/docker.md) instead.
+This set covers the checks that need nothing beyond Python, Node.js, and the pinned development dependencies. Container commands require a Docker installation and are documented in [Docker strategy](../deployment/docker.md) instead.
 
 CI runs every check in this set on each pull request, with one difference: the workflow runs `python -m pytest` while this local set adds `-W error`, so the local run is the stricter of the two.
 
-CI additionally runs two things this set does not: it validates the Compose topology and builds the backend image, and it runs the database migration tests against an ephemeral PostgreSQL service. Those migration tests are part of the suite above but skip unless `TEST_DATABASE_URL` names a reachable disposable database, so a plain local run does not exercise them. See [CI/CD strategy](../deployment/ci-cd.md).
+CI additionally runs two things this set does not: it validates the Compose topology and builds the backend and frontend images, and it runs the database migration tests against an ephemeral PostgreSQL service. Those migration tests are part of the suite above but skip unless `TEST_DATABASE_URL` names a reachable disposable database, so a plain local run does not exercise them. See [CI/CD strategy](../deployment/ci-cd.md).
 
 ## TypeScript and Frontend Standards
 
@@ -114,23 +123,34 @@ CI additionally runs two things this set does not: it validates the Compose topo
 
 - Use TypeScript strict mode.
 - Do not use `any` as a shortcut around API contracts or UI state.
-- Define types from public API contracts, not database/ORM shapes.
-- Validate untrusted API data at the frontend boundary where needed.
+- Define types from public API contracts, not database/ORM shapes. Keep the wire field names as the contract spells them — `snake_case`, per [API conventions](../api/conventions.md#json-naming-and-data-formats) — rather than renaming them into a shape the API does not return.
+- Validate untrusted API data at the frontend boundary where needed. `frontend/lib/api-client.ts` checks every response against the documented envelope before a view sees it, because a view that trusts an unchecked body renders `undefined` instead of reporting a failure. A failure the API reported keeps the API's own [error code](../api/conventions.md#error-codes); a failure only the client can see — unreachable, or a malformed success body — gets a client-side code, which is never sent over HTTP and so does not widen the wire catalogue.
 
 ### Naming
 
 - React components, types, and interfaces: `PascalCase`.
-- Variables, functions, hooks, and props: `camelCase`.
-- Files follow the chosen frontend convention consistently; feature modules use descriptive names.
+- Variables, functions, hooks, and props: `camelCase`. This governs identifiers the frontend owns, not the wire fields above.
+- Component files are `PascalCase.tsx` beside their `PascalCase.module.css`; route files use the names Next.js reserves — `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `not-found.tsx`. Other modules are `kebab-case.ts`.
 - Use learner-facing domain terms consistently: `topicProgress`, `studyPlan`, `revisionRecord`.
 
 ### UI Responsibilities
 
-- Keep planning, progress calculation, and curriculum rules in the backend.
+- Keep planning, progress calculation, and curriculum rules in the backend. Ordering is a curriculum rule: subjects and topics arrive in syllabus order, and the frontend renders that order rather than sorting.
 - Render backend-provided curriculum data; do not hardcode GATE CSE topics in UI code.
-- Handle loading, empty, success, and error states for every asynchronous learner workflow.
+- Handle loading, empty, success, and error states for every asynchronous learner workflow. Handle an expected API failure in the page rather than leaving it to the route error boundary: a production build replaces a server-side error message with a generic one, so the boundary cannot explain what happened.
+- Place a loading boundary *below* any call that can decide the response status. A `Suspense` boundary — or a `loading.tsx`, which also covers every nested route — commits a `200` before the suspended work runs, so a boundary above a lookup that calls `notFound()` turns a `404` into a `200`.
 - Use supportive language from `docs/domain/terminology.md`.
 - Make user-initiated changes explicit; do not silently update learner-visible state from AI text.
+
+### Accessibility
+
+Accessibility *conformance* is a future quality target in [non-functional requirements](../requirements/non-functional.md#future-quality-considerations), and nothing here claims it. These are the baseline habits that keep conformance reachable rather than a later rewrite:
+
+- Use semantic elements for structure — headings in order, lists for lists, `nav` for navigation — so the page is navigable without sight.
+- Never remove a focus indicator, and keep the first focusable element a skip link to the main content.
+- Do not carry meaning in colour alone; put it in the text as well.
+- Give every asynchronous state a text equivalent: a loading message with `role="status"`, and an error panel with `role="alert"`.
+- Prefer Testing Library queries by role and accessible name, so a component test fails when the markup stops being reachable.
 
 ## API and Boundary Standards
 
@@ -207,7 +227,9 @@ Before adding a dependency:
 - [Domain terminology](../domain/terminology.md) — the canonical vocabulary this document requires
 - [Folder structure](folder-structure.md)
 - [Dependency rules](../architecture/dependency-rules.md)
-- [API conventions](../api/conventions.md)
+- [API conventions](../api/conventions.md) — the wire field names the frontend types keep
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the frontend framework and tooling these standards assume
+- [Non-functional requirements](../requirements/non-functional.md) — where accessibility conformance sits as a future target
 - [Database migrations](../database/migrations.md)
 - [Git workflow](git-workflow.md)
 - [CI/CD strategy](../deployment/ci-cd.md) — the pipeline that enforces the checks defined here
