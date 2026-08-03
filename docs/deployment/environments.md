@@ -11,6 +11,7 @@ related:
   - ../database/migrations.md
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
 ---
 
 # LearnFlow Environments and Configuration
@@ -306,6 +307,7 @@ Example: if `AI_PROVIDER=ollama`, the backend requires an Ollama endpoint and co
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — why `DATABASE_URL` has no default
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why `APP_DEFAULT_TIMEZONE` exists and what sets its default
 - [Docker strategy](docker.md)
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the decision that made `API_BASE_URL` server-side frontend configuration
 - [CI/CD](ci-cd.md)
 - [Database migrations](../database/migrations.md) — the workflow `DATABASE_URL` and `TEST_DATABASE_URL` serve
 - [Technology stack](../development/tech-stack.md)

@@ -8,6 +8,7 @@ related:
   - environments.md
   - ci-cd.md
   - ../requirements/non-functional.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ../development/tech-stack.md
   - ../development/folder-structure.md
   - ../roadmap/milestones.md
@@ -323,6 +324,7 @@ explicit, and each refuses to run ahead of its predecessor.
 - [ADR-009: Name and validate configuration variables explicitly](../adr/ADR-009-configuration-naming-and-validation.md) — the variable naming categories Compose supplies
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — why Ollama stays on the host rather than in Compose
 - [Environments](environments.md)
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — why the `frontend` service renders on the server and needs no CORS
 - [Non-functional requirements](../requirements/non-functional.md) — NFR-001, the local-first rule the disabled build telemetry follows
 - [CI/CD strategy](ci-cd.md) — the container checks that run on every pull request
 - [Repository and folder structure](../development/folder-structure.md) — where `compose.yaml`, `docker/`, and `.dockerignore` live

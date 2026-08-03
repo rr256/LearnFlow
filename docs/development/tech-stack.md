@@ -11,6 +11,7 @@ related:
   - ../deployment/ci-cd.md
   - ../database/migrations.md
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
 ---
 
 # LearnFlow Technology Stack
@@ -75,7 +76,7 @@ Host machine
 
 The backend receives service endpoints and model names through environment configuration. Ollama remains on the host initially because local models can be large and are already installed on the learner's machine.
 
-The frontend calls the backend from its own server, not from the browser. Learner-facing pages render as React Server Components, so the API address is server-side configuration that never reaches a client bundle, and the API needs no cross-origin allow-list. See [Docker strategy](../deployment/docker.md#the-frontend-service).
+The frontend calls the backend from its own server, not from the browser. Learner-facing pages render as React Server Components, so the API address is server-side configuration that never reaches a client bundle, and the API needs no cross-origin allow-list while that stays true. [ADR-015](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) decides this and bounds it to the current scope; see also [Docker strategy](../deployment/docker.md#the-frontend-service).
 
 ## Development Environment Requirements
 
@@ -127,6 +128,7 @@ Do not add a framework only because it is popular or because an AI assistant sug
 - [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why these choices stay replaceable
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the generation and embedding choice
 - [ADR-005: Use Docker Compose for local development](../adr/ADR-005-docker-compose-local-development.md) — the container choice
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the frontend framework, styling, test, and lint choices above
 - [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — the CI and documentation-validation choices
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — the driver and execution-model choices
 - [Database migrations](../database/migrations.md) — the Alembic workflow

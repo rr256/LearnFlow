@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-01
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - conventions.md
@@ -107,8 +107,11 @@ A goal aims at an examination cycle, a target date, or both, and never at neithe
 database enforces. A response reports an examination as a **window** spanning the published sitting
 days, together with the source it came from and whether those dates are still provisional; it never
 reports a single examination date the examining body has not published. None of these endpoints is
-implemented; their request and response schemas are written with the client that consumes them. See
-[ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
+implemented; their request and response schemas are written with the client that consumes them.
+
+That deferral is now **due for re-evaluation**: a frontend application exists, though no screen that
+would consume these endpoints does. [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md)
+owns the condition and records what has to be settled; this catalogue does not restate it.
 
 ## Planning Endpoints
 

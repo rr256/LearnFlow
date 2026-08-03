@@ -12,6 +12,7 @@ related:
   - ../deployment/ci-cd.md
   - ../deployment/docker.md
   - ../adr/ADR-010-feature-delivery-workflow.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
 ---
 
 # LearnFlow Repository and Folder Structure
@@ -377,6 +378,7 @@ Local data locations are configured through environment variables and Docker vol
 - [Dependency rules](../architecture/dependency-rules.md)
 - [Technology stack](tech-stack.md)
 - [Coding standards](coding-standards.md)
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the decisions the frontend structure implements
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [Database migrations](../database/migrations.md) — the authoritative description of the curriculum seed named in `backend/scripts/`
 - [Docker strategy](../deployment/docker.md) — what `compose.yaml`, `docker/`, and `.dockerignore` contain today

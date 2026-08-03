@@ -11,6 +11,7 @@ related:
   - ../development/documentation-standards.md
   - docker.md
   - ../adr/ADR-010-feature-delivery-workflow.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ../database/migrations.md
   - ../api/endpoints.md
 ---
@@ -267,6 +268,7 @@ the *CI Responsibilities* table before adding it.
 - [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — the decision this pipeline implements
 - [Environments](environments.md)
 - [Docker strategy](docker.md) — the images and topology the `containers` job validates
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the frontend the `frontend` job checks
 - [API endpoints](../api/endpoints.md) — the endpoints the `database` job reads over HTTP
 - [Git workflow](../development/git-workflow.md)
 - [Coding standards](../development/coding-standards.md)

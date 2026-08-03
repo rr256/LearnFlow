@@ -15,6 +15,7 @@ related:
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -220,4 +221,5 @@ numbering convention that no requirement yet constrains, which is what
 - [Database migrations](../database/migrations.md) — the migrations applied so far and the seeds that fill them
 - [Database schema](../database/schema.md) — which schema areas exist today
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why part of Milestone 2's schema arrived in Milestone 1
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the frontend decisions behind the items above, including the loading-boundary rule
 - [Deferred ideas](future-ideas.md)

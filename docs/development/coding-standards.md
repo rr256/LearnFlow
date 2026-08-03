@@ -12,6 +12,7 @@ related:
   - documentation-standards.md
   - ../deployment/ci-cd.md
   - ../adr/ADR-010-feature-delivery-workflow.md
+  - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
 ---
 
 # LearnFlow Coding Standards
@@ -227,6 +228,7 @@ Before adding a dependency:
 - [Folder structure](folder-structure.md)
 - [Dependency rules](../architecture/dependency-rules.md)
 - [API conventions](../api/conventions.md) — the wire field names the frontend types keep
+- [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the frontend framework and tooling these standards assume
 - [Non-functional requirements](../requirements/non-functional.md) — where accessibility conformance sits as a future target
 - [Database migrations](../database/migrations.md)
 - [Git workflow](git-workflow.md)

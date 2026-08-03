@@ -2,7 +2,7 @@
 title: LearnFlow Architecture Decision Register
 status: approved
 owner: architecture
-last_updated: 2026-08-01
+last_updated: 2026-08-03
 related:
   - ../00-project-context.md
   - ../adr/README.md
@@ -38,7 +38,7 @@ These are register statuses. They are distinct from the document `status` field 
 | DEC-005 | LearnFlow uses Clean Architecture with domain, application, presentation, infrastructure, and composition-root boundaries. | Approved | [Clean Architecture](clean-architecture.md) | Accepted — [ADR-001](../adr/ADR-001-clean-architecture.md) |
 | DEC-006 | External capabilities use provider interfaces/adapters where realistic replacement is expected. | Approved | [Provider pattern](provider-pattern.md) | Accepted — [ADR-002](../adr/ADR-002-provider-pattern.md) |
 | DEC-007 | Python with FastAPI is the initial backend/API technology. | Approved | [Architecture overview](overview.md) | ADR pending |
-| DEC-008 | Next.js with TypeScript is the initial web frontend technology. | Approved | [Architecture overview](overview.md) | ADR pending |
+| DEC-008 | Next.js with TypeScript is the initial web frontend technology. Learner-facing pages reach the API from the Next.js server, so the browser makes no backend call and the API needs no CORS middleware in this scope. CSS Modules, Vitest with React Testing Library, ESLint with `eslint-config-next`, and npm with a committed lockfile are the styling, test, lint, and package-manager choices. | Approved | [Architecture overview](overview.md), [Technology stack](../development/tech-stack.md), [Repository and folder structure](../development/folder-structure.md) | Accepted — [ADR-015](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) |
 | DEC-009 | PostgreSQL stores structured transactional data; repositories isolate persistence implementation. | Approved | [Architecture overview](overview.md), [Provider pattern](provider-pattern.md) | Accepted — [ADR-003](../adr/ADR-003-postgresql-persistence.md) |
 | DEC-010 | Local filesystem storage is the initial source-file storage implementation; cloud storage is a future adapter. | Approved | [Provider pattern](provider-pattern.md) | ADR pending |
 | DEC-011 | Ollama is the initial local AI provider for both generation and embeddings; AI is used for reasoning/generation, not durable memory or direct state changes. | Approved | [Architecture overview](overview.md), [Provider pattern](provider-pattern.md) | Accepted — [ADR-004](../adr/ADR-004-ollama-local-ai-provider.md) |
@@ -93,6 +93,7 @@ These ADRs are accepted and hold the durable rationale, alternatives, and conseq
 | [ADR-012](../adr/ADR-012-curriculum-seed-and-reconciliation.md) | Load curriculum as reconciled reference data from a versioned file | DEC-003, DEC-004, DEC-025 |
 | [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) | Model an examination period as a published window of reference data | DEC-026 |
 | [ADR-014](../adr/ADR-014-api-response-contract.md) | Fix the public HTTP API response contract | DEC-027 |
+| [ADR-015](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) | Build the frontend on Next.js and reach the API from the server | DEC-008 |
 
 Decisions still marked **ADR pending** above have an approved direction but no formal ADR yet. Create the ADR before or alongside implementation of the affected area.
 
