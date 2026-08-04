@@ -2,7 +2,7 @@
 title: LearnFlow Docker Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-03
+last_updated: 2026-08-04
 related:
   - ../00-project-context.md
   - environments.md
@@ -46,7 +46,7 @@ Ollama runs on the host initially. The backend receives its endpoint and configu
 
 | Service | State |
 | --- | --- |
-| `frontend` | Implemented — builds from `docker/frontend.Dockerfile`. The image build and this service definition reach CI for the first time on the pull request that adds them; neither has been validated anywhere yet. |
+| `frontend` | Implemented — builds from `docker/frontend.Dockerfile`; build verified in CI. |
 | `backend` | Implemented — builds from `docker/backend.Dockerfile`; build verified in CI. |
 | `postgres` | Implemented — `postgres:18-alpine` with a named volume and a `pg_isready` health check. |
 | `chromadb` | Not implemented — no code reads `CHROMA_URL`. |
@@ -133,23 +133,35 @@ but waiting means the first page a learner opens meets a backend ready to answer
 
 ### Verification status
 
-**The build is verified in CI.** The `containers` job first ran on pull request #7 and passed:
-`docker compose config -q` validated the topology and `docker build -f docker/backend.Dockerfile .`
-built the image. It runs again on every pull request and every push to `main`, so a change that
-breaks the build is caught there. The frontend image build joined the same job with the frontend
-application.
+**Both image builds and the topology are verified in CI.** The `containers` job first ran on pull
+request #7 and passed: `docker compose config -q` validated the topology and
+`docker build -f docker/backend.Dockerfile .` built the backend image. The frontend image build
+joined the same job with the frontend application, and first passed on pull request #13 — run
+`30850601752`, on commit `588cbfc`, where `Validate Compose topology`, `Build backend image`, and
+`Build frontend image` all succeeded. It failed on that pull request's two earlier runs, for a
+lockfile `npm ci` could not install. The job runs again on every pull request and every push to
+`main`, so a change that breaks either build is caught there.
 
-Two limits on what that proves:
+The `frontend` **service definition** was validated earlier and more often than the image that serves
+it: `docker compose config -q` reads every service in the file, so it covered `frontend` from that
+service's first run on pull request #13, and passed on all three of that pull request's runs —
+including the two whose frontend image build failed. Be precise about what that check is worth. It
+proves the file parses, interpolates its variables, and matches the Compose schema. It does not
+prove the service's ports, environment, health check, or `depends_on` are *correct*, only that they
+are well-formed.
+
+Two further limits, both still true after run `30850601752`:
 
 - **No container has been started.** CI validates and builds; it does not run `docker compose up`.
   No health-check probe has therefore executed, no request has been served through a container, the
   backend has never connected to the `postgres` service, and the frontend has never called the
-  backend over the Compose network. Runtime behavior is unverified, as distinct from the build.
-- **The commands were not run locally when this setup was prepared**, because Docker was not
-  installed on that workstation. That was true again when the `postgres` service was added, and again
-  when the `frontend` service was added — including `docker compose config -q`, so the frontend
-  service definition's first validation is in CI. CI is the authoritative verification. Container
-  commands are deliberately outside the canonical
+  backend over the Compose network. A successful `docker build` shows that an image can be produced,
+  not that the process inside it runs, serves, or reaches another service. Runtime behavior remains
+  unverified, as distinct from the build.
+- **The commands have never been run locally**, because Docker was not installed on the workstation
+  when this setup was prepared, nor when the `postgres` service was added, nor when the `frontend`
+  service was added, and it is still not installed. CI is therefore the only verification these
+  commands have ever received. Container commands are deliberately outside the canonical
   [local quality checks](../development/coding-standards.md#local-quality-checks), which cover the
   checks needing nothing beyond Python and Node.js; running them locally is optional and needs a
   Docker installation.
@@ -158,8 +170,9 @@ The migrations themselves are verified separately and more strongly: the CI `dat
 them to a real PostgreSQL service container on every pull request. That job uses a GitHub Actions
 service rather than Compose, so it exercises the schema without exercising this topology.
 
-The Milestone 1 Compose item stays unticked for both of the reasons above and because the topology
-covers four services, three of which now exist; [milestones](../roadmap/milestones.md) records why.
+The Milestone 1 Compose item stays unticked on two counts: no container has been started, per the
+first limit above, and the topology covers four services, three of which now exist.
+[Milestones](../roadmap/milestones.md) records the same two.
 
 ## Service Responsibilities
 
