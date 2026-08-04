@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-03
+last_updated: 2026-08-04
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -53,7 +53,7 @@ Define reviewable delivery checkpoints for LearnFlow. A milestone is complete on
   providers, storage, and RAG.
 - [x] Backend starts through FastAPI application factory/composition root.
 - [x] `GET /health` returns a safe readiness response.
-- [ ] Docker Compose starts frontend, backend, PostgreSQL, and ChromaDB. The `frontend`, `backend`, and `postgres` services are implemented (`compose.yaml`, `docker/frontend.Dockerfile`, `docker/backend.Dockerfile`), and CI validates the topology and builds both images on every pull request. The backend image build and the topology validation first passed on pull request #7; the frontend image build and the `frontend` service definition reach CI for the first time on the pull request that adds them. The item remains open on two counts: `chromadb` joins Compose with the code that consumes it, and no container has been started yet, so `docker compose up` serving `GET /health` against the `postgres` service, and the frontend calling the backend over the Compose network, are still unverified. See [Docker strategy](../deployment/docker.md).
+- [ ] Docker Compose starts frontend, backend, PostgreSQL, and ChromaDB. The `frontend`, `backend`, and `postgres` services are implemented (`compose.yaml`, `docker/frontend.Dockerfile`, `docker/backend.Dockerfile`), and CI validates the topology and builds both images on every pull request. The backend image build and the topology validation first passed on pull request #7. On pull request #13, the topology validation covered the new `frontend` service from that service's first run, and the frontend image build first passed in run `30850601752`. The item remains open on two counts: `chromadb` joins Compose with the code that consumes it, and no container has been started yet — nothing has served a request through a container, and the frontend has never called the backend over the Compose network. See [Docker strategy](../deployment/docker.md#verification-status) for exactly what the passing builds do and do not prove.
 - [x] Backend configuration is validated from environment variables. Now includes `DATABASE_URL`, which has no default and is required.
 - [x] Alembic initializes and applies an initial migration to a fresh PostgreSQL database. `20260731_01_create_curriculum_tables` creates the curriculum area, `20260731_02_add_topic_code_unique_constraint` amends it, and `20260801_01_create_examination_schedule_and_learner_goal_tables` adds the examination schedule area and the first two learner-planning tables; the CI `database` job applies them to an empty PostgreSQL service container, compares the models against the result, exercises the constraints, and downgrades back to empty on every pull request. The remaining schema areas are migrated with the milestones that use them, per [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md).
 - [x] Curated GATE CSE curriculum seed/import is idempotent. `backend/scripts/seed_curriculum.py`
@@ -184,11 +184,15 @@ numbering convention that no requirement yet constrains, which is what
 - [ ] Errors, logging, and health/readiness behavior are documented and tested where practical.
 - [ ] Database/resource backup and restore instructions are documented.
 - [ ] `.env.example`, `.gitignore`, Docker setup, and README are validated.
-- [x] CI configuration runs the checks enumerated in [CI/CD strategy](../deployment/ci-cd.md) on pull requests and pushes to `main` (`.github/workflows/pull-request.yml`), covering documentation, lint, backend tests, database migrations, and the container build. The Python checks were verified locally when they were added; the container checks were verified in CI, where they first ran and passed on pull request #7; the database checks run only in CI, because that workstation has no PostgreSQL.
+- [x] CI configuration runs the checks enumerated in [CI/CD strategy](../deployment/ci-cd.md) on pull requests and pushes to `main` (`.github/workflows/pull-request.yml`), covering documentation, lint, backend tests, database migrations, and the container build. The Python checks were verified locally when they were added; the container checks as they then stood — topology validation and the backend image build — were verified in CI, where they first ran and passed on pull request #7, and the frontend image build joined them later; the database checks run only in CI, because that workstation has no PostgreSQL.
 - [x] CI also covers frontend checks, once that artifact exists. The `frontend` job runs `npm ci`,
   ESLint, `tsc --noEmit`, Vitest, and the production build on Node 24, and the `containers` job now
-  builds the frontend image too. All five were verified locally before they were added, except the
-  image build, which needs Docker; see [CI/CD strategy](../deployment/ci-cd.md#the-frontend-job).
+  builds the frontend image too. All five `frontend` job commands were verified locally before they
+  were added; see [CI/CD strategy](../deployment/ci-cd.md#the-frontend-job). The image build could
+  not be verified locally, because Docker is not installed on that workstation, and was verified in
+  CI instead — run `30850601752` on pull request #13; see
+  [Docker strategy](../deployment/docker.md#verification-status), which holds the evidence and its
+  limits.
 - [ ] Major learner workflows have loading, empty, error, and success states.
 - [ ] Known limitations are documented rather than hidden.
 
