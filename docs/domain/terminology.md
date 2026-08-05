@@ -39,6 +39,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Provisional** | A published schedule whose source says the dates are still liable to change. | The honest default before an examining body confirms. Say so wherever the dates are shown. |
 | **Confirmed** | A published schedule whose dates the examining body has confirmed. | Set it only on the examining body's word, never on age or proximity. |
 | **Learner setup** | The capability by which a learner establishes their profile, active learning program, and study goal before planning begins. | The canonical name for the capability, wherever it is named: requirements, API documentation, endpoint groupings, and UI copy. It is not only a first-time activity — a learner returns to it whenever their goal changes. |
+| **Home screen** | The application's landing screen, which shows the learner's saved learner setup — their profile, their study goal, and the published dates of the examination that goal aims at. | Read-only: it reports what is stored and links to *learner setup* to change it. It is not a *dashboard*; see the row below. Its UI heading is "Your study setup". |
 | **Study goal** | The learner's target outcome and deadline. | Aims at an examination cycle, a target completion date, or both — never at neither. |
 | **Target date** | A learner's own completion date, for a learner following no published examination. | Not a substitute for an examination window. Leave it empty rather than guessing a paper date. |
 | **Availability** | Time the learner can realistically allocate to study. | A planning input, not a measure of commitment or ability. |
@@ -80,6 +81,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Exam date; examination date | Examination window; examination period | A body that publishes several sitting days has not named the learner's day. A single date presents a guess as a deadline. |
 | Exam; GATE date | Examination cycle; examination schedule | Keeps platform-core language reusable across learning programs. |
 | Onboarding | Learner setup | Use **learner setup** for the capability. **Onboarding** is permitted for one narrower thing only: the first-time UI flow a learner walks through before they have a profile or a goal. It never names the capability, its endpoints, or the ongoing ability to change a goal — a learner who edits an established goal is not being onboarded. |
+| Dashboard (for the home screen) | Home screen | **Dashboard** is reserved for the progress overview [FR-011](../requirements/functional.md#fr-011-progress-overview) describes and PRG-001 will serve: progress by subject and topic, upcoming work, revisions due, and priority focus areas. None of that is built. Calling the setup overview a dashboard would make one word mean two things, and would take the name before the screen that earns it exists. Use **home screen** for the landing screen; the word *dashboard* stays free for progress content. |
 | Test integration | Manual external test result entry | The MVP does not connect to third-party test platforms. |
 | AI memory | Learner progress, resource retrieval, or conversation context | Store durable facts in the application/database, not in model memory. |
 | GATE topic | Topic in the GATE CSE learning program | Keeps platform-core language reusable. |
@@ -98,6 +100,8 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
   is a migration decision rather than a wording one.
 - State a published date's status wherever it is shown. A provisional date presented without that
   word reads as settled fact.
+- Name a screen for what a learner does there, not for a UI genre. *Home screen* says where it sits;
+  *dashboard* would say what it looks like, and that word is already spoken for above.
 - Two existing names retain **onboarding** and are not renamed, for the same reason the dated-span
   rule leaves `target_date` alone — a rename costs more than the inconsistency. The frontend module
   `frontend/features/onboarding/` holds the first-time flow, which the rule above permits; and

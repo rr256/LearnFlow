@@ -2,7 +2,7 @@
 title: LearnFlow Functional Requirements
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-01
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - mvp.md
@@ -44,14 +44,21 @@ The data model must support additional learning programs, including other GATE b
 
 **Priority:** MVP
 
-LearnFlow must allow a learner to create a study baseline before planning begins.
+LearnFlow must allow a learner to create a study baseline before planning begins, and must show that
+baseline back to them afterwards.
 
 ### Acceptance criteria
 
 - The learner can set a target examination schedule or completion date.
 - The learner can set available study time and basic planning preferences.
 - The learner can confirm GATE CSE as the active learning program.
+- The learner can review the setup they saved — their profile, their active learning program, and
+  their study goal with the published dates of the examination it aims at — without re-entering it.
 - The learner can start with no previous progress and still receive an initial plan.
+
+A learner who cannot see what was stored cannot tell a saved setup from a lost one, and every date
+shown back to them carries its source and whether it is still provisional, per
+[ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
 
 ## FR-003 — Study Timeline and Plan
 

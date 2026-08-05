@@ -37,6 +37,42 @@ of its seven endpoints. ADR-013 itself is unchanged and remains accepted.
 capability, and renaming an accepted ADR breaks every link that already points at it. The title above
 uses the canonical term; the file name is a stable identifier, not vocabulary.
 
+## Implementation status — 2026-08-05
+
+*Note added 2026-08-05, later the same day. The decision below is unchanged: no endpoint was added, no
+request or response field changed, and no status code moved. As elsewhere in this repository, the
+accepted text is left as written.*
+
+**These contracts now have a second client.** A home screen at `/` reads the learner's saved setup
+back — LRN-001 for the profile, GOAL-002 for the goal, and EXM-001 for the cycle's dated periods —
+and links to `/setup` to change it. It is read-only and writes nothing.
+
+It needed **no new endpoint**, which is a consequence of two choices this record made. A goal response
+carries the examination *window* but not the periods, and EXM-001 reports "every period beside it,
+including the registration deadlines, which ADR-013 persisted precisely so the product could surface
+them" — so a screen wanting those dates reads EXM-001 and matches the goal's cycle by id. The home
+screen is the first thing to surface them.
+
+It also inherits [ADR-015](ADR-015-frontend-foundation-and-server-rendered-api-access.md)'s call
+topology without renegotiating it: the page is a React Server Component, the browser issues no request
+to the backend, and `API_CORS_ALLOWED_ORIGINS` stays planned rather than implemented.
+
+**Two statements are overtaken:**
+
+- Under [Neutral](#neutral), "The contracts are implemented by one client, the setup screen." Two
+  clients implement them now. The same bullet's next sentence — "Later screens inherit them" — is what
+  actually happened, so the position is unchanged; only the count is.
+- The acceptance-criteria arithmetic. Under [Positive](#positive), "Two of FR-002's four acceptance
+  criteria are met", and under [the decision](#the-deferral-is-discharged-for-lrn-001-lrn-002-and-goal-001-to-goal-004),
+  "Two of FR-002's four acceptance criteria are accordingly still unmet".
+  [FR-002](../requirements/functional.md#fr-002-initial-learner-setup) has since gained a fifth
+  criterion — reviewing the saved setup without re-entering it — which the home screen meets. **Three
+  of five are now met.** The two that are not are exactly the two this record named, unchanged and
+  waiting on the same work: weekly availability, which needs the `day_of_week` decision, and receiving
+  an initial plan, which needs Milestone 3.
+  [endpoints.md](../api/endpoints.md#goal-005-deferred) carries the current count and stays
+  authoritative for it.
+
 ## Context
 
 [ADR-013](ADR-013-examination-schedule-and-study-goal.md) deferred LRN-001, LRN-002, and GOAL-001 to

@@ -34,13 +34,17 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     # `fetch` is global in Node 24, so the image needs no health-probe package.
+    #
+    # /health is a static route that reaches nothing, so this probe asks only
+    # whether the frontend process is responding. Probing `/` instead would call
+    # the API up to three times every interval, to render a page nobody reads.
     healthcheck:
       test:
         - CMD
         - node
         - -e
         - |
-          fetch("http://127.0.0.1:3000/")
+          fetch("http://127.0.0.1:3000/health")
             .then((response) => process.exit(response.ok ? 0 : 1))
             .catch(() => process.exit(1));
       interval: 10s

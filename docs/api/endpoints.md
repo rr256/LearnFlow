@@ -253,9 +253,10 @@ would fix the `day_of_week` numbering convention that
 [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) records as open and no requirement
 yet constrains. It arrives with that decision.
 
-Two of [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s four acceptance
-criteria are met — setting a target examination schedule or completion date, and confirming the
-active learning program. Two are not:
+Three of [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s five acceptance
+criteria are met — setting a target examination schedule or completion date, confirming the active
+learning program, and reviewing the saved setup, which the home screen reads back over LRN-001,
+GOAL-002, and EXM-001. Two are not:
 
 - *"The learner can set available study time and basic planning preferences"* — GOAL-005, waiting on
   the decision above.

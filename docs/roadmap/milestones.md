@@ -92,8 +92,11 @@ numbering convention that no requirement yet constrains, which is what
 
 The learner setup half of this milestone is now delivered: EXM-001, LRN-001, LRN-002, and GOAL-001 to
 GOAL-004, and the `/setup` screen that consumes them, contracted by
-[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md) and needing no migration. Progress
-tracking is what remains.
+[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md) and needing no migration. The home
+screen at `/` is a second consumer, reading that saved setup back over LRN-001, GOAL-002, and
+EXM-001 — which is the acceptance criterion later added to
+[FR-002](../requirements/functional.md#fr-002-initial-learner-setup); it needed no endpoint of its
+own. Progress tracking is what remains.
 
 ### Definition of Done
 

@@ -2,7 +2,7 @@
 title: LearnFlow Coding Standards
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-03
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - folder-structure.md
@@ -108,7 +108,7 @@ python scripts/validate_docs.py                                        # documen
 - `-W error` treats warnings as errors, so a deprecation surfaces in the change that introduced it rather than later.
 - Ruff configuration lives in `backend/pyproject.toml`. `scripts/` sits outside `backend/`, so its invocations name that configuration explicitly; both trees are held to the same rules.
 - `npm ci` installs exactly what `frontend/package-lock.json` records and fails when it disagrees with `package.json`, where `npm install` would quietly reconcile the two. Run it after pulling a change that touches frontend dependencies; otherwise the four checks below it are enough.
-- `npm run build` is a check, not just a packaging step: it fails on a type error Next.js reports that `tsc` alone does not, and on a route that cannot render. Every curriculum route is dynamic, so it reaches no API and needs no running backend.
+- `npm run build` is a check, not just a packaging step: it fails on a type error Next.js reports that `tsc` alone does not, and on a route that cannot render. Every home, curriculum, and setup route is dynamic, so it reaches no API and needs no running backend.
 - The documentation validator enforces the mechanical rules in [documentation standards](documentation-standards.md) and runs from the repository root.
 
 This set covers the checks that need nothing beyond Python, Node.js, and the pinned development dependencies. Container commands require a Docker installation and are documented in [Docker strategy](../deployment/docker.md) instead.

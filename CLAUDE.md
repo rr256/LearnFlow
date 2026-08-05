@@ -89,7 +89,12 @@ Node.js 24 or later is required. Next.js + TypeScript, App Router, CSS Modules. 
 API from its own server — learner-facing pages are React Server Components and writes go through a
 server action, so the browser never reaches the backend, no CORS configuration exists, and
 `API_BASE_URL` is server-side only. Today it serves a read-only curriculum view over CUR-001 to
-CUR-003, and a `/setup` screen over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004.
+CUR-003, a `/setup` screen over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004, and a home
+screen at `/` that reads the saved setup back over LRN-001, GOAL-002, and EXM-001.
+
+The frontend serves its own static `/health` for the container health check, distinct from the
+backend's `GET /health`. It reaches nothing, so the probe asks only whether the frontend process is
+responding rather than generating backend requests every interval.
 
 A `"use server"` module may export only async functions. A constant exported from one fails at
 runtime with a `500` that neither `tsc` nor `next build` reports; `frontend/tests/server-actions.test.ts`

@@ -109,7 +109,7 @@ environments, documentation, and CI configuration out of every build context. No
 | Process user | The unprivileged `node` user the base image ships, not root. |
 | Entry point | `node server.js`, the standalone server. |
 | Published port | `127.0.0.1:3000` only, so the application is not reachable from other devices. |
-| Health check | `GET /` probed with Node's global `fetch`, so the image needs no extra package. |
+| Health check | `GET /health` probed with Node's global `fetch`, so the image needs no extra package. That route is static and reaches nothing — see below. |
 | Telemetry | Disabled through `NEXT_TELEMETRY_DISABLED=1` in the image and in CI. LearnFlow is local-first under [NFR-001](../requirements/non-functional.md#nfr-001-local-first-privacy); no build reports anything outward. |
 
 **The browser never calls the API.** Learner-facing pages render as React Server Components, and the
@@ -122,8 +122,27 @@ and writes alike — and sends HTML. Three consequences:
 - `API_BASE_URL` is server-side configuration. It carries no `NEXT_PUBLIC_` prefix, so it never
   enters a client bundle — which is what the rule against browser-visible infrastructure values in
   [environments](environments.md#configuration-principles) requires.
-- The image builds without a running backend. Every curriculum and setup route is `force-dynamic`, so
-  nothing is fetched while prerendering.
+- The image builds without a running backend. Every home, curriculum, and setup route is
+  `force-dynamic`, so nothing is fetched while prerendering.
+
+**The frontend's health check probes its own `/health`, not `/`.** That route is `force-static` and
+reaches nothing — no API, no database, no other service — so the probe answers exactly one question:
+is this frontend process responding?
+
+Probing `/` answered that question too, but only by rendering the home screen, which calls the API up
+to three times to build a page no probe reads. Every ten seconds, for the life of the container.
+That is the reason for the change: a liveness check should not generate backend traffic.
+
+**It was not a correctness fix.** Probing `/` did not report the container unhealthy when the backend
+was down: the home screen catches an unreachable API and renders its notice with a `200`, so the old
+probe passed. The frontend renders per request and needs no API at startup, and both probes reflect
+that — the new one just does so without asking the backend anything.
+
+This is a different endpoint from the backend's `GET /health`, on a different service. The backend's
+is the operational endpoint described in
+[API conventions](../api/conventions.md#operational-endpoints-are-unversioned); the frontend's reports
+only that the Next.js server process is serving. Both answer a flat `{"status": "ok"}`, so probe
+tooling reads the same field from either.
 
 `compose.yaml` fixes `API_BASE_URL` to `http://backend:${API_PORT:-8000}` rather than interpolating
 it whole, for the reason `DATABASE_URL` is fixed: a developer's `.env` names the backend's published
@@ -307,7 +326,8 @@ On a new local environment:
 6. Confirm backend health and the curriculum-read endpoints — `GET /health`, then
    `GET /api/v1/curriculum/programs`, which returns the program step 3 loaded. See
    [API endpoints](../api/endpoints.md#curriculum-endpoints).
-7. Open <http://127.0.0.1:3000/curriculum> to browse the same data in the frontend.
+7. Open <http://127.0.0.1:3000/> to see the learner's saved setup, and
+   <http://127.0.0.1:3000/curriculum> to browse the same data in the frontend.
 
 Be precise about what has been demonstrated. Steps 2 to 6 are exercised on every pull request by the
 CI `database` job, which applies the migrations, runs each seed twice, sets the study goal, and reads

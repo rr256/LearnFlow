@@ -47,6 +47,7 @@ Both services are then published on the loopback interface only:
 ```bash
 curl http://127.0.0.1:8000/health                       # {"status":"ok"}
 curl http://127.0.0.1:8000/api/v1/curriculum/programs   # the seeded learning programs
+open http://127.0.0.1:3000/                             # your saved study setup
 open http://127.0.0.1:3000/curriculum                   # the same data in the browser
 ```
 
@@ -92,9 +93,19 @@ API is exposed to the browser and the backend needs no CORS configuration. `API_
 `http://127.0.0.1:8000`, which is where the backend is published; set it in `frontend/.env.local` or
 your shell to point elsewhere. Next.js reads `.env` files from `frontend/`, not the repository root.
 
-`/curriculum` lists the learning programs, and each program page shows its active curriculum
-version's subjects, topics, and subtopics. Nothing in the hierarchy is hardcoded — it is all read
-from the endpoints above, so an empty database shows an empty-state panel naming the seed to run.
+`/` is the home screen: the profile and study goal you have saved, together with the published dates
+of the examination that goal aims at — or an invitation to set them up if you have not. `/setup` is
+where you set them: your name, timezone, learning program, and either a published examination cycle
+or your own completion date. `/curriculum` lists the learning programs, and each program page shows
+its active curriculum version's subjects, topics, and subtopics. Nothing in the curriculum hierarchy
+is hardcoded — it is all read from the endpoints above, so an empty database shows an empty-state
+panel naming the seed to run.
+
+The examination dates are reference data rather than anything you entered: an examination is always
+shown as a **window** spanning the published sitting days, never as a single date, and a provisional
+schedule says so in words wherever its dates appear. See
+[ADR-013](docs/adr/ADR-013-examination-schedule-and-study-goal.md) and
+[terminology](docs/domain/terminology.md).
 
 Before committing, run the
 [local quality checks](docs/development/coding-standards.md#local-quality-checks). The database
@@ -104,8 +115,9 @@ migration tests are not part of that set: they need PostgreSQL, so they skip unl
 ## Project status
 
 Documentation and architecture foundation, a minimal FastAPI backend foundation, the curriculum and
-examination-schedule database schema with the curated data that fills both, the learner's study
-goal, the first read API over the curriculum, and a Next.js frontend that reads it.
+examination-schedule database schema with the curated data that fills both, the read API over the
+curriculum, the learner setup and study-goal API, and a Next.js frontend through which a learner can
+complete setup, read it back, and browse the curriculum.
 [Project context](docs/00-project-context.md) is the authoritative summary of what exists.
 
 **Implemented**
@@ -119,10 +131,19 @@ goal, the first read API over the curriculum, and a Next.js frontend that reads 
   subtopics, and topic relationships. Every response uses the documented `data` envelope, and every
   failure the documented error envelope. See [API endpoints](docs/api/endpoints.md#curriculum-endpoints)
   and [ADR-014](docs/adr/ADR-014-api-response-contract.md).
-- A Next.js + TypeScript frontend serving a read-only curriculum view over those three endpoints —
-  the learning-program list, and one program's subjects, topics, subtopics, and topic relationships.
-  Pages render on the Next.js server, so the browser never calls the API and no API address enters a
-  client bundle. Loading, empty, error, and not-found states are all handled.
+- The examination-schedule and learner setup endpoints: EXM-001, which publishes each cycle's
+  examination window, provenance, and dated periods as reference data; LRN-001 and LRN-002 for the
+  local learner's profile; and GOAL-001 to GOAL-004 for their study goals. No request accepts a
+  `learner_id` — the effective learner is resolved server-side. GOAL-005, weekly availability, stays
+  deferred on the `day_of_week` numbering decision. See
+  [API endpoints](docs/api/endpoints.md#learner-setup-and-goal-endpoints) and
+  [ADR-016](docs/adr/ADR-016-learner-onboarding-api-contracts.md).
+- A Next.js + TypeScript frontend serving three screens: a home screen reading back the saved profile
+  and study goal, with the published dates of the examination it aims at; a `/setup` screen that
+  writes the profile and the goal; and a read-only curriculum view — the learning-program list, and
+  one program's subjects, topics, subtopics, and topic relationships. Pages render on the Next.js
+  server and the setup form posts to a server action, so the browser never calls the API and no API
+  address enters a client bundle. Loading, empty, error, and not-found states are all handled.
 - Backend and frontend container images, and Docker Compose `frontend`, `backend`, and `postgres`
   services. See [Docker strategy](docs/deployment/docker.md).
 - SQLAlchemy models and Alembic migrations for the curriculum tables — learning programs, curriculum
@@ -144,11 +165,12 @@ goal, the first read API over the curriculum, and a Next.js frontend that reads 
 
 **Not implemented**
 
-AI and RAG, external integrations, and every learner feature beyond browsing the curriculum. The
-frontend is read-only: no learner setup, no study-goal screen, no authentication, and no way to write
-anything. The curriculum endpoints above are the only ones serving learner-facing data, and they only
-read — no endpoint writes anything. The examination schedule and the study goal are reachable only
-through the commands above; the learner and study-goal endpoints remain deferred, per
-[ADR-013](docs/adr/ADR-013-examination-schedule-and-study-goal.md). The progress, resource, and
-assessment tables arrive with the milestones that use them. Compose has no ChromaDB service. Nothing
-beyond the implemented items above should be inferred from the current repository contents.
+AI and RAG, external integrations, authentication, and every learner feature beyond completing setup,
+reading it back, and browsing the curriculum. There is no planning, progress, resource, mentor, or
+assessment screen, and no plan is generated at all. Weekly availability cannot be set: GOAL-005 waits
+on the `day_of_week` numbering convention that
+[ADR-011](docs/adr/ADR-011-sqlalchemy-persistence-implementation.md) keeps open, so one acceptance
+criterion of FR-002 is still unmet. Switching learning programs has no screen, though the API
+supports it. The progress, resource, and assessment tables arrive with the milestones that use them.
+Compose has no ChromaDB service. Nothing beyond the implemented items above should be inferred from
+the current repository contents.
