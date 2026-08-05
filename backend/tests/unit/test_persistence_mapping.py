@@ -34,6 +34,11 @@ from app.infrastructure.persistence.examination_schedule import (
     ExaminationSchedule,
 )
 from app.infrastructure.persistence.learner_planning import STUDY_GOAL_STATUSES, Learner, StudyGoal
+from app.infrastructure.persistence.progress import (
+    LEARNING_STAGES,
+    STAGE_SOURCES,
+    LearnerTopicProgress,
+)
 
 CURRICULUM_TABLES = (
     "learning_programs",
@@ -53,7 +58,9 @@ LEARNER_PLANNING_TABLES = (
     "study_goals",
 )
 
-MAPPED_TABLES = CURRICULUM_TABLES + EXAMINATION_TABLES + LEARNER_PLANNING_TABLES
+PROGRESS_TABLES = ("learner_topic_progress",)
+
+MAPPED_TABLES = CURRICULUM_TABLES + EXAMINATION_TABLES + LEARNER_PLANNING_TABLES + PROGRESS_TABLES
 
 
 def compiled(table_name: str) -> str:
@@ -202,13 +209,15 @@ def test_topic_ordering_and_trackability_use_the_documented_types():
 
 def test_the_remaining_schema_areas_are_absent():
     """Guards the agreed scope. `availability_slots` and `study_plans` complete the
-    learner-planning area in later milestones; each waits for the code that reads
-    it, so no column fixes a convention before a requirement constrains it."""
+    learner-planning area in later milestones, and `revision_records` and
+    `study_activities` complete the progress area; each waits for the code that
+    reads it, so no column fixes a convention before a requirement constrains it."""
     for table_name in (
         "availability_slots",
         "study_plans",
         "plan_items",
-        "learner_topic_progress",
+        "study_activities",
+        "revision_records",
         "resources",
         "checkpoint_quizzes",
     ):
@@ -344,3 +353,75 @@ def test_learner_owned_records_carry_a_learner_id():
     """Kept from the start so multiple accounts stay an authentication change."""
     assert "learner_id" in StudyGoal.__table__.columns
     assert "user_id" not in StudyGoal.__table__.columns
+
+
+# -- progress ---------------------------------------------------------------
+
+
+def test_learning_stage_is_constrained_to_the_five_approved_stages():
+    ddl = compiled("learner_topic_progress")
+
+    assert "ck_learner_topic_progress_learning_stage_is_known" in ddl
+    for stage in LEARNING_STAGES:
+        assert f"'{stage}'" in ddl
+
+
+def test_the_stored_learning_stages_are_the_five_terminology_defines():
+    """The stored form is `snake_case`; docs/domain/terminology.md holds the
+    display labels a learner sees. Renaming a label must not become a migration,
+    so the two are deliberately different representations of the same five."""
+    assert LEARNING_STAGES == (
+        "not_explored",
+        "building_foundation",
+        "developing_confidence",
+        "practice_ready",
+        "strong_understanding",
+    )
+
+
+def test_stage_source_is_constrained_to_the_documented_values():
+    ddl = compiled("learner_topic_progress")
+
+    assert "ck_learner_topic_progress_stage_source_is_known" in ddl
+    for source in STAGE_SOURCES:
+        assert f"'{source}'" in ddl
+
+
+def test_a_learner_holds_one_progress_record_per_topic():
+    """What makes recording a stage an update of the existing row rather than a
+    second row beside it. schema.md lists it under Required Indexes."""
+    ddl = compiled("learner_topic_progress")
+
+    assert (
+        "CONSTRAINT uq_learner_topic_progress_learner_id_topic_id "
+        "UNIQUE (learner_id, topic_id)" in ddl
+    )
+
+
+def test_topic_progress_carries_a_learner_id():
+    assert "learner_id" in LearnerTopicProgress.__table__.columns
+    assert "user_id" not in LearnerTopicProgress.__table__.columns
+
+
+def test_the_progress_columns_awaiting_their_own_code_are_absent():
+    """schema.md holds three further columns as an approved target. Each arrives
+    with the change that writes it, per ADR-011 and ADR-017: `material_status`
+    and `material_completed_at` with material completion, and `last_studied_at`
+    with `study_activities`, which does not exist."""
+    columns = LearnerTopicProgress.__table__.columns
+
+    assert "material_status" not in columns
+    assert "material_completed_at" not in columns
+    assert "last_studied_at" not in columns
+
+
+def test_a_stage_always_has_a_value_and_a_source():
+    """Neither is nullable and neither has a database default. A row that cannot
+    say where its stage came from is one a later derived writer could overwrite
+    without knowing it was discarding a learner's own answer."""
+    columns = LearnerTopicProgress.__table__.columns
+
+    assert columns["learning_stage"].nullable is False
+    assert columns["learning_stage"].server_default is None
+    assert columns["stage_source"].nullable is False
+    assert columns["stage_source"].server_default is None

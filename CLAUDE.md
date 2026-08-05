@@ -59,8 +59,8 @@ Tests, lint, and formatting are part of the repository check set below.
 
 Database — PostgreSQL through SQLAlchemy and Alembic. `DATABASE_URL` is required and has no default.
 Migrations are never applied automatically, by startup or by a container entrypoint. The schema is
-migrated one area per milestone; the curriculum tables, the examination schedule tables, and
-`learners` and `study_goals` exist today. Curated content is loaded by idempotent seeds, not by
+migrated one area per milestone; the curriculum tables, the examination schedule tables, `learners`
+and `study_goals`, and `learner_topic_progress` exist today. Curated content is loaded by idempotent seeds, not by
 migrations — each matches records on a natural key and never deletes, so both are safe to repeat.
 Run them in the order above; each refuses to run ahead of its predecessor. See
 [`docs/database/migrations.md`](docs/database/migrations.md).
@@ -70,8 +70,16 @@ schedule keeps its source and its `provisional`/`confirmed` status. See
 [`docs/adr/ADR-013-examination-schedule-and-study-goal.md`](docs/adr/ADR-013-examination-schedule-and-study-goal.md).
 
 The learner and study-goal endpoints are contracted by
-[`docs/adr/ADR-016-learner-onboarding-api-contracts.md`](docs/adr/ADR-016-learner-onboarding-api-contracts.md).
+[`docs/adr/ADR-016-learner-onboarding-api-contracts.md`](docs/adr/ADR-016-learner-onboarding-api-contracts.md),
+and the topic-progress endpoints by
+[`docs/adr/ADR-017-topic-progress-api-and-schema.md`](docs/adr/ADR-017-topic-progress-api-and-schema.md).
 No request accepts a `learner_id`; the effective learner is resolved server-side.
+
+A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
+`developing_confidence`, `practice_ready`, `strong_understanding` — and rendered from the labels in
+[`docs/domain/terminology.md`](docs/domain/terminology.md). A topic with no record has no stage and
+reads as *Not explored*; nothing creates a record on a learner's behalf, and there is no way to clear
+one. Only a topic with `is_trackable` may hold a stage.
 
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
@@ -88,9 +96,10 @@ npm run dev                                     # http://localhost:3000
 Node.js 24 or later is required. Next.js + TypeScript, App Router, CSS Modules. The frontend calls the
 API from its own server — learner-facing pages are React Server Components and writes go through a
 server action, so the browser never reaches the backend, no CORS configuration exists, and
-`API_BASE_URL` is server-side only. Today it serves a read-only curriculum view over CUR-001 to
-CUR-003, a `/setup` screen over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004, and a home
-screen at `/` that reads the saved setup back over LRN-001, GOAL-002, and EXM-001.
+`API_BASE_URL` is server-side only. Today it serves a curriculum view over CUR-001 to CUR-003 that
+also reads the learner's recorded stages over PRG-002 and writes one over PRG-004, a `/setup` screen
+over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004, and a home screen at `/` that reads the
+saved setup back over LRN-001, GOAL-002, and EXM-001.
 
 The frontend serves its own static `/health` for the container health check, distinct from the
 backend's `GET /health`. It reaches nothing, so the probe asks only whether the frontend process is

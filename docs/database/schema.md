@@ -13,6 +13,7 @@ related:
   - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
+  - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -37,7 +38,7 @@ tables arrive in more than one migration.
 | Curriculum | Implemented — migrations `20260731_01_create_curriculum_tables` and `20260731_02_add_topic_code_unique_constraint`, populated by the idempotent seed described in [migrations](migrations.md#the-curriculum-seed). |
 | Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
 | Learner planning | Partly implemented — `learners` and `study_goals` arrive in the same migration `20260801_01`; `availability_slots` arrives with Milestone 2 and `study_plans` and `plan_items` with Milestone 3. |
-| Progress and revision | Not implemented — `learner_topic_progress` and `study_activities` arrive with Milestone 2; `revision_records` with Milestone 3. |
+| Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `study_activities` arrives with the code that records study work, and `revision_records` with Milestone 3. |
 | Resources and RAG metadata | Not implemented — arrives with Milestone 4. |
 | Assessment | Not implemented — arrives with Milestone 5. |
 | External evidence | Not implemented — arrives with Milestone 5. |
@@ -338,19 +339,52 @@ Stores one actionable recommendation within a plan.
 
 Stores the current learner-specific progress summary for a topic.
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | uuid PK | Progress identifier. |
-| `learner_id` | uuid FK | References `learners.id`. |
-| `topic_id` | uuid FK | References `topics.id`. |
-| `material_status` | text | `not_started`, `in_progress`, or `completed`. |
-| `learning_stage` | text | Approved learner-visible stage. |
-| `stage_source` | text | `learner`, `derived`, or `mixed`. |
-| `last_studied_at` | timestamptz nullable | Most recent study evidence. |
-| `material_completed_at` | timestamptz nullable | When material was marked completed. |
-| `created_at`, `updated_at` | timestamptz | Audit timestamps. |
+| Column | Type | Notes | State |
+| --- | --- | --- | --- |
+| `id` | uuid PK | Progress identifier. | Implemented |
+| `learner_id` | uuid FK | References `learners.id`. | Implemented |
+| `topic_id` | uuid FK | References `topics.id`. | Implemented |
+| `material_status` | text | `not_started`, `in_progress`, or `completed`. | **Not created** |
+| `learning_stage` | varchar(32) | Approved learner-visible stage, in the stored form below. | Implemented |
+| `stage_source` | varchar(16) | `learner`, `derived`, or `mixed`. | Implemented |
+| `last_studied_at` | timestamptz nullable | Most recent study evidence. | **Not created** |
+| `material_completed_at` | timestamptz nullable | When material was marked completed. | **Not created** |
+| `created_at`, `updated_at` | timestamptz | Audit timestamps. | Implemented |
 
-**Constraints:** unique `(learner_id, topic_id)`.
+**Constraints:** unique `(learner_id, topic_id)`, named
+`uq_learner_topic_progress_learner_id_topic_id`, which is also the required index below;
+`learning_stage` and `stage_source` are each constrained to their documented values.
+
+Migration `20260805_01` creates this table with five of its eight documented columns. The three
+marked above remain an approved target and arrive with the code that maintains them, per
+[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) and
+[ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md): `material_status` and
+`material_completed_at` belong to material completion, which nothing records yet, and
+`last_studied_at` can only be filled from a study activity, and `study_activities` does not exist.
+Each is a nullable addition to an existing table, which is the additive change
+[migrations](migrations.md#additive-changes-first) prefers.
+
+`stage_source` is deliberately **not** deferred with them, though every row written today says
+`learner` and nothing derives a stage. It is what distinguishes a stage the learner chose from one
+produced by evidence, which is the boundary
+[FR-005](../requirements/functional.md#fr-005-topic-progress-and-learning-evidence) draws; adding the
+column after evidence starts proposing stages would mean backfilling rows whose origin is no longer
+recoverable. It is `NOT NULL` with no database default, so no row can acquire a source nobody chose.
+
+`learning_stage` stores the `snake_case` form of the five learner-visible stages —
+`not_explored`, `building_foundation`, `developing_confidence`, `practice_ready`, and
+`strong_understanding` — matching every other controlled value in this schema.
+[Terminology](../domain/terminology.md) holds the labels a learner reads; the two are separate
+representations so rewording a label stays a text change rather than a migration over learner rows.
+
+**A topic with no row here has no recorded stage**, which the interface shows as *Not explored*. The
+row is created by the learner's own action, so a fresh installation holds none rather than one per
+trackable topic. Setting `not_explored` explicitly stores a row, and is how a learner records that
+they reset a topic deliberately.
+
+Whether a topic may hold progress at all is `topics.is_trackable`, and it is enforced in the
+application rather than here: a topic that only groups subtopics cannot hold a stage, and a database
+check would have to reach across a foreign key to find out.
 
 ### `study_activities`
 
@@ -617,11 +651,11 @@ Use named nullable foreign keys rather than a generic polymorphic `source_type`/
 ## Required Indexes
 
 Create indexes in addition to primary/unique keys for likely MVP access patterns. Each is created by
-the migration that creates its table; the two marked below are implemented today.
+the migration that creates its table; the three marked below are implemented today.
 
 - `topics(subject_id, parent_topic_id, position)` — implemented
 - `examination_periods(examination_schedule_id, starts_on)` — implemented
-- `learner_topic_progress(learner_id, topic_id)` unique
+- `learner_topic_progress(learner_id, topic_id)` unique — implemented, as the unique constraint named above
 - `study_plans(learner_id, study_goal_id, status, period_start)`
 - `plan_items(study_plan_id, scheduled_for, status)`
 - `revision_records(learner_id, due_on, status)`
@@ -855,6 +889,56 @@ The learner and study-goal endpoints, defined in
   learner and a handful of goals, so every access is a sequential scan of a few rows.
 - `planning_preferences` stays uncreated, and GOAL-004 accordingly does not accept it.
 
+### Progress and revision area — partial review approved 2026-08-05
+
+This review covers only `learner_topic_progress`, the one table migration `20260805_01` creates, and
+only the five of its eight columns that migration creates. `study_activities` and `revision_records`
+are unreviewed and unimplemented.
+
+Covered by this review:
+
+- The first API contracts — PRG-002 and PRG-004, fixed by
+  [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md).
+- The planned SQLAlchemy mapping strategy.
+- Database constraints supported by the selected PostgreSQL and Alembic versions.
+
+**No schema change resulted beyond the table this migration creates.** What the review settled:
+
+- The five learning stages are stored as `snake_case` text guarded by a `CHECK`, in `varchar(32)`.
+  The longest, `strong_understanding`, is 20 characters. This follows the controlled-value convention
+  ADR-011 chose rather than a PostgreSQL enum, so adding a sixth stage stays an ordinary constraint
+  change.
+- `stage_source` is `varchar(16)` — `derived`, the longest of the three, is 7 — and is created now
+  rather than deferred, for the reason recorded under the table above. It is the one column in this
+  area whose later absence could not be repaired by a backfill.
+- Three columns are deliberately not created. Each is a nullable additive change when its writer
+  arrives, so nothing here forecloses them.
+- `(learner_id, topic_id)` uniqueness is what makes PRG-004 rewrite one row rather than append a
+  second, and it is the required index this document already listed. No further index was needed: a
+  single-learner installation holds at most one record per topic, and the curated GATE CSE curriculum
+  has 65 topics and subtopics.
+- PRG-002's `curriculum_version_id` filter reaches through `subjects` to `topics`; no column was
+  added to `learner_topic_progress` to shorten that path. Denormalising the version onto a
+  learner-owned row would let it drift from the topic it describes.
+- "A grouping topic holds no stage" is **not** a database constraint. `topics.is_trackable` lives on
+  another table, so expressing it would need a trigger or a redundant copy of the flag; the use case
+  refuses it before the database sees it, and a `422` naming the topic is a better answer than an
+  integrity error.
+- The examination-schedule precedent on identifier length was checked: the longest name here,
+  `uq_learner_topic_progress_learner_id_topic_id`, is 45 characters, comfortably inside PostgreSQL's
+  63-character limit. The unit test guarding that limit covers this table too.
+
+**Remaining review inputs:**
+
+| Review input | State |
+| --- | --- |
+| The final GATE CSE curriculum seed structure | **Reviewed 2026-08-05** — progress references `topics.id`, which the seed already creates and never deletes, so a re-seeded curriculum cannot orphan a learner's record. |
+| The actual revision-scheduling rules | **Pending** — they constrain `revision_records`, which arrives in Milestone 3. |
+
+One input remains pending, and it belongs to a table this review does not cover, so the area stays
+**partly reviewed** for `learner_topic_progress` and unreviewed for the two tables that do not exist
+yet.
+
 ## Related Documents
 
 - [Project context](../00-project-context.md)
@@ -864,6 +948,7 @@ The learner and study-goal endpoints, defined in
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — why `uq_topics_subject_id_code` exists and how the curriculum tables are populated
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why the examination is periods rather than a date, and why `study_goals.target_date` is nullable
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the endpoint contracts the two API reviews above were taken against
+- [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why `learner_topic_progress` is created without three of its documented columns, and why `stage_source` is not one of them
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated

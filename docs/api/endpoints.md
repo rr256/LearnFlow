@@ -16,6 +16,7 @@ related:
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-014-api-response-contract.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
+  - ../adr/ADR-017-topic-progress-api-and-schema.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -287,16 +288,109 @@ Supports **FR-003 — Study Timeline and Plan** and **FR-004 — Plan Adaptation
 
 Supports **FR-005 — Topic Progress and Learning Evidence** and **FR-011 — Progress Overview**.
 
-| ID | Method and path | Purpose | Primary request/result |
-| --- | --- | --- | --- |
-| PRG-001 | `GET /api/v1/progress/overview` | Read learner summary: progress, current plan, revisions due, and priority focus areas. | Dashboard-ready overview. |
-| PRG-002 | `GET /api/v1/progress/topics` | List topic-progress records, filterable by curriculum, subject, stage, or material status. | Topic progress collection. |
-| PRG-003 | `GET /api/v1/progress/topics/{topic_id}` | Read detailed progress/evidence for one topic. | Progress summary, evidence, and next action. |
-| PRG-004 | `PATCH /api/v1/progress/topics/{topic_id}` | Update learner-entered material status or learning stage. | Updated topic progress. |
-| ACT-001 | `POST /api/v1/study-activities` | Record actual study, practice, revision, or mistake-review activity. | Activity record; optional progress/recommendation update. |
-| ACT-002 | `GET /api/v1/study-activities` | Read activity history with date/topic filters. | Activity collection. |
+| ID | Method and path | Purpose | Primary request/result | State |
+| --- | --- | --- | --- | --- |
+| PRG-001 | `GET /api/v1/progress/overview` | Read learner summary: progress, current plan, revisions due, and priority focus areas. | Dashboard-ready overview. | Not implemented |
+| PRG-002 | `GET /api/v1/progress/topics` | List the learner's recorded topic progress, filterable by curriculum version. | Topic progress collection. | Implemented |
+| PRG-003 | `GET /api/v1/progress/topics/{topic_id}` | Read detailed progress/evidence for one topic. | Progress summary, evidence, and next action. | Not implemented |
+| PRG-004 | `PATCH /api/v1/progress/topics/{topic_id}` | Record the learner's learning stage for a topic. | Updated topic progress. | Implemented |
+| ACT-001 | `POST /api/v1/study-activities` | Record actual study, practice, revision, or mistake-review activity. | Activity record; optional progress/recommendation update. | Not implemented |
+| ACT-002 | `GET /api/v1/study-activities` | Read activity history with date/topic filters. | Activity collection. | Not implemented |
 
 The API must not treat a plan-item update, a manual stage update, or one quiz result as automatic permanent mastery.
+
+PRG-002 and PRG-004 are implemented, and their contracts are fixed by
+[ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). Neither accepts a `learner_id`: the
+effective learner is resolved server-side, per the [identity assumption](#identity-assumption) above.
+Both are synchronous, and both read and write through the `ManageTopicProgress` application use case.
+
+**Material status is not yet recorded anywhere.** PRG-004's original intent line said "material
+status or learning stage"; it accepts the stage alone, because
+`learner_topic_progress.material_status` is not created — see
+[schema.md](../database/schema.md#learner_topic_progress). The field would promise storage the
+database has not got, which is the same reason GOAL-004 does not accept planning preferences.
+
+### PRG-002 — `GET /api/v1/progress/topics`
+
+Query parameters `curriculum_version_id` (a UUID, optional), `limit` (1–100, default 25), and
+`offset` (0 or greater, default 0). Returns `200` with the `data` array and the `pagination` block
+described in [conventions](conventions.md#success-response-shapes), newest first.
+
+Each item carries `id`, `learner_id`, `learning_stage`, `stage_source`, and `topic` — the topic's
+`id`, `code`, `name`, `is_trackable`, `subject_id`, and `curriculum_version_id`.
+
+**Only topics the learner has recorded something against are returned.** A topic absent from this
+collection has no stored stage, which reads as *Not explored* — the neutral starting state. Listing
+every topic is what CUR-003 does; a client showing both joins them by topic identifier. LearnFlow
+never creates a progress record the learner did not ask for, so a fresh installation returns an empty
+page rather than one row per topic.
+
+`stage_source` is `learner` for a stage the learner set themselves. `derived` and `mixed` are
+reserved for a stage produced from quiz or external-test evidence; nothing produces one yet.
+
+An installation where setup has not run has no learner and therefore no records, which is an empty
+page rather than a failure. An unknown `curriculum_version_id` returns an empty page rather than
+`404`: a filter that matches nothing is an empty result, not a missing record.
+
+`subject_id` and `learning_stage` filters, which this catalogue's original intent line also named,
+are **not** accepted. They are compatible additions under
+[versioning](versioning.md#compatible-changes-within-a-major-version) and arrive with the screen that
+needs them.
+
+Errors: `422` `validation_error` for a `limit`, `offset`, or `curriculum_version_id` outside those
+bounds or shapes; `409` `conflict` when more than one learner is stored.
+
+### PRG-004 — `PATCH /api/v1/progress/topics/{topic_id}`
+
+`topic_id` is a UUID. Request body: `learning_stage`, one of `not_explored`, `building_foundation`,
+`developing_confidence`, `practice_ready`, or `strong_understanding`. It is required, and an unknown
+field is rejected. Returns `200` with the record under `data`, in the per-item shape PRG-002 returns.
+
+The record comes into existence on the learner's own action, as the learner profile does under
+LRN-002, and is rewritten afterwards. A learner may move to any stage from any stage, **including
+backwards**: a stage guides the next action rather than scoring the learner, and noticing that a
+topic needs more work is worth recording. Recording the stage a topic already holds is accepted and
+writes nothing, so a repeated form submission does not fail on its second attempt.
+
+The stored values are `snake_case`; [terminology](../domain/terminology.md) holds the labels a
+learner reads. The two are deliberately separate representations, so rewording a label is a text
+change rather than a migration over learner rows.
+
+**There is no way to clear a stage.** `learning_stage: null` is rejected rather than treated as a
+clear — a stage always holds a value, the same rule LRN-002 applies to `timezone` and GOAL-004 to
+`status`. A learner who has changed their mind records `not_explored`, which stores a record saying
+they did so deliberately and stays distinguishable from a topic never touched.
+
+A topic that only groups subtopics is refused. `topics.is_trackable` says whether progress can be
+recorded directly against a topic, and a grouping heading cannot hold a stage of its own.
+
+Errors: `404` `not_found` when no such topic is stored; `422` `validation_error` when the stage is
+not one of the five, when the topic is not trackable, or when the request names an unknown field —
+`details` names `body.learning_stage` or `path.topic_id` accordingly, and never echoes the rejected
+value; `409` `conflict` when no learner exists yet to own the record, or when more than one learner
+is stored.
+
+### PRG-001, PRG-003, ACT-001, and ACT-002 — not implemented
+
+Each waits on something that does not exist rather than on a decision:
+
+- **PRG-001** reports the current plan, revisions due, and priority focus areas. `study_plans`,
+  `plan_items`, and `revision_records` all arrive with
+  [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision).
+- **PRG-003** promises a progress summary, evidence, and a next action. The only evidence stored is
+  the stage itself, so today it would return exactly what PRG-002 returns per item.
+- **ACT-001** and **ACT-002** need `study_activities`, which is not created.
+
+Three of [FR-005](../requirements/functional.md#fr-005-topic-progress-and-learning-evidence)'s six
+acceptance criteria are met — marking a topic with one of the five stages, updating it at any time,
+and presenting an encouraging next action. Three are not: recording that study material has been
+completed, which needs `material_status`; storing quiz, test, mistake, and revision evidence
+separately, which needs those tables; and the rule against claiming mastery from one signal, which is
+respected but not yet exercised, because only one kind of signal exists.
+
+Related entities: [learner topic progress](../domain/entities.md#learner-topic-progress) and
+[topic](../domain/entities.md#topic). Related tables:
+[progress and revision schema area](../database/schema.md#schema-areas).
 
 ## Revision Endpoints
 
@@ -372,7 +466,10 @@ Implement in an order that enables one working learner flow:
 2. Learner setup and study-goal creation. **Done** — EXM-001, LRN-001, LRN-002, and GOAL-001 to
    GOAL-004, contracted by [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md). GOAL-005
    waits on the `day_of_week` decision, not on a client.
-3. Progress reads/updates and basic study activities.
+3. Progress reads/updates and basic study activities. **Partly done** — PRG-002 and PRG-004 record a
+   learning stage and read it back, contracted by
+   [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). PRG-001, PRG-003, ACT-001, and
+   ACT-002 wait on the plan, revision, and study-activity records described above.
 4. Plan generation/read/update.
 5. Revision reads/updates.
 6. Resource registration and ingestion status.
@@ -387,6 +484,7 @@ Implement in an order that enables one working learner flow:
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — what a study goal aims at, and the deferral ADR-016 discharges
 - [ADR-014: Fix the public HTTP API response contract](../adr/ADR-014-api-response-contract.md) — the envelope, pagination block, and error codes every endpoint here returns
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the request and response fields of EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004
+- [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the request and response fields of PRG-002 and PRG-004, and why the other four progress endpoints stay uncontracted
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

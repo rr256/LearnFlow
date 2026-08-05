@@ -2,12 +2,13 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-31
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - domain-model.md
   - terminology.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../database/schema.md
 ---
 
@@ -209,6 +210,8 @@ Strong understanding
 
 Each stage should be paired with a useful next action, such as study concepts, practise questions, revise errors, or maintain through scheduled revision.
 
+The labels above are what a learner reads. [Terminology](terminology.md) is authoritative for them and for the `snake_case` form each is stored and sent as; do not restate the stored values here. A learner may move to any stage from any stage, including backwards — the order is a progression, not a ranking. See [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md).
+
 ## Important Non-Entities
 
 The following are important, but are not domain entities in this document:
@@ -243,6 +246,7 @@ Topic ── Learning Resource
 - [Project context](../00-project-context.md)
 - [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — quiz-topic cardinality, mistake sources, and evidence boundaries
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination schedule and period entities
+- [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — which part of the learner topic progress entity is persisted today
 - [Domain model](domain-model.md)
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)

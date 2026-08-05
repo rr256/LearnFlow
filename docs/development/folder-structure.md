@@ -15,6 +15,7 @@ related:
   - ../adr/ADR-010-feature-delivery-workflow.md
   - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
+  - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../domain/terminology.md
 ---
 
@@ -224,7 +225,8 @@ app/
 │   ├── page.tsx                            # CUR-001, the learning-program list
 │   ├── error.tsx                           # Last-resort render boundary
 │   └── programs/[programId]/
-│       ├── page.tsx                        # CUR-002 and CUR-003
+│       ├── page.tsx                        # CUR-002, CUR-003, and PRG-002;
+│       │                                   # writes PRG-004 via a server action
 │       └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
@@ -271,7 +273,7 @@ quizzes/
 external-tests/
 ```
 
-Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, and `onboarding/` exist today.
+Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, and `progress/` exist today.
 
 `onboarding/` holds the **learner setup** capability's screen. The module keeps the narrower name
 because a module directory names a UI flow, which is the one use
@@ -293,6 +295,10 @@ onboarded — and it writes nothing.
 | `onboarding/StudyGoalSummary.tsx` | The goal the learner has already set, with its examination window, source, and provisional status. |
 | `onboarding/submission.ts` | Reads the form into the two requests it makes, and owns the form's state shape. Plain functions, so they are testable without a running server. |
 | `onboarding/actions.ts` | The `"use server"` module holding the write path. |
+| `progress/TopicStageControl.tsx` | The learning-stage control beside one trackable topic, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. |
+| `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
+| `progress/submission.ts` | Reads the stage form into the request it makes, and owns the control's state shape. |
+| `progress/actions.ts` | The `"use server"` module holding the write path. |
 
 A goal response carries the examination **window** but not the dated periods, per
 [endpoints](../api/endpoints.md#learner-setup-and-goal-endpoints), so a screen wanting the
@@ -324,7 +330,7 @@ Frontend-only utilities, including the typed API client, request/error helpers, 
 | Path | Responsibility |
 | --- | --- |
 | `config.ts` | Resolves and validates `API_BASE_URL`. Takes the environment as a parameter so validation is testable without mutating `process.env`. |
-| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, and study-goal endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
+| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, study-goal, and topic-progress endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
 
 When the API answers with a failure, `ApiError.code` is the API's own code from the closed catalogue
 in [API conventions](../api/conventions.md#error-codes). Two client-side codes cover what the
@@ -340,10 +346,10 @@ TypeScript types based on public API contracts. Do not copy database/ORM types i
 
 ### `frontend/tests/`
 
-Vitest specs for the API client, the configuration reader, the curriculum, learner-setup, and home
-components, the setup form's submission parsing, the home screen's date presentation, and the
-`"use server"` export rule. They stub `fetch` and reach no live backend, so `npm test` needs nothing
-running.
+Vitest specs for the API client, the configuration reader, the curriculum, learner-setup, home, and
+progress components, the setup and stage forms' submission parsing, the home screen's date
+presentation, the stage-to-topic join, and the `"use server"` export rule. They stub `fetch` and
+reach no live backend, so `npm test` needs nothing running.
 
 ## Docker and Scripts
 
@@ -442,6 +448,7 @@ Local data locations are configured through environment variables and Docker vol
 - [Coding standards](coding-standards.md)
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the decisions the frontend structure implements
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the server-action write path the `onboarding/` module implements
+- [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the contracts the `progress/` module implements, and why its control sits inside the curriculum view
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

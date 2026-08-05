@@ -17,6 +17,7 @@ related:
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
+  - ../adr/ADR-017-topic-progress-api-and-schema.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -96,7 +97,14 @@ GOAL-004, and the `/setup` screen that consumes them, contracted by
 screen at `/` is a second consumer, reading that saved setup back over LRN-001, GOAL-002, and
 EXM-001 — which is the acceptance criterion later added to
 [FR-002](../requirements/functional.md#fr-002-initial-learner-setup); it needed no endpoint of its
-own. Progress tracking is what remains.
+own.
+
+The first half of progress tracking has now arrived too: a learner can mark a trackable topic with a
+learning stage and change it later, over PRG-004, and see the saved stage while browsing the
+curriculum, over PRG-002. Contracted by
+[ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md), with migration `20260805_01` creating
+`learner_topic_progress`. Material status, study activities, and the progress overview are what
+remain.
 
 ### Definition of Done
 
@@ -140,10 +148,33 @@ own. Progress tracking is what remains.
   production build with a contract-shaped stub API: the rendered hierarchy, a `404` for an unknown
   program id, and the API-unreachable panel were each confirmed. **Not yet exercised against the real
   backend**, which needs PostgreSQL; see [Docker strategy](../deployment/docker.md#verification-status).
-- [ ] Learner can record material status, learning stage, and study activity.
-- [ ] Progress overview shows subject/topic progress and priority focus areas.
-- [ ] Supportive learning-stage labels and next actions are used in UI.
-- [ ] API, domain, persistence, and frontend tests cover core progress state transitions.
+- [ ] Learner can record material status, learning stage, and study activity. **The learning stage is
+  done**: PRG-004 records one of the five approved stages against a trackable topic and rewrites it on
+  a later submission, PRG-002 reads back what was recorded, and the `/curriculum/programs/{id}` screen
+  offers a control beside each trackable topic. A topic with no record reads as *Not explored* rather
+  than being written on the learner's behalf, and a grouping topic is refused, matching
+  `topics.is_trackable`. Material status and study activity remain: `learner_topic_progress.material_status`
+  is deliberately not created and `study_activities` does not exist, each waiting on the code that
+  would write it, per [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) and
+  [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md).
+- [ ] Progress overview shows subject/topic progress and priority focus areas. PRG-001 needs the plan
+  and revision records Milestone 3 brings; nothing is built.
+- [x] Supportive learning-stage labels and next actions are used in UI. The stored values are
+  `snake_case`, and the screen renders the five labels
+  [terminology](../domain/terminology.md) defines, each paired with a constructive next action rather
+  than a verdict — which is [FR-005](../requirements/functional.md#fr-005-topic-progress-and-learning-evidence)'s
+  sixth acceptance criterion. A stage never reads as a score: a learner may move to any stage from
+  any stage, including backwards, and nothing compares two of them. Covered by a test asserting that
+  none of the wording terminology.md tells us to avoid appears in the labels or the next actions.
+- [ ] API, domain, persistence, and frontend tests cover core progress state transitions. Covered for
+  the learning stage: unit tests against a fake, API tests over the real application factory, and
+  PostgreSQL integration tests that record a stage over HTTP against the seeded GATE CSE curriculum
+  and verify the constraints. Exercised end to end against the production standalone frontend with a
+  contract-shaped stub API — a no-JavaScript submission created a stage, a second updated it, the
+  saved stage and its next action read back, and no API address appeared in any served page or client
+  script. **The integration tests have not been run against a live database locally** — that
+  workstation has no PostgreSQL, so they skip; the CI `database` job runs them. The remaining
+  transitions arrive with the records that have them.
 - [ ] Requirements/API/schema docs are updated to match implementation.
 
 ## Milestone 3 — Planning and Revision
@@ -244,4 +275,5 @@ own. Progress tracking is what remains.
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why part of Milestone 2's schema arrived in Milestone 1
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the frontend decisions behind the items above, including the loading-boundary rule
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the contracts behind the learner setup items in Milestone 2
+- [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the contracts and the migration behind the progress items in Milestone 2
 - [Deferred ideas](future-ideas.md)

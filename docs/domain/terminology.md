@@ -9,6 +9,7 @@ related:
   - entities.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
+  - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../development/coding-standards.md
 ---
 
@@ -48,12 +49,13 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Study activity** | A record of actual study, practice, or revision work completed by the learner. | May record duration and related resources/topics. |
 | **Learner topic progress** | The learner-specific state and evidence for one topic. | Combines several signals; it is not a single permanent score. |
 | **Material completed** | The learner has completed the planned material for a topic. | Does not mean mastery or exam readiness. |
-| **Learning stage** | A supportive, learner-visible summary of current understanding. | Use the approved stage labels below. |
-| **Not explored** | No meaningful work or evidence is recorded for the topic. | Neutral starting state. |
-| **Building foundation** | The learner should focus on concepts and basic study. | Use a constructive next action. |
-| **Developing confidence** | The learner has partial understanding and needs focused practice. | Do not label this as weak. |
-| **Practice-ready** | The learner is ready for more topic-focused questions. | Not a guarantee of exam performance. |
-| **Strong understanding** | Recent evidence indicates consistent understanding; scheduled revision is still needed. | Do not call this permanent mastery. |
+| **Learning stage** | A supportive, learner-visible summary of current understanding. | Use the approved stage labels below. They are the wording a learner reads; the stored and wire form is the `snake_case` value beside each one, per [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). |
+| **Not explored** | No meaningful work or evidence is recorded for the topic. | Neutral starting state. Stored as `not_explored`, but a topic with **no record at all** also reads as this — the two are distinct, and only the first means the learner said so on purpose. |
+| **Building foundation** | The learner should focus on concepts and basic study. | Use a constructive next action. Stored as `building_foundation`. |
+| **Developing confidence** | The learner has partial understanding and needs focused practice. | Do not label this as weak. Stored as `developing_confidence`. |
+| **Practice-ready** | The learner is ready for more topic-focused questions. | Not a guarantee of exam performance. Stored as `practice_ready`. |
+| **Strong understanding** | Recent evidence indicates consistent understanding; scheduled revision is still needed. | Do not call this permanent mastery. Stored as `strong_understanding`. |
+| **Stage source** | Whether a learning stage was set by the learner or derived from evidence. | Stored as `learner`, `derived`, or `mixed`. Everything recorded today is `learner`; nothing derives a stage yet. |
 | **Revision** | Intentional revisiting of a topic to reinforce retention and address errors. | A revision record tracks when it is due and what happened. |
 | **Revision due** | A topic currently recommended for revision. | A recommendation, not a failure notice. |
 | **Checkpoint quiz** | A short, topic-focused practice assessment. | Used to gather evidence after study or revision. |
@@ -100,6 +102,10 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
   is a migration decision rather than a wording one.
 - State a published date's status wherever it is shown. A provisional date presented without that
   word reads as settled fact.
+- A controlled value is stored and sent as `snake_case`; the label in this document is what a learner
+  reads. The five learning stages follow the same rule as `late_registration` and
+  `recommended_before`, so rewording a label stays a text change rather than a migration over learner
+  rows. Keep the two in step: a new stage needs a value, a label, and a next action.
 - Name a screen for what a learner does there, not for a UI genre. *Home screen* says where it sits;
   *dashboard* would say what it looks like, and that word is already spoken for above.
 - Two existing names retain **onboarding** and are not renamed, for the same reason the dated-span
@@ -114,6 +120,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 - [Project context](../00-project-context.md)
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination vocabulary above
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the capability *learner setup* names, and the endpoints that serve it
+- [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why the stage labels above and their stored values are separate representations
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)

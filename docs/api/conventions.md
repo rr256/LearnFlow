@@ -9,6 +9,7 @@ related:
   - versioning.md
   - ../adr/ADR-014-api-response-contract.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
+  - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../architecture/clean-architecture.md
 ---
 
@@ -170,8 +171,14 @@ deliberately. Three conditions produce it today, and each is a request that cann
 because of what is or is not already stored, rather than a malformed one:
 
 - An active study goal already exists for the learning program (GOAL-001).
-- No learner exists yet, so there is nobody to own a goal (GOAL-001).
+- No learner exists yet, so there is nobody to own the record being written (GOAL-001, PRG-004).
 - More than one learner is stored, so the local learner is undefined (every learner-owned endpoint).
+
+The second condition generalised when the topic-progress endpoints arrived: recording a learning
+stage needs a learner to own it for the same reason a goal does. See
+[ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). Adding an endpoint to an existing
+condition is not a contract change — the status and the code are unchanged, and a client already
+handling `conflict` is unaffected.
 
 Adding the code was a compatible change under the rule below, because `409` previously fell back to
 `request_failed`.
@@ -307,6 +314,7 @@ Each endpoint entry in `endpoints.md` must define:
 - [Project context](../00-project-context.md)
 - [ADR-014: Fix the public HTTP API response contract](../adr/ADR-014-api-response-contract.md) — the durable rationale for the envelope, the pagination block, and the error-code catalogue
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the change that added `conflict` to the catalogue above
+- [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the change that widened the "no learner exists yet" condition to a second endpoint
 - [API endpoints](endpoints.md)
 - [API versioning](versioning.md)
 - [Clean Architecture](../architecture/clean-architecture.md)
