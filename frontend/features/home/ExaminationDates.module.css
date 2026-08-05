@@ -1,0 +1,61 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+.window {
+  margin: 0 0 var(--space-4);
+  font-weight: 600;
+}
+
+.windowLabel {
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.subheading {
+  margin: 0 0 var(--space-2);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.dates {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.dates dt {
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.dates dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+}
+
+/* The word carries the meaning; the colour only reinforces it. */
+.provisional {
+  margin: var(--space-4) 0 0;
+  color: var(--colour-notice-border);
+}
+
+.source {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}

@@ -2,7 +2,7 @@
 title: LearnFlow CI/CD Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-03
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - environments.md
@@ -89,10 +89,10 @@ which `npm install` would silently reconcile — so a dependency change that was
 pass here.
 
 `npm run build` is a check rather than a packaging step: it fails on a type error Next.js reports
-that `tsc` alone does not, and on a route that cannot render. It reaches no API, because every
-curriculum route is `force-dynamic` and nothing is fetched while prerendering. The job therefore
-starts no service and needs no backend. `NEXT_TELEMETRY_DISABLED` is set for the same local-first
-reason it is set in the image; see [Docker strategy](docker.md#the-frontend-service).
+that `tsc` alone does not, and on a route that cannot render. It reaches no API, because every home,
+curriculum, and setup route is `force-dynamic` and nothing is fetched while prerendering. The job
+therefore starts no service and needs no backend. `NEXT_TELEMETRY_DISABLED` is set for the same
+local-first reason it is set in the image; see [Docker strategy](docker.md#the-frontend-service).
 
 The frontend tests stub `fetch` and assert against the documented response envelope, so they verify
 how the client handles the contract rather than whether a live backend honours it. Nothing yet reads
