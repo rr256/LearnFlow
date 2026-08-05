@@ -2,7 +2,7 @@
 title: "ADR-015: Build the Frontend on Next.js and Reach the API from the Server"
 status: accepted
 owner: architecture-and-development
-last_updated: 2026-08-03
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - ADR-001-clean-architecture.md
@@ -10,6 +10,7 @@ related:
   - ADR-009-configuration-naming-and-validation.md
   - ADR-013-examination-schedule-and-study-goal.md
   - ADR-014-api-response-contract.md
+  - ADR-016-learner-onboarding-api-contracts.md
   - ../architecture/overview.md
   - ../development/tech-stack.md
   - ../development/folder-structure.md
@@ -30,6 +31,35 @@ Accepted — 2026-08-03
 
 Resolves DEC-008, which had been approved since the documentation foundation with its ADR recorded
 as pending.
+
+## Implementation status — 2026-08-05
+
+*The decision below is unchanged, and in particular the CORS position it takes still holds.*
+
+**The frontend now writes.** A learner setup screen at `/setup` creates and updates the learner
+profile and the study goal, per [ADR-016](ADR-016-learner-onboarding-api-contracts.md). It inherits
+this record rather than renegotiating it, which is what the Neutral bullet below says every later
+screen does: the form posts to a Next.js **server action**, so the API call is still made by the
+Next.js server, the browser still issues no request to the backend, and `API_CORS_ALLOWED_ORIGINS`
+stays planned rather than implemented. This was verified against the production standalone server —
+no API address appears in the served HTML or in any client script.
+
+Three statements are overtaken, and as elsewhere the accepted text is left as written:
+
+- Under [Neutral](#neutral), "Only the curriculum reads have a client today" — the onboarding
+  endpoints have one too.
+- Under [Implementation notes](#implementation-notes), "the learner and study-goal endpoints remain
+  deferred by ADR-013" describes the state at acceptance. ADR-016 discharges that deferral for all
+  but GOAL-005.
+- The record says it "decides nothing about … learner-owned screens". One now exists, decided by
+  ADR-016 rather than here.
+
+**One consequence of the framework choice was found the same way this record's loading-boundary trap
+was — by running the built server, not by reading the code.** A `"use server"` module may export only
+async functions; exporting a constant from one throws on the first request that reaches it, and
+neither `tsc --noEmit` nor `next build` reports it.
+[folder-structure.md](../development/folder-structure.md#frontendfeatures) records the rule, and a
+test now enforces it.
 
 ## Context
 
@@ -230,6 +260,7 @@ convenience.
 - [ADR-009: Name and validate configuration variables explicitly](ADR-009-configuration-naming-and-validation.md) — the `API_BASE_URL` deferral this record settles
 - [ADR-013: Model an examination period as a published window of reference data](ADR-013-examination-schedule-and-study-goal.md) — the endpoint deferral this frontend's existence affects
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the contract this client parses
+- [ADR-016: Fix the learner onboarding API contracts](ADR-016-learner-onboarding-api-contracts.md) — the first learner-owned screen, which inherits this record's call topology for its writes
 - [Architecture overview](../architecture/overview.md) — the web application component this record gives a call topology
 - [Technology stack](../development/tech-stack.md)
 - [Repository and folder structure](../development/folder-structure.md)

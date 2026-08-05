@@ -69,6 +69,11 @@ An examination is stored as a dated **window**, never as a single guessed date, 
 schedule keeps its source and its `provisional`/`confirmed` status. See
 [`docs/adr/ADR-013-examination-schedule-and-study-goal.md`](docs/adr/ADR-013-examination-schedule-and-study-goal.md).
 
+The learner and study-goal endpoints are contracted by
+[`docs/adr/ADR-016-learner-onboarding-api-contracts.md`](docs/adr/ADR-016-learner-onboarding-api-contracts.md),
+which is `proposed` and awaiting acceptance. No request accepts a `learner_id`; the effective learner
+is resolved server-side.
+
 ## Frontend quick reference
 
 ```bash
@@ -78,9 +83,14 @@ npm run dev                                     # http://localhost:3000
 ```
 
 Node.js 24 or later is required. Next.js + TypeScript, App Router, CSS Modules. The frontend calls the
-API from its own server — learner-facing pages are React Server Components, so the browser never
-reaches the backend, no CORS configuration exists, and `API_BASE_URL` is server-side only. Today it
-serves a read-only curriculum view over CUR-001 to CUR-003 and writes nothing.
+API from its own server — learner-facing pages are React Server Components and writes go through a
+server action, so the browser never reaches the backend, no CORS configuration exists, and
+`API_BASE_URL` is server-side only. Today it serves a read-only curriculum view over CUR-001 to
+CUR-003, and a `/setup` screen over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004.
+
+A `"use server"` module may export only async functions. A constant exported from one fails at
+runtime with a `500` that neither `tsc` nor `next build` reports; `frontend/tests/server-actions.test.ts`
+checks the rule.
 
 Local containers — `compose.yaml` defines the `frontend`, `backend`, and `postgres` services;
 ChromaDB joins them with the code that uses it:

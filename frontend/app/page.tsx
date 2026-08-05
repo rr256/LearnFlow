@@ -14,10 +14,13 @@ export default function HomePage() {
     <>
       <h1>LearnFlow</h1>
       <p className={styles.lead}>
-        LearnFlow is being built one capability at a time. Browsing the curriculum is the first
-        one that is ready.
+        LearnFlow is being built one capability at a time. Setting up your study goal and browsing
+        the curriculum are the two that are ready.
       </p>
       <ul className={styles.actions}>
+        <li>
+          <Link href="/setup">Set up your study goal</Link>
+        </li>
         <li>
           <Link href="/curriculum">Browse the curriculum</Link>
         </li>

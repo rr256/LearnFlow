@@ -2,13 +2,14 @@
 title: LearnFlow Docker Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-04
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - environments.md
   - ci-cd.md
   - ../requirements/non-functional.md
   - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
+  - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../development/tech-stack.md
   - ../development/folder-structure.md
   - ../roadmap/milestones.md
@@ -111,16 +112,18 @@ environments, documentation, and CI configuration out of every build context. No
 | Health check | `GET /` probed with Node's global `fetch`, so the image needs no extra package. |
 | Telemetry | Disabled through `NEXT_TELEMETRY_DISABLED=1` in the image and in CI. LearnFlow is local-first under [NFR-001](../requirements/non-functional.md#nfr-001-local-first-privacy); no build reports anything outward. |
 
-**The browser never calls the API.** The curriculum views render as React Server Components, so the
-Next.js server makes every API call and sends HTML. Three consequences:
+**The browser never calls the API.** Learner-facing pages render as React Server Components, and the
+setup screen's writes go through a server action, so the Next.js server makes every API call — reads
+and writes alike — and sends HTML. Three consequences:
 
 - The API needs no CORS allow-list, and `API_CORS_ALLOWED_ORIGINS` stays a planned setting rather
-  than one this change implements.
+  than one this change implements. The first write path did not alter this, per
+  [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md).
 - `API_BASE_URL` is server-side configuration. It carries no `NEXT_PUBLIC_` prefix, so it never
   enters a client bundle — which is what the rule against browser-visible infrastructure values in
   [environments](environments.md#configuration-principles) requires.
-- The image builds without a running backend. Every curriculum route is `force-dynamic`, so nothing
-  is fetched while prerendering.
+- The image builds without a running backend. Every curriculum and setup route is `force-dynamic`, so
+  nothing is fetched while prerendering.
 
 `compose.yaml` fixes `API_BASE_URL` to `http://backend:${API_PORT:-8000}` rather than interpolating
 it whole, for the reason `DATABASE_URL` is fixed: a developer's `.env` names the backend's published

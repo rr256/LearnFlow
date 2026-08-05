@@ -2,7 +2,7 @@
 title: LearnFlow Architecture Decision Register
 status: approved
 owner: architecture
-last_updated: 2026-08-03
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - ../adr/README.md
@@ -57,7 +57,8 @@ These are register statuses. They are distinct from the document `status` field 
 | DEC-024 | PostgreSQL persistence uses synchronous SQLAlchemy with psycopg 3. The schema is migrated one area per milestone, starting with the curriculum tables; `schema.md` remains the approved target for every area it documents — six when this decision was recorded, seven since DEC-026 added the examination schedule. Controlled values are validated text guarded by a `CHECK` constraint, and one active curriculum version per program is enforced by a partial unique index. | Approved | [Database schema](../database/schema.md), [Database migrations](../database/migrations.md) | Accepted — [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) |
 | DEC-025 | Curriculum is loaded from a versioned data file by an idempotent seed that matches every record on a database-enforced natural key, updates in place, and never deletes. A topic code is unique within its subject; a subject or topic dropped from the source keeps its row. | Approved | [Database migrations](../database/migrations.md), [Database schema](../database/schema.md) | Accepted — [ADR-012](../adr/ADR-012-curriculum-seed-and-reconciliation.md) |
 | DEC-026 | An examination period is published reference data modelled as a dated window, never a single guessed date. An examination schedule belongs to a learning program and cycle, carries its source and a `provisional`/`confirmed` status, and is loaded by its own idempotent seed. A study goal references a schedule, a target date, or both, enforced by a `CHECK`. The default learner timezone is `APP_DEFAULT_TIMEZONE`, defaulting to `Asia/Kolkata`. | Approved | [Database schema](../database/schema.md), [Domain model](../domain/domain-model.md), [Terminology](../domain/terminology.md) | Accepted — [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) |
-| DEC-027 | Every `/api/v1` response uses the `data` envelope, and every collection carries a `pagination` block with `limit`, `offset`, and `total` from its first version. Every failure — including one the application did not raise — returns the error envelope with a code from a closed catalogue: `not_found`, `method_not_allowed`, `validation_error`, `internal_error`, and `request_failed` as the fallback. A `details` entry is `field`, `message`, and `type`, and never the rejected input; a `500` never carries the reason. | Approved | [API conventions](../api/conventions.md), [API endpoints](../api/endpoints.md), [API versioning](../api/versioning.md) | Accepted — [ADR-014](../adr/ADR-014-api-response-contract.md) |
+| DEC-027 | Every `/api/v1` response uses the `data` envelope, and every collection carries a `pagination` block with `limit`, `offset`, and `total` from its first version. Every failure — including one the application did not raise — returns the error envelope with a code from a closed catalogue: `not_found`, `method_not_allowed`, `validation_error`, `internal_error`, and `request_failed` as the fallback. A `details` entry is `field`, `message`, and `type`, and never the rejected input; a `500` never carries the reason. `conflict` joined the catalogue for `409` with DEC-028. | Approved | [API conventions](../api/conventions.md), [API endpoints](../api/endpoints.md), [API versioning](../api/versioning.md) | Accepted — [ADR-014](../adr/ADR-014-api-response-contract.md) |
+| DEC-028 | The learner and study-goal endpoint deferral is discharged for LRN-001, LRN-002, and GOAL-001 to GOAL-004, and EXM-001 is added so a learner can choose a published examination cycle. Their request and response contracts are fixed, `409` gains the code `conflict`, and the setup screen writes through a Next.js server action, so no browser calls the API and no CORS is introduced. GOAL-005 stays deferred on the `day_of_week` decision, not on a client. Per-endpoint fields and rules live in [API endpoints](../api/endpoints.md#learner-setup-and-goal-endpoints). | Approved | [API endpoints](../api/endpoints.md), [API conventions](../api/conventions.md), [Database schema](../database/schema.md) | ADR proposed — [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md) |
 
 ## Deferred Decisions
 
@@ -94,6 +95,14 @@ These ADRs are accepted and hold the durable rationale, alternatives, and conseq
 | [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) | Model an examination period as a published window of reference data | DEC-026 |
 | [ADR-014](../adr/ADR-014-api-response-contract.md) | Fix the public HTTP API response contract | DEC-027 |
 | [ADR-015](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) | Build the frontend on Next.js and reach the API from the server | DEC-008 |
+
+## Proposed ADRs
+
+Drafted, implemented alongside, and awaiting project-owner acceptance:
+
+| ADR | Decision | Register entry |
+| --- | --- | --- |
+| [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md) | Fix the learner onboarding API contracts | DEC-028 |
 
 Decisions still marked **ADR pending** above have an approved direction but no formal ADR yet. Create the ADR before or alongside implementation of the affected area.
 

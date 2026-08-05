@@ -2,12 +2,13 @@
 title: LearnFlow API Conventions
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-01
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - endpoints.md
   - versioning.md
   - ../adr/ADR-014-api-response-contract.md
+  - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../architecture/clean-architecture.md
 ---
 
@@ -159,9 +160,21 @@ these three keys and no others:
 | --- | --- | --- |
 | `404` | `not_found` | The addressed record does not exist, or the path matches no endpoint. |
 | `405` | `method_not_allowed` | The path exists but does not support the method used. |
+| `409` | `conflict` | The request conflicts with what is already stored. |
 | `422` | `validation_error` | Request validation failed. `details` names each offending field. |
 | `500` | `internal_error` | An unexpected server failure. No internal detail is returned. |
 | any other | `request_failed` | Fallback for a status no endpoint yet returns deliberately. Give a status its own code here when an endpoint starts using it. |
+
+`conflict` was added with the learner and study-goal endpoints, the first to return `409`
+deliberately. Three conditions produce it today, and each is a request that cannot be satisfied
+because of what is or is not already stored, rather than a malformed one:
+
+- An active study goal already exists for the learning program (GOAL-001).
+- No learner exists yet, so there is nobody to own a goal (GOAL-001).
+- More than one learner is stored, so the local learner is undefined (every learner-owned endpoint).
+
+Adding the code was a compatible change under the rule below, because `409` previously fell back to
+`request_failed`.
 
 The `404` code is `not_found`, not `resource_not_found`. **Resource** is a canonical LearnFlow term for a learner's study material, and `/api/v1/resources` is reserved for it under RES-001 to RES-008; a generic code carrying that word would make one name mean two things. See [terminology](../domain/terminology.md) and [ADR-014](../adr/ADR-014-api-response-contract.md).
 
@@ -293,6 +306,7 @@ Each endpoint entry in `endpoints.md` must define:
 
 - [Project context](../00-project-context.md)
 - [ADR-014: Fix the public HTTP API response contract](../adr/ADR-014-api-response-contract.md) — the durable rationale for the envelope, the pagination block, and the error-code catalogue
+- [ADR-016: Fix the learner onboarding API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the change that added `conflict` to the catalogue above
 - [API endpoints](endpoints.md)
 - [API versioning](versioning.md)
 - [Clean Architecture](../architecture/clean-architecture.md)

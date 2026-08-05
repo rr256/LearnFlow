@@ -1,0 +1,257 @@
+"""The learner onboarding endpoints against a real PostgreSQL database.
+
+The API tests prove the contract against fakes. These prove the part a fake
+cannot: that the SQL the repositories emit writes and reads the learner and the
+goal the seeds actually created, that the database `CHECK` constraints agree with
+the rules the use cases enforce, and that a request reporting a failure commits
+nothing -- all through the same composition root the running backend uses.
+
+Skipped unless ``TEST_DATABASE_URL`` names a disposable database; see
+tests/integration/conftest.py.
+"""
+
+import uuid
+from collections.abc import Iterator
+from datetime import UTC, datetime
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import Engine, func, select
+from sqlalchemy.orm import Session
+
+from app.application.use_cases.seed_curriculum import SeedCurriculum
+from app.application.use_cases.seed_examination_schedule import SeedExaminationSchedule
+from app.composition.app_factory import create_app
+from app.composition.config import Settings
+from app.infrastructure.persistence.curriculum_seed_repository import (
+    SqlAlchemyCurriculumSeedRepository,
+)
+from app.infrastructure.persistence.examination_schedule_seed_repository import (
+    SqlAlchemyExaminationScheduleSeedRepository,
+)
+from app.infrastructure.persistence.learner_planning import Learner, StudyGoal
+from scripts.curriculum_seed_file import GATE_CSE_CURRICULUM_FILE, load_curriculum_seed
+from scripts.examination_schedule_file import (
+    GATE_CSE_EXAMINATION_SCHEDULE_FILE,
+    load_examination_schedule,
+)
+
+LEARNER = "/api/v1/learner"
+SCHEDULES = "/api/v1/examination-schedules"
+GOALS = "/api/v1/study-goals"
+CURRICULUM = "/api/v1/curriculum"
+SEED_TIME = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
+
+
+@pytest.fixture
+def seeded_reference_data(session: Session) -> None:
+    """Load the curriculum and the published schedule, as the seed commands do."""
+    SeedCurriculum(SqlAlchemyCurriculumSeedRepository(session), clock=lambda: SEED_TIME)(
+        load_curriculum_seed(GATE_CSE_CURRICULUM_FILE)
+    )
+    session.commit()
+    SeedExaminationSchedule(SqlAlchemyExaminationScheduleSeedRepository(session))(
+        load_examination_schedule(GATE_CSE_EXAMINATION_SCHEDULE_FILE)
+    )
+    session.commit()
+
+
+@pytest.fixture
+def client(
+    migrated_database: Engine, database_url: str, seeded_reference_data: None
+) -> Iterator[TestClient]:
+    """A client wired to the test database through the real composition root."""
+    app = create_app(Settings(database_url=database_url))
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def gate_cse(client: TestClient) -> dict:
+    """The seeded GATE CSE program, read back through CUR-001."""
+    programs = client.get(f"{CURRICULUM}/programs").json()["data"]
+    return next(program for program in programs if program["code"] == "gate-cse")
+
+
+@pytest.fixture
+def gate_2027(client: TestClient, gate_cse: dict) -> dict:
+    """The seeded GATE 2027 schedule, read back through EXM-001."""
+    body = client.get(f"{SCHEDULES}?learning_program_id={gate_cse['id']}").json()
+    return next(schedule for schedule in body["data"] if schedule["cycle_label"] == "2027")
+
+
+# -- EXM-001 over seeded data ----------------------------------------------
+
+
+def test_the_seeded_schedule_is_readable_with_its_provenance(gate_2027):
+    assert gate_2027["name"] == "GATE 2027"
+    assert gate_2027["schedule_status"] == "provisional"
+    assert gate_2027["source_reference"].startswith("https://")
+    assert gate_2027["organising_body"]
+
+
+def test_the_seeded_schedule_reports_a_window_spanning_its_sitting_weekends(gate_2027):
+    """Three weekends, one window, and no single examination date; ADR-013."""
+    window = gate_2027["examination_window"]
+    sittings = [period for period in gate_2027["periods"] if period["period_type"] == "examination"]
+
+    assert len(sittings) == 3
+    assert window["starts_on"] == min(period["starts_on"] for period in sittings)
+    assert window["ends_on"] == max(period["ends_on"] for period in sittings)
+
+
+def test_the_seeded_schedule_reports_its_registration_deadlines(gate_2027):
+    types = {period["period_type"] for period in gate_2027["periods"]}
+
+    assert {"registration", "late_registration", "results"} <= types
+
+
+# -- LRN-001 and LRN-002 over a real database ------------------------------
+
+
+def test_the_profile_is_absent_until_setup_creates_it(client, session):
+    body = client.get(f"{LEARNER}/profile").json()
+
+    assert body["data"] is None
+    assert session.scalar(select(func.count()).select_from(Learner)) == 0
+
+
+def test_updating_the_profile_writes_the_learner_row(client, session):
+    body = client.patch(
+        f"{LEARNER}/profile", json={"display_name": "Asha", "timezone": "Europe/Lisbon"}
+    ).json()
+
+    stored = session.scalar(select(Learner))
+    assert stored is not None
+    assert (str(stored.id), stored.display_name, stored.timezone) == (
+        body["data"]["id"],
+        "Asha",
+        "Europe/Lisbon",
+    )
+
+
+def test_a_created_learner_takes_the_configured_default_timezone(client, session):
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+
+    stored = session.scalar(select(Learner))
+    assert stored is not None
+    assert stored.timezone == "Asia/Kolkata"
+
+
+# -- GOAL-001 to GOAL-004 over a real database -----------------------------
+
+
+def test_creating_a_goal_writes_the_row_bound_to_the_active_curriculum_version(
+    client, session, gate_cse, gate_2027
+):
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+
+    body = client.post(
+        GOALS,
+        json={
+            "learning_program_id": gate_cse["id"],
+            "examination_schedule_id": gate_2027["id"],
+        },
+    ).json()
+
+    stored = session.scalar(select(StudyGoal))
+    assert stored is not None
+    assert str(stored.curriculum_version_id) == gate_cse["active_curriculum_version"]["id"]
+    assert str(stored.examination_schedule_id) == gate_2027["id"]
+    assert body["data"]["curriculum_version"]["status"] == "active"
+
+
+def test_a_created_goal_reports_the_seeded_examination_window(client, gate_cse, gate_2027):
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+
+    body = client.post(
+        GOALS,
+        json={
+            "learning_program_id": gate_cse["id"],
+            "examination_schedule_id": gate_2027["id"],
+        },
+    ).json()
+
+    assert body["data"]["examination"]["examination_window"] == gate_2027["examination_window"]
+
+
+def test_a_goal_survives_a_round_trip_through_the_read_endpoints(client, gate_cse, gate_2027):
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+    created = client.post(
+        GOALS,
+        json={
+            "learning_program_id": gate_cse["id"],
+            "examination_schedule_id": gate_2027["id"],
+            "target_date": "2027-01-31",
+        },
+    ).json()["data"]
+
+    read_back = client.get(f"{GOALS}/{created['id']}").json()["data"]
+    listed = client.get(GOALS).json()
+
+    assert read_back == created
+    assert listed["data"] == [created]
+    assert listed["pagination"]["total"] == 1
+
+
+def test_updating_a_goal_writes_only_what_it_names(client, session, gate_cse, gate_2027):
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+    created = client.post(
+        GOALS,
+        json={
+            "learning_program_id": gate_cse["id"],
+            "examination_schedule_id": gate_2027["id"],
+            "target_date": "2027-01-31",
+        },
+    ).json()["data"]
+
+    client.patch(f"{GOALS}/{created['id']}", json={"status": "paused"})
+
+    session.expire_all()
+    stored = session.scalar(select(StudyGoal))
+    assert stored is not None
+    assert stored.status == "paused"
+    assert str(stored.examination_schedule_id) == gate_2027["id"]
+
+
+def test_a_rejected_goal_leaves_no_row_behind(client, session, gate_cse):
+    """A request that reported a failure must commit nothing."""
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+
+    response = client.post(GOALS, json={"learning_program_id": gate_cse["id"]})
+
+    assert response.status_code == 422
+    assert session.scalar(select(func.count()).select_from(StudyGoal)) == 0
+
+
+def test_a_conflicting_second_goal_leaves_the_first_untouched(client, session, gate_cse, gate_2027):
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+    body = {
+        "learning_program_id": gate_cse["id"],
+        "examination_schedule_id": gate_2027["id"],
+    }
+    client.post(GOALS, json=body)
+
+    response = client.post(GOALS, json=body)
+
+    assert response.status_code == 409
+    assert session.scalar(select(func.count()).select_from(StudyGoal)) == 1
+
+
+def test_a_goal_referencing_an_unknown_schedule_is_refused_before_the_database_sees_it(
+    client, session, gate_cse
+):
+    """The use case names the offending field; a foreign key would only raise a 500."""
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+
+    response = client.post(
+        GOALS,
+        json={
+            "learning_program_id": gate_cse["id"],
+            "examination_schedule_id": str(uuid.uuid4()),
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "body.examination_schedule_id"
+    assert session.scalar(select(func.count()).select_from(StudyGoal)) == 0
