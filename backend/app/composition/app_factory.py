@@ -12,11 +12,27 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.composition.config import Settings, load_settings
-from app.composition.providers import build_read_curriculum_provider
+from app.composition.providers import (
+    build_learner_profile_provider,
+    build_read_curriculum_provider,
+    build_read_examination_schedules_provider,
+    build_study_goals_provider,
+)
 from app.infrastructure.persistence.engine import create_database_engine, create_session_factory
-from app.presentation.api.dependencies import READ_CURRICULUM_PROVIDER
+from app.presentation.api.dependencies import (
+    LEARNER_PROFILE_PROVIDER,
+    READ_CURRICULUM_PROVIDER,
+    READ_EXAMINATION_SCHEDULES_PROVIDER,
+    STUDY_GOALS_PROVIDER,
+)
 from app.presentation.api.errors import register_error_handlers
-from app.presentation.api.routes import curriculum, health
+from app.presentation.api.routes import (
+    curriculum,
+    examination_schedules,
+    health,
+    learner,
+    study_goals,
+)
 
 
 @asynccontextmanager
@@ -57,9 +73,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.session_factory = session_factory
 
     # The presentation layer asks for use cases, not repositories. Installing
-    # the provider here keeps the choice of implementation in the only layer
-    # permitted to make it.
+    # the providers here keeps the choice of implementation in the only layer
+    # permitted to make it. The learner-owned providers also own the
+    # transaction, so no route has to remember to commit.
     setattr(app.state, READ_CURRICULUM_PROVIDER, build_read_curriculum_provider(session_factory))
+    setattr(
+        app.state,
+        READ_EXAMINATION_SCHEDULES_PROVIDER,
+        build_read_examination_schedules_provider(session_factory),
+    )
+    setattr(
+        app.state,
+        LEARNER_PROFILE_PROVIDER,
+        build_learner_profile_provider(
+            session_factory, default_timezone=settings.app_default_timezone
+        ),
+    )
+    setattr(app.state, STUDY_GOALS_PROVIDER, build_study_goals_provider(session_factory))
 
     # Registered before the routers so every failure -- including a 404 for a
     # path no router claims -- is reported in the documented error envelope.
@@ -67,4 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(curriculum.router)
+    app.include_router(examination_schedules.router)
+    app.include_router(learner.router)
+    app.include_router(study_goals.router)
     return app

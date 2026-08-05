@@ -23,9 +23,7 @@ completed, or archived -- that is history, not a draft.
 
 import uuid
 from collections.abc import Sequence
-from datetime import date
 
-from app.application.dto.examination_schedule_seed import EXAMINATION_PERIOD_TYPE
 from app.application.dto.study_goal import (
     ExaminationGoalSummary,
     RecordChange,
@@ -41,6 +39,7 @@ from app.application.ports.study_goal_repository import (
     StudyGoalRecord,
     StudyGoalRepository,
 )
+from app.application.use_cases.examination_window import derive_examination_window
 
 ACTIVE_STATUS = "active"
 
@@ -222,8 +221,9 @@ class SetStudyGoal:
 def _summarise(
     schedule: ExaminationScheduleRecord, periods: Sequence[ExaminationPeriodRecord]
 ) -> ExaminationGoalSummary:
-    starts_on, ends_on = _examination_window(periods)
+    starts_on, ends_on = derive_examination_window(periods)
     return ExaminationGoalSummary(
+        id=schedule.id,
         cycle_label=schedule.cycle_label,
         name=schedule.name,
         schedule_status=schedule.schedule_status,
@@ -232,25 +232,4 @@ def _summarise(
         organising_body=schedule.organising_body,
         window_starts_on=starts_on,
         window_ends_on=ends_on,
-    )
-
-
-def _examination_window(
-    periods: Sequence[ExaminationPeriodRecord],
-) -> tuple[date | None, date | None]:
-    """The first and last day the examination is sat.
-
-    Registration and results periods are excluded: they bracket the examination
-    rather than being it, and including them would widen the window a plan is
-    built against by months.
-
-    Returns ``(None, None)`` when a stored schedule has no examination period,
-    which the seed refuses to create but a hand-edited database could hold.
-    """
-    sittings = [period for period in periods if period.period_type == EXAMINATION_PERIOD_TYPE]
-    if not sittings:
-        return None, None
-    return (
-        min(period.starts_on for period in sittings),
-        max(period.ends_on for period in sittings),
     )

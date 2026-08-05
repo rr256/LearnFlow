@@ -2,7 +2,7 @@
 title: "ADR-013: Model an Examination Period as a Published Window of Reference Data"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-03
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
@@ -11,6 +11,7 @@ related:
   - ADR-012-curriculum-seed-and-reconciliation.md
   - ADR-014-api-response-contract.md
   - ADR-015-frontend-foundation-and-server-rendered-api-access.md
+  - ADR-016-learner-onboarding-api-contracts.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../domain/domain-model.md
@@ -93,6 +94,37 @@ study-goal endpoint was added, no schema for one was written, and the examinatio
 goal are still reached only by `scripts.seed_examination_schedule` and `scripts.set_study_goal`. The
 learner-planning area's first-API-contract review in [database/schema.md](../database/schema.md)
 accordingly stays **pending**.
+
+### Implementation status — 2026-08-05
+
+**The deferral is discharged, for six of the seven endpoints.** A learner setup screen now exists and
+consumes them, which settles the ambiguity the note above identified under either reading of the
+condition. [ADR-016](ADR-016-learner-onboarding-api-contracts.md) fixes the request and response
+contracts of LRN-001, LRN-002, and GOAL-001 to GOAL-004, and adds EXM-001 so a learner can choose a
+published cycle rather than name one — the gap this record left when it said an examination window
+reaches a client through a goal response, which a learner without a goal has not got.
+
+**GOAL-005 remains deferred, but for a different reason than this record gave.** It waits on
+`availability_slots` and the `day_of_week` numbering convention that
+[ADR-011](ADR-011-sqlalchemy-persistence-implementation.md) keeps open — a schema decision, which a
+caller's existence does not unblock. The bullet under *Neutral* below already anticipated this:
+`availability_slots` "stays behind, because it would force the `day_of_week` convention that no
+requirement yet constrains."
+
+**Two statements above are now overtaken**, and as with the earlier notes the accepted text is left
+as written:
+
+- Under [Reconciliation is an application use case, and there is no HTTP surface yet](#reconciliation-is-an-application-use-case-and-there-is-no-http-surface-yet),
+  "No endpoint is added" and the schema deferral that follows it describe the state at acceptance.
+  Endpoints now exist.
+- The *Neutral* bullet "`examination_schedules` and `study_goals` are written but read by nothing but
+  the commands that write them" no longer holds: EXM-001 and the goal endpoints read both.
+
+**Nothing else changed.** The window model, the provenance rules, the `CHECK` requiring a goal to aim
+at something, and the default learner timezone are all implemented as decided here, and ADR-016
+required **no migration** — the tables this record created hold everything the new contracts return.
+The learner-planning and examination-schedule first-API-contract reviews in
+[database/schema.md](../database/schema.md) are accordingly discharged.
 
 ## Context
 
@@ -326,6 +358,7 @@ curriculum area's first-API-contract review as pending for the same reason.
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](ADR-012-curriculum-seed-and-reconciliation.md) — the seed rules this record reuses
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the envelope and error contract the deferred goal endpoints will answer in
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the client whose existence reopens the deferral above
+- [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the record that discharges that deferral, and the endpoint schemas this one left open
 - [Database schema](../database/schema.md) — the tables and constraints this record decides
 - [Database migrations](../database/migrations.md) — the seed's commands and operational rules
 - [Domain model](../domain/domain-model.md) — the examination schedule concept

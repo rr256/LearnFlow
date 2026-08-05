@@ -1,10 +1,14 @@
-"""Fixtures for API tests that need curriculum data behind the endpoints.
+"""Fixtures for API tests that need data behind the endpoints.
 
-The application is built through the real factory and the real use case; only
-the repository is replaced. An API test therefore exercises routing, validation,
-response mapping, and error mapping over the same code the running backend uses,
-without needing PostgreSQL. The database counterpart is
-tests/integration/test_curriculum_api.py.
+The application is built through the real factory and the real use cases; only
+the repositories are replaced. An API test therefore exercises routing,
+validation, response mapping, and error mapping over the same code the running
+backend uses, without needing PostgreSQL. The database counterparts are
+tests/integration/test_curriculum_api.py and
+tests/integration/test_learner_onboarding_api.py.
+
+The onboarding stores are defined in `onboarding_fixtures.py`; the two fixtures
+at the foot of this module are what a test asks for.
 """
 
 import uuid
@@ -26,6 +30,7 @@ from app.application.ports.curriculum_seed_repository import (
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.composition.app_factory import create_app
 from app.presentation.api.dependencies import READ_CURRICULUM_PROVIDER
+from tests.api.onboarding_fixtures import Onboarding, install_onboarding
 from tests.unit.fake_curriculum_repository import FakeCurriculumRepository
 
 PUBLISHED_AT = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
@@ -114,5 +119,25 @@ def curriculum_client(curriculum: Curriculum) -> Iterator[TestClient]:
     """A client whose curriculum endpoints serve the fixture curriculum."""
     app = create_app()
     install_reader(app, lambda: ReadCurriculum(curriculum.repository()))
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture
+def onboarding() -> Onboarding:
+    """The learner, goal, and schedule stores the onboarding endpoints share."""
+    return Onboarding()
+
+
+@pytest.fixture
+def onboarding_client(onboarding: Onboarding) -> Iterator[TestClient]:
+    """A client whose learner, goal, and schedule endpoints share one set of stores.
+
+    They are shared deliberately: a test can create a profile over LRN-002 and
+    then set a goal over GOAL-001, which is the sequence the setup screen
+    performs.
+    """
+    app = create_app()
+    install_onboarding(app, onboarding)
     with TestClient(app) as client:
         yield client

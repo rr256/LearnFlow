@@ -2,12 +2,13 @@
 title: "ADR-014: Fix the Public HTTP API Response Contract"
 status: accepted
 owner: architecture-and-api
-last_updated: 2026-08-01
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - ADR-001-clean-architecture.md
   - ADR-010-feature-delivery-workflow.md
   - ADR-013-examination-schedule-and-study-goal.md
+  - ADR-016-learner-onboarding-api-contracts.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -21,6 +22,24 @@ related:
 ## Status
 
 Accepted — 2026-08-01
+
+## Implementation status — 2026-08-05
+
+*The decision below is unchanged. Two statements in it have been overtaken, and are left as written.*
+
+- **The catalogue has gained a code.** `409` now returns `conflict`, added with the learner and
+  study-goal endpoints — the first to return that status deliberately. This is exactly the mechanism
+  the decision provides for ("A status gains its own code in the change where an endpoint starts
+  returning it deliberately"), and it is compatible, because `409` previously fell back to
+  `request_failed`. [api/conventions.md](../api/conventions.md#error-codes) holds the current
+  catalogue and stays authoritative, as the implementation note below already says.
+- **The endpoint deferral this record refers to is discharged.** Under
+  [Implementation notes](#implementation-notes), "The deferred learner and study-goal endpoints —
+  LRN-001, LRN-002, and GOAL-001 to GOAL-005 — remain deferred by ADR-013" describes the state at
+  acceptance. [ADR-016](ADR-016-learner-onboarding-api-contracts.md) has since fixed the contracts of
+  all but GOAL-005, and they respond in this record's envelope, as it anticipated.
+- Under [Neutral](#neutral), "The contract is implemented only by OPS-001 and CUR-001 to CUR-003
+  today" is likewise superseded: EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004 implement it too.
 
 ## Context
 
@@ -238,6 +257,7 @@ it needs a major version.
 - [ADR-001: Adopt Clean Architecture](ADR-001-clean-architecture.md) — why HTTP mapping stays in the presentation layer
 - [ADR-010: Deliver features through pull requests with automated gates](ADR-010-feature-delivery-workflow.md) — the gate at which a public contract decision is raised
 - [ADR-013: Model an examination period as a published window of reference data](ADR-013-examination-schedule-and-study-goal.md) — the endpoints this contract will shape once their client exists
+- [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the record that shaped them, and that added `conflict` to the catalogue above
 - [API conventions](../api/conventions.md) — the catalogue this record decides
 - [API endpoint catalog](../api/endpoints.md) — the per-endpoint error codes
 - [API versioning](../api/versioning.md) — what makes a change to this contract breaking

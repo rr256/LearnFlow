@@ -1,0 +1,39 @@
+.summary {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  max-width: var(--measure);
+}
+
+.summary h2 {
+  font-size: 1.125rem;
+}
+
+.details {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.details dt {
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.details dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* The word carries the meaning; the colour only reinforces it. */
+.provisional {
+  color: var(--colour-notice-border);
+  font-weight: 400;
+}
+
+.source {
+  margin: var(--space-4) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}

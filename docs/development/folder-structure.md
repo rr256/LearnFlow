@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-03
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -13,6 +13,8 @@ related:
   - ../deployment/docker.md
   - ../adr/ADR-010-feature-delivery-workflow.md
   - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
+  - ../adr/ADR-016-learner-onboarding-api-contracts.md
+  - ../domain/terminology.md
 ---
 
 # LearnFlow Repository and Folder Structure
@@ -215,17 +217,20 @@ app/
 ├── page.module.css
 ├── not-found.tsx                           # Unmatched address, and notFound()
 ├── globals.css                             # Reset, colour tokens, focus styles
-└── curriculum/
-    ├── page.tsx                            # CUR-001, the learning-program list
-    ├── error.tsx                           # Last-resort render boundary
-    └── programs/[programId]/
-        ├── page.tsx                        # CUR-002 and CUR-003
-        └── page.module.css
+├── curriculum/
+│   ├── page.tsx                            # CUR-001, the learning-program list
+│   ├── error.tsx                           # Last-resort render boundary
+│   └── programs/[programId]/
+│       ├── page.tsx                        # CUR-002 and CUR-003
+│       └── page.module.css
+└── setup/
+    └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
+                                            # writes LRN-002 and GOAL-001/GOAL-004 via a server action
 ```
 
-Every curriculum route sets `dynamic = "force-dynamic"`. The curriculum lives in the database, so a
-build-time snapshot would go stale the moment the seed ran again — and the container build has no
-API to reach.
+Every curriculum and setup route sets `dynamic = "force-dynamic"`. The curriculum lives in the
+database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
+goal are learner data that changes on submission — and the container build has no API to reach.
 
 **There is no `loading.tsx` segment file, deliberately.** A segment file also covers every nested
 route, and a boundary over `programs/[programId]` commits a `200` before that page can call
@@ -252,7 +257,31 @@ quizzes/
 external-tests/
 ```
 
-Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `curriculum/` exists today and holds the program list and the subject/topic tree, each with its own CSS Module.
+Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `curriculum/` and `onboarding/` exist today.
+
+`onboarding/` holds the **learner setup** capability's screen. The module keeps the narrower name
+because a module directory names a UI flow, which is the one use
+[terminology](../domain/terminology.md) permits for *onboarding*; prose, endpoint groupings, and UI
+copy say *learner setup*.
+
+| Path | Responsibility |
+| --- | --- |
+| `curriculum/LearningProgramList.tsx` | The program list CUR-001 returns, with its CSS Module. |
+| `curriculum/CurriculumTree.tsx` | The subject and topic hierarchy CUR-003 returns, with its CSS Module. |
+| `onboarding/LearnerSetupForm.tsx` | The setup form. A client component only so it can show the last submission's result beside the field responsible; it calls no API itself. |
+| `onboarding/StudyGoalSummary.tsx` | The goal the learner has already set, with its examination window, source, and provisional status. |
+| `onboarding/submission.ts` | Reads the form into the two requests it makes, and owns the form's state shape. Plain functions, so they are testable without a running server. |
+| `onboarding/actions.ts` | The `"use server"` module holding the write path. |
+
+**A `"use server"` module may export only async functions.** Exporting a constant from one throws
+`A "use server" file can only export async functions` on the first request that reaches it — a `500`
+that neither `tsc --noEmit` nor `next build` reports. That is why the setup state shape and its
+initial value live in `submission.ts` rather than beside the action, and why
+`frontend/tests/server-actions.test.ts` checks the rule for every such module.
+
+A server action is still the Next.js server calling the API, so a write does not make the browser
+reach the backend and introduces no CORS; see
+[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md).
 
 ### `frontend/components/`
 
@@ -265,7 +294,7 @@ Frontend-only utilities, including the typed API client, request/error helpers, 
 | Path | Responsibility |
 | --- | --- |
 | `config.ts` | Resolves and validates `API_BASE_URL`. Takes the environment as a parameter so validation is testable without mutating `process.env`. |
-| `api-client.ts` | Typed calls to the curriculum endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only. |
+| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, and study-goal endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
 
 When the API answers with a failure, `ApiError.code` is the API's own code from the closed catalogue
 in [API conventions](../api/conventions.md#error-codes). Two client-side codes cover what the
@@ -281,7 +310,9 @@ TypeScript types based on public API contracts. Do not copy database/ORM types i
 
 ### `frontend/tests/`
 
-Vitest specs for the API client, the configuration reader, and the curriculum components. They stub `fetch` and reach no live backend, so `npm test` needs nothing running.
+Vitest specs for the API client, the configuration reader, the curriculum and learner-setup
+components, the setup form's submission parsing, and the `"use server"` export rule. They stub
+`fetch` and reach no live backend, so `npm test` needs nothing running.
 
 ## Docker and Scripts
 
@@ -379,6 +410,8 @@ Local data locations are configured through environment variables and Docker vol
 - [Technology stack](tech-stack.md)
 - [Coding standards](coding-standards.md)
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the decisions the frontend structure implements
+- [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the server-action write path the `onboarding/` module implements
+- [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [Database migrations](../database/migrations.md) — the authoritative description of the curriculum seed named in `backend/scripts/`
 - [Docker strategy](../deployment/docker.md) — what `compose.yaml`, `docker/`, and `.dockerignore` contain today

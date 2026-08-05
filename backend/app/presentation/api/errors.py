@@ -16,6 +16,7 @@ rather than sent empty; a null would tell a client a value exists.
 """
 
 import logging
+from collections.abc import Sequence
 from http import HTTPStatus
 from typing import Final
 
@@ -27,6 +28,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.status import (
     HTTP_404_NOT_FOUND,
     HTTP_405_METHOD_NOT_ALLOWED,
+    HTTP_409_CONFLICT,
     HTTP_422_UNPROCESSABLE_CONTENT,
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
@@ -43,12 +45,21 @@ VALIDATION_ERROR: Final = "validation_error"
 INTERNAL_ERROR: Final = "internal_error"
 REQUEST_FAILED: Final = "request_failed"
 
+# Added with the study-goal endpoints, the first to return 409 deliberately: an
+# active goal already exists for the program, or more than one learner is stored
+# so the local learner is undefined. Giving a status its own code where it
+# previously fell back to REQUEST_FAILED is a compatible change under
+# docs/api/versioning.md -- no documented code changes meaning, and a client
+# handling the fallback keeps working.
+CONFLICT: Final = "conflict"
+
 # The stable, machine-readable code for each status the API can currently
 # return. A status with no entry falls back to REQUEST_FAILED; give it its own
 # code here when an endpoint starts returning it deliberately.
 ERROR_CODES_BY_STATUS: Final[dict[int, str]] = {
     HTTP_404_NOT_FOUND: NOT_FOUND,
     HTTP_405_METHOD_NOT_ALLOWED: METHOD_NOT_ALLOWED,
+    HTTP_409_CONFLICT: CONFLICT,
     HTTP_422_UNPROCESSABLE_CONTENT: VALIDATION_ERROR,
     HTTP_500_INTERNAL_SERVER_ERROR: INTERNAL_ERROR,
 }
@@ -56,6 +67,7 @@ ERROR_CODES_BY_STATUS: Final[dict[int, str]] = {
 _DEFAULT_MESSAGES: Final[dict[int, str]] = {
     HTTP_404_NOT_FOUND: "The requested resource was not found.",
     HTTP_405_METHOD_NOT_ALLOWED: "That method is not supported for this path.",
+    HTTP_409_CONFLICT: "The request conflicts with the current state of the record.",
     HTTP_422_UNPROCESSABLE_CONTENT: "The request failed validation.",
     HTTP_500_INTERNAL_SERVER_ERROR: "An unexpected error occurred.",
 }
@@ -91,6 +103,26 @@ class ErrorResponse(BaseModel):
     """The documented error envelope."""
 
     error: ApiError
+
+
+class RequestRejected(StarletteHTTPException):
+    """An HTTP failure that names the request fields responsible for it.
+
+    A plain `HTTPException` carries a message but no `details`, which is enough
+    for a `404` and not enough for a rule a route checked itself -- "this goal
+    would aim at nothing" has an offending field, and a form should be able to
+    mark it. Raising this instead keeps the documented envelope while filling
+    `details` the same way a Pydantic failure does.
+
+    As everywhere else, the rejected value is never included (ADR-014).
+    """
+
+    def __init__(
+        self, status_code: int, detail: str, *, details: Sequence[ErrorDetail] = ()
+    ) -> None:
+        """Record the failure and the request fields responsible for it."""
+        super().__init__(status_code=status_code, detail=detail)
+        self.error_details: tuple[ErrorDetail, ...] = tuple(details)
 
 
 def register_error_handlers(app: FastAPI) -> None:
@@ -132,7 +164,11 @@ def _handle_http_exception(request: Request, exception: StarletteHTTPException) 
     default = _DEFAULT_MESSAGES.get(exception.status_code, _FALLBACK_MESSAGE)
     detail = exception.detail if isinstance(exception.detail, str) else ""
     message = detail if detail and detail != _reason_phrase(exception.status_code) else default
-    return _envelope(status_code=exception.status_code, message=message)
+    return _envelope(
+        status_code=exception.status_code,
+        message=message,
+        details=list(getattr(exception, "error_details", ())),
+    )
 
 
 def _reason_phrase(status_code: int) -> str:

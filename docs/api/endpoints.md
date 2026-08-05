@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-03
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - conventions.md
@@ -12,8 +12,10 @@ related:
   - ../database/schema.md
   - ../database/migrations.md
   - ../roadmap/milestones.md
+  - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-014-api-response-contract.md
+  - ../adr/ADR-016-learner-onboarding-api-contracts.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -89,29 +91,184 @@ Related entities: [learning program](../domain/entities.md#learning-program),
 [curriculum schema area](../database/schema.md#schema-areas). The rows they return are loaded by
 [the curriculum seed](../database/migrations.md#the-curriculum-seed).
 
+## Examination Schedule Endpoints
+
+Supports **FR-002 — Initial Learner Setup**.
+
+| ID | Method and path | Purpose | Primary response |
+| --- | --- | --- | --- |
+| EXM-001 | `GET /api/v1/examination-schedules` | List the published examination schedules a learner can aim at. | Schedules, each with its examination window, provenance, and dated periods. |
+
+An examination schedule is reference data, like the curriculum, so this endpoint resolves no learner
+identity and is synchronous. It exists because a learner setting a first goal has to *choose* a
+cycle: before it, a schedule reached a client only through a goal that already named one.
+
+### EXM-001 — `GET /api/v1/examination-schedules`
+
+Query parameters `learning_program_id` (a UUID, optional), `limit` (1–100, default 25), and `offset`
+(0 or greater, default 0). Returns `200` with the `data` array and the `pagination` block described
+in [conventions](conventions.md#success-response-shapes), ordered by descending `cycle_label`.
+
+Each item carries `id`, `learning_program_id`, `cycle_label`, `name`, `organising_body`,
+`source_reference`, `source_checked_on`, `schedule_status`, `examination_window`, and `periods`.
+
+`examination_window` is `{starts_on, ends_on}` spanning the first published sitting day to the last,
+derived from the `examination` periods alone; it is `null` when a stored schedule publishes no
+sitting day. There is deliberately no single examination date field: an examining body that publishes
+several sitting days has not named the learner's day. `schedule_status` is `provisional` or
+`confirmed` and travels with the dates wherever they are shown.
+
+`periods` lists every dated period — `registration`, `late_registration`, `examination`, and
+`results` — because the registration deadlines are the nearest actionable dates a learner has.
+
+An unknown `learning_program_id` returns an empty page rather than `404`: a filter that matches
+nothing is an empty result, not a missing record. Errors: `422` `validation_error` for a `limit`,
+`offset`, or `learning_program_id` outside those bounds or shapes.
+
+Related entities: [examination schedule](../domain/entities.md#examination-schedule) and
+[examination period](../domain/entities.md#examination-period). The rows it returns are loaded by
+[the examination schedule seed](../database/migrations.md#the-examination-schedule-seed).
+
 ## Learner Setup and Goal Endpoints
 
 Supports **FR-002 — Initial Learner Setup**.
 
-| ID | Method and path | Purpose | Primary request/result |
-| --- | --- | --- | --- |
-| LRN-001 | `GET /api/v1/learner/profile` | Read local learner profile/preferences. | Current learner summary. |
-| LRN-002 | `PATCH /api/v1/learner/profile` | Update learner display preferences/timezone. | Updated profile. |
-| GOAL-001 | `POST /api/v1/study-goals` | Create a study goal for a selected program/version, aiming at an examination cycle, a target date, or both. | Goal data, including the examination window when a cycle is named. |
-| GOAL-002 | `GET /api/v1/study-goals` | List the learner's goals. | Goal collection. |
-| GOAL-003 | `GET /api/v1/study-goals/{goal_id}` | Read one study goal. | Goal + availability summary. |
-| GOAL-004 | `PATCH /api/v1/study-goals/{goal_id}` | Update the examination cycle, target date, status, or planning preferences. | Updated goal. |
-| GOAL-005 | `PUT /api/v1/study-goals/{goal_id}/availability` | Replace recurring weekly available study time. | Saved availability slots. |
+| ID | Method and path | Purpose | Primary request/result | State |
+| --- | --- | --- | --- | --- |
+| LRN-001 | `GET /api/v1/learner/profile` | Read local learner profile/preferences. | Current learner summary. | Implemented |
+| LRN-002 | `PATCH /api/v1/learner/profile` | Update learner display preferences/timezone. | Updated profile. | Implemented |
+| GOAL-001 | `POST /api/v1/study-goals` | Create a study goal for a selected program, aiming at an examination cycle, a target date, or both. | Goal data, including the examination window when a cycle is named. | Implemented |
+| GOAL-002 | `GET /api/v1/study-goals` | List the learner's goals. | Goal collection. | Implemented |
+| GOAL-003 | `GET /api/v1/study-goals/{goal_id}` | Read one study goal. | Goal. | Implemented |
+| GOAL-004 | `PATCH /api/v1/study-goals/{goal_id}` | Update the examination cycle, target date, or status. | Updated goal. | Implemented |
+| GOAL-005 | `PUT /api/v1/study-goals/{goal_id}/availability` | Replace recurring weekly available study time. | Saved availability slots. | **Deferred** |
 
 A goal aims at an examination cycle, a target date, or both, and never at neither — a rule the
-database enforces. A response reports an examination as a **window** spanning the published sitting
-days, together with the source it came from and whether those dates are still provisional; it never
-reports a single examination date the examining body has not published. None of these endpoints is
-implemented; their request and response schemas are written with the client that consumes them.
+database enforces and the application refuses before the database sees it. A response reports an
+examination as a **window** spanning the published sitting days, together with the source it came
+from and whether those dates are still provisional; it never reports a single examination date the
+examining body has not published.
 
-That deferral is now **due for re-evaluation**: a frontend application exists, though no screen that
-would consume these endpoints does. [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md)
-owns the condition and records what has to be settled; this catalogue does not restate it.
+None of these endpoints accepts a `learner_id`: the effective learner is resolved server-side, per
+the [identity assumption](#identity-assumption) above. All are synchronous.
+
+The deferral [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) recorded is
+**discharged for LRN-001, LRN-002, and GOAL-001 to GOAL-004**, whose contracts are fixed by
+[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md) and defined below. GOAL-005 stays
+deferred for a different reason, given under it.
+
+### LRN-001 — `GET /api/v1/learner/profile`
+
+Returns `200` with the learner under `data`: `id`, `display_name`, and `timezone`.
+
+`data` is `null` before setup has created a learner. That is a real state of a fresh installation
+rather than a failure, so it is not a `404` a client would have to special-case — and a read never
+creates the record it did not find. Errors: `409` `conflict` when more than one learner is stored,
+because LearnFlow is single-learner until accounts exist and choosing one arbitrarily would show a
+learner somebody else's profile.
+
+### LRN-002 — `PATCH /api/v1/learner/profile`
+
+Request body: `display_name` (string or `null`) and `timezone` (an IANA zone name). Both are
+optional; an unknown field is rejected. Returns `200` with the updated profile in the shape LRN-001
+returns.
+
+This is where the local learner record comes into existence, on the learner's own action. A field the
+request omits is left alone, so a form that did not include the timezone cannot move every future
+plan by hours. `display_name: null` removes the stored name — absence deliberately cannot express
+that. `timezone: null` is rejected: a learner always has one.
+
+Errors: `422` `validation_error` for an unknown timezone, a `null` timezone, a request naming no
+field to change, or an unknown field; `409` `conflict` when more than one learner is stored.
+
+### GOAL-001 — `POST /api/v1/study-goals`
+
+Request body: `learning_program_id` (a UUID), `examination_schedule_id` (a UUID or `null`), and
+`target_date` (`YYYY-MM-DD` or `null`). An unknown field is rejected. Returns `201` with the goal
+under `data`.
+
+There is no `curriculum_version_id`. A goal binds to the program's **active** curriculum version, so
+a client cannot attach a learner to a draft or retired syllabus by naming its identifier. Accepting
+one later, once a reason exists to study an older version, is a compatible addition.
+
+A goal response carries `id`, `learner_id`, `status`, `target_date`, `learning_program`
+(`id`, `code`, `name`), `curriculum_version` (`id`, `version_label`, `status`), and `examination` —
+`null` for a goal aiming at a target date alone, and otherwise the schedule's `id`, `cycle_label`,
+`name`, `organising_body`, `source_reference`, `source_checked_on`, `schedule_status`, and
+`examination_window`.
+
+Errors: `422` `validation_error` when the request aims at neither a cycle nor a date, when the
+program or schedule is not stored, when the schedule belongs to another program, or when the program
+has no active curriculum version — `details` names the offending field in each case. `409` `conflict`
+when no learner exists yet, or when the learner already has an **active** goal for that program: the
+existing goal is what any plan was built from, so a repeated form submission must not replace it.
+Goals that are paused, completed, or archived are history and do not conflict.
+
+### GOAL-002 — `GET /api/v1/study-goals`
+
+Query parameters `limit` (1–100, default 25) and `offset` (0 or greater, default 0). Returns `200`
+with the `data` array and the `pagination` block, newest first, in the per-item shape GOAL-001
+returns.
+
+An installation where setup has not run has no learner and therefore no goals, which is an empty page
+rather than a failure. Errors: `422` `validation_error` for a window outside those bounds; `409`
+`conflict` when more than one learner is stored.
+
+### GOAL-003 — `GET /api/v1/study-goals/{goal_id}`
+
+`goal_id` is a UUID. Returns `200` with one goal under `data`, in the shape GOAL-001 returns.
+
+**No availability summary is returned**, unlike this catalogue's original intent line: `availability_slots`
+does not exist, for the reason given under GOAL-005.
+
+Errors: `404` `not_found` when no such goal is stored *or it belongs to another learner* —
+`conventions.md` treats "not visible to the caller" as a `404`, and saying "that exists but is not
+yours" would confirm a record the caller may not read. `422` `validation_error` when the path segment
+is not a UUID; `409` `conflict` when more than one learner is stored.
+
+### GOAL-004 — `PATCH /api/v1/study-goals/{goal_id}`
+
+Request body: `examination_schedule_id` (a UUID or `null`), `target_date` (`YYYY-MM-DD` or `null`),
+and `status` (`active`, `paused`, `completed`, or `archived`). All optional; an unknown field is
+rejected. Returns `200` with the updated goal.
+
+A field the request omits is left alone; an explicit `null` clears it. `status: null` is rejected: a
+goal always has one. The result must still aim at an examination cycle, a target date, or both.
+
+**Planning preferences are not accepted**, unlike this catalogue's original intent line.
+`study_goals.planning_preferences` is not created — [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md)
+held it back because nothing reads it and its shape is undecided, and
+[schema.md](../database/schema.md#study_goals) records it as an approved target rather than an
+existing column — so the field would promise storage the database has not got.
+
+Errors: `404` `not_found` as for GOAL-003; `422` `validation_error` when the update would leave the
+goal aiming at nothing, names an unknown status, names no field to change, or names a schedule that
+is not stored or belongs to another program; `409` `conflict` when more than one learner is stored.
+
+### GOAL-005 — deferred
+
+`PUT /api/v1/study-goals/{goal_id}/availability` is **not implemented**, and the reason is a schema
+decision rather than a contract one. It needs `availability_slots`, which does not exist: creating it
+would fix the `day_of_week` numbering convention that
+[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) records as open and no requirement
+yet constrains. It arrives with that decision.
+
+Two of [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s four acceptance
+criteria are met — setting a target examination schedule or completion date, and confirming the
+active learning program. Two are not:
+
+- *"The learner can set available study time and basic planning preferences"* — GOAL-005, waiting on
+  the decision above.
+- *"The learner can start with no previous progress and still receive an initial plan"* — no plan is
+  generated at all. PLN-001 arrives with [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision).
+
+Related entities: [learner](../domain/entities.md#learner) and
+[study goal](../domain/entities.md#study-goal). Related tables:
+[learner planning schema area](../database/schema.md#schema-areas). These endpoints read and write
+through the `ManageLearnerProfile` and `ManageStudyGoals` application use cases; the same rows are
+also maintained from the command line by
+[`scripts.set_study_goal`](../database/migrations.md#setting-the-local-learners-study-goal), which
+upserts the learner's active goal rather than refusing a second one.
 
 ## Planning Endpoints
 
@@ -211,9 +368,9 @@ These are manual learner-data endpoints. The MVP does not include Testbook/Made 
 Implement in an order that enables one working learner flow:
 
 1. Operational health and curriculum reads. **Done** — OPS-001 and CUR-001 to CUR-003.
-2. Learner setup and study-goal creation. Gated on the client that consumes it, per
-   [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md); the order below resumes once
-   those schemas can be written against a real caller.
+2. Learner setup and study-goal creation. **Done** — EXM-001, LRN-001, LRN-002, and GOAL-001 to
+   GOAL-004, contracted by [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md). GOAL-005
+   waits on the `day_of_week` decision, not on a client.
 3. Progress reads/updates and basic study activities.
 4. Plan generation/read/update.
 5. Revision reads/updates.
@@ -225,8 +382,10 @@ Implement in an order that enables one working learner flow:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
-- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — what a study goal aims at, and why the goal endpoints are deferred
+- [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — the open `day_of_week` decision GOAL-005 waits on
+- [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — what a study goal aims at, and the deferral ADR-016 discharges
 - [ADR-014: Fix the public HTTP API response contract](../adr/ADR-014-api-response-contract.md) — the envelope, pagination block, and error codes every endpoint here returns
+- [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the request and response fields of EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-04
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -16,6 +16,7 @@ related:
   - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
+  - ../adr/ADR-016-learner-onboarding-api-contracts.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -89,6 +90,11 @@ below with their evidence. `availability_slots` deliberately stayed behind — i
 numbering convention that no requirement yet constrains, which is what
 [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) exists to avoid.
 
+The learner setup half of this milestone is now delivered: EXM-001, LRN-001, LRN-002, and GOAL-001 to
+GOAL-004, and the `/setup` screen that consumes them, contracted by
+[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md) and needing no migration. Progress
+tracking is what remains.
+
 ### Definition of Done
 
 - [x] Published examination schedule seed/import is idempotent.
@@ -102,15 +108,23 @@ numbering convention that no requirement yet constrains, which is what
   by integration tests that apply the seed twice to an ephemeral PostgreSQL database in the CI
   `database` job. See [the examination schedule seed](../database/migrations.md#the-examination-schedule-seed)
   and [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
-- [ ] Learner profile/local identity is initialized safely. The `learners` table and the command that
-  creates the single local learner exist, ahead of this milestone; the safe-initialization question
-  is settled when an API and a frontend can reach it.
+- [x] Learner profile/local identity is initialized safely. LRN-001 reads the local learner's profile
+  and LRN-002 creates or updates it, contracted by
+  [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md). Safe initialization is what those
+  contracts settle: a read returns `data: null` rather than creating the record it did not find, so no
+  page load leaves a learner behind; the record is created by the learner's own action; the timezone
+  comes from `APP_DEFAULT_TIMEZONE` rather than a database default; a partial update leaves an omitted
+  field alone; no request accepts a `learner_id`, so no client can address another learner; and more
+  than one stored learner is refused with a `409` rather than resolved by guessing. Covered by unit,
+  API, and PostgreSQL integration tests.
 - [ ] Learner can select active GATE CSE curriculum, target date, and weekly availability. The
-  curriculum and examination goal halves are done: `python -m scripts.set_study_goal` binds the
-  learner to the active curriculum version and the published GATE 2027 examination window, and
-  `study_goals` persists it. Weekly availability remains, and needs `availability_slots` plus the
-  `day_of_week` numbering convention that is still an open decision. The goal aims at an examination
-  *window* rather than a guessed date; see
+  curriculum and examination goal halves are **done through the frontend**: `/setup` reads the
+  profile from LRN-001, the programs from CUR-001, the existing goal from GOAL-002, and the published
+  cycles from EXM-001, then writes through LRN-002 and GOAL-001 or GOAL-004 — binding the learner to
+  the program's active curriculum version and to an examination window, a target date, or both. `python -m scripts.set_study_goal` still does the same from the
+  command line. Weekly availability remains, and needs `availability_slots` plus the `day_of_week`
+  numbering convention that is still an open decision — GOAL-005 waits on that, not on a client. The
+  goal aims at an examination *window* rather than a guessed date; see
   [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md).
 - [x] Learner can browse curriculum in the frontend without hardcoded topic data. `/curriculum` lists
   the learning programs from CUR-001, and `/curriculum/programs/{id}` reads one program from CUR-002
@@ -226,4 +240,5 @@ numbering convention that no requirement yet constrains, which is what
 - [Database schema](../database/schema.md) — which schema areas exist today
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why part of Milestone 2's schema arrived in Milestone 1
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the frontend decisions behind the items above, including the loading-boundary rule
+- [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the contracts behind the learner setup items in Milestone 2
 - [Deferred ideas](future-ideas.md)

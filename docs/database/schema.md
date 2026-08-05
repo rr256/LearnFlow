@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-01
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - overview.md
@@ -12,6 +12,7 @@ related:
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -773,8 +774,26 @@ What the review settled:
 
 | Review input | State |
 | --- | --- |
-| The first API contracts | **Pending** — no endpoint reads a schedule. Review against the schemas when they are written. |
+| The first API contracts | **Reviewed 2026-08-05** — EXM-001 is implemented and its schema needs no change to the tables. See below. |
 | The actual revision-scheduling rules | Not applicable to this area. |
+
+No input is left pending, so **the examination schedule area is fully reviewed**.
+
+#### API-contract review outcome
+
+EXM-001, defined in [endpoints](../api/endpoints.md#exm-001-get-apiv1examination-schedules), reads
+these tables. **No schema change resulted.** What the review settled:
+
+- Every column the endpoint returns already exists, and it asks for none the tables do not hold.
+- The examination window stays derived rather than stored, as
+  [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) decided. The endpoint computes it
+  from the `examination` periods on each read, so a re-seeded correction reaches every reader at once.
+- `source_reference`, `source_checked_on`, `organising_body`, and `schedule_status` are all returned,
+  so a client can state where a date came from and whether it is settled. `source_reference` being
+  `NOT NULL` is what lets the response promise a source rather than a nullable one.
+- The `examination_periods(examination_schedule_id, starts_on)` index this area already creates serves
+  the periods read, which fetches every period of a page of schedules in one query.
+- No new index was needed. A single-learner installation holds one program and a handful of cycles.
 
 ### Learner planning area — partial review approved 2026-07-31
 
@@ -797,9 +816,44 @@ What the review settled:
 
 | Review input | State |
 | --- | --- |
-| The first API contracts | **Pending** — LRN-001, LRN-002, and GOAL-001 to GOAL-005 are defined at intent level in [endpoints](../api/endpoints.md); none is implemented, and all seven are deferred by [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) until the client that consumes them exists. |
+| The first API contracts | **Reviewed 2026-08-05** — LRN-001, LRN-002, and GOAL-001 to GOAL-004 are implemented and their schemas need no change to `learners` or `study_goals`. See below. |
 | The actual revision-scheduling rules | **Pending** — they constrain `study_plans` and `plan_items`, which arrive in Milestone 3. |
 | The `day_of_week` numbering convention | **Open** — needed by `availability_slots`, not created here. |
+
+Two inputs remain pending, and both belong to tables this review does not cover, so the area stays
+**partly reviewed** for `learners` and `study_goals` and unreviewed for the three tables that do not
+exist yet.
+
+#### API-contract review outcome
+
+The learner and study-goal endpoints, defined in
+[endpoints](../api/endpoints.md#learner-setup-and-goal-endpoints) and contracted by
+[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md), read and write these two tables.
+**No schema change resulted.** What the review settled:
+
+- Every column an endpoint returns already exists. `learners.display_name` being nullable is what
+  lets LRN-002 remove a name; `learners.timezone` being `NOT NULL` with no database default is what
+  makes the composition root supply `APP_DEFAULT_TIMEZONE` on creation rather than the database
+  inventing one.
+- `display_name` stays unbounded `text`. The API bounds it at 200 characters as a typo guard, which
+  is a contract constraint rather than a storage one; a longer name is a `422`, not a truncated row.
+- Both nullable goal columns and `ck_study_goals_aims_at_a_date_or_an_examination` hold exactly the
+  rule the endpoints enforce. The application refuses a goal aiming at nothing *before* the database
+  sees it, so the constraint stays a backstop rather than the error path — failing it there would
+  surface as an unexplained `500` instead of a `422` naming the fields.
+- `study_goals.curriculum_version_id` records the version a goal was created against and is never
+  rewritten by an update, so a retired version still reads back as the goal's own. GOAL-001 binds a
+  new goal to the program's active version instead of accepting one from a client.
+- The "one active goal per program" rule GOAL-001 enforces is **not** a database constraint. A partial
+  unique index on `(learner_id, learning_program_id) WHERE status = 'active'` would express it, and
+  was deliberately not added: the rule belongs to the create path only, no other writer exists —
+  `scripts.set_study_goal` updates its own active goal by design — and the index would make that
+  command's upsert fail where it currently succeeds. Recorded as intentional future work in
+  [deferred ideas](../roadmap/future-ideas.md#deferred-architecture-and-operations-ideas), with the
+  triggers that would justify adding it.
+- No index beyond the keys was needed, as recorded above. A single-learner installation holds one
+  learner and a handful of goals, so every access is a sequential scan of a few rows.
+- `planning_preferences` stays uncreated, and GOAL-004 accordingly does not accept it.
 
 ## Related Documents
 
@@ -809,6 +863,7 @@ What the review settled:
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — the migration ordering and the constraint choices this document records
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — why `uq_topics_subject_id_code` exists and how the curriculum tables are populated
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why the examination is periods rather than a date, and why `study_goals.target_date` is nullable
+- [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the endpoint contracts the two API reviews above were taken against
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated
