@@ -6,8 +6,15 @@ import { Suspense } from "react";
 import styles from "@/app/curriculum/programs/[programId]/page.module.css";
 import { Notice } from "@/components/Notice";
 import { CurriculumTree } from "@/features/curriculum/CurriculumTree";
-import { ApiError, readCurriculumTree, readLearningProgram } from "@/lib/api-client";
+import { stagesByTopicId } from "@/features/progress/stages";
+import {
+  ApiError,
+  listTopicProgress,
+  readCurriculumTree,
+  readLearningProgram,
+} from "@/lib/api-client";
 import type { CurriculumTree as CurriculumTreeData, LearningProgram } from "@/types/curriculum";
+import type { LearningStage } from "@/types/progress";
 
 export const metadata: Metadata = {
   title: "Learning program",
@@ -47,24 +54,58 @@ function LoadFailure({ error }: { error: ApiError }) {
 }
 
 /**
- * CUR-003 -- the version's subjects, topics, and subtopics.
+ * PRG-002 -- the stages this learner has recorded against the version's topics.
+ *
+ * A failure here is deliberately not fatal. The curriculum is reference data
+ * every reader can see; the stages are one learner's, and losing them should
+ * cost the reader the controls rather than the whole syllabus. Returning null
+ * renders the tree without them.
+ *
+ * `MAX_PAGE_SIZE` is not requested explicitly: the client already defaults this
+ * call to it, which covers the curated GATE CSE curriculum in one page. A
+ * curriculum large enough to exceed it would need paging here, and the
+ * `pagination` block is what would reveal that.
+ */
+async function recordedStages(
+  curriculumVersionId: string,
+): Promise<Map<string, LearningStage> | null> {
+  try {
+    return stagesByTopicId(await listTopicProgress({ curriculumVersionId }));
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    return null;
+  }
+}
+
+/**
+ * CUR-003 and PRG-002 -- the version's subjects and topics, with the learner's
+ * recorded stage beside each trackable one.
  *
  * Suspended by the page below, so the program's own details appear before the
  * tree arrives. Only this half is suspended: a boundary over the program lookup
  * would commit a `200` before that lookup could call `notFound()`, and a
  * mistyped program id would answer `200` instead of `404`.
+ *
+ * The two calls run together rather than in sequence: neither addresses the
+ * other's result, so the page waits once instead of twice.
  */
 async function CurriculumTreeSection({ curriculumVersionId }: { curriculumVersionId: string }) {
   let tree: CurriculumTreeData;
+  let stages: Map<string, LearningStage> | null;
   try {
-    tree = await readCurriculumTree(curriculumVersionId);
+    [tree, stages] = await Promise.all([
+      readCurriculumTree(curriculumVersionId),
+      recordedStages(curriculumVersionId),
+    ]);
   } catch (error) {
     if (!(error instanceof ApiError)) {
       throw error;
     }
     return <LoadFailure error={error} />;
   }
-  return <CurriculumTree tree={tree} />;
+  return <CurriculumTree stages={stages} tree={tree} />;
 }
 
 /**

@@ -15,6 +15,7 @@ from app.composition.providers import (
     build_learner_profile_provider,
     build_read_curriculum_provider,
     build_study_goals_provider,
+    build_topic_progress_provider,
 )
 
 
@@ -80,6 +81,27 @@ def test_the_learner_profile_provider_commits_when_the_caller_returns_cleanly():
 def test_the_learner_profile_provider_rolls_back_when_the_caller_raises():
     factory, session = session_factory()
     provider = build_learner_profile_provider(factory, default_timezone="Asia/Kolkata")  # type: ignore[arg-type]
+
+    with pytest.raises(RuntimeError), provider():
+        raise RuntimeError("the route failed")
+
+    assert (session.commits, session.rollbacks) == (0, 1)
+
+
+def test_the_topic_progress_provider_commits_when_the_caller_returns_cleanly():
+    factory, session = session_factory()
+    provider = build_topic_progress_provider(factory)  # type: ignore[arg-type]
+
+    with provider():
+        pass
+
+    assert (session.commits, session.rollbacks) == (1, 0)
+
+
+def test_the_topic_progress_provider_rolls_back_when_the_caller_raises():
+    """A rejected stage must leave no record behind."""
+    factory, session = session_factory()
+    provider = build_topic_progress_provider(factory)  # type: ignore[arg-type]
 
     with pytest.raises(RuntimeError), provider():
         raise RuntimeError("the route failed")

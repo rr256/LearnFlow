@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
+from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.application.use_cases.read_examination_schedules import ReadExaminationSchedules
 from app.infrastructure.persistence.curriculum_repository import SqlAlchemyCurriculumRepository
@@ -33,11 +34,15 @@ from app.infrastructure.persistence.learner_repository import SqlAlchemyLearnerR
 from app.infrastructure.persistence.study_goal_management_repository import (
     SqlAlchemyStudyGoalManagementRepository,
 )
+from app.infrastructure.persistence.topic_progress_repository import (
+    SqlAlchemyTopicProgressRepository,
+)
 
 ReadCurriculumProvider = Callable[[], AbstractContextManager[ReadCurriculum]]
 ReadExaminationSchedulesProvider = Callable[[], AbstractContextManager[ReadExaminationSchedules]]
 LearnerProfileProvider = Callable[[], AbstractContextManager[ManageLearnerProfile]]
 StudyGoalsProvider = Callable[[], AbstractContextManager[ManageStudyGoals]]
+TopicProgressProvider = Callable[[], AbstractContextManager[ManageTopicProgress]]
 
 
 def build_read_curriculum_provider(
@@ -112,6 +117,32 @@ def build_study_goals_provider(
                     learners=SqlAlchemyLearnerRepository(session),
                     goals=SqlAlchemyStudyGoalManagementRepository(session),
                     schedules=SqlAlchemyExaminationScheduleRepository(session),
+                )
+            except BaseException:
+                session.rollback()
+                raise
+            session.commit()
+
+    return provide
+
+
+def build_topic_progress_provider(
+    session_factory: sessionmaker[Session],
+) -> TopicProgressProvider:
+    """Build the provider that hands the topic-progress use case to one request.
+
+    It writes, so it owns the transaction like the other learner-owned
+    providers: a route that reported a saved stage over a rolled-back session
+    would tell a learner their work was recorded when it was not.
+    """
+
+    @contextmanager
+    def provide() -> Iterator[ManageTopicProgress]:
+        with session_factory() as session:
+            try:
+                yield ManageTopicProgress(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    progress=SqlAlchemyTopicProgressRepository(session),
                 )
             except BaseException:
                 session.rollback()

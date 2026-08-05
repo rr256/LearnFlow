@@ -18,12 +18,19 @@ from fastapi.testclient import TestClient
 
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
+from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.composition.app_factory import create_app
-from app.presentation.api.dependencies import LEARNER_PROFILE_PROVIDER, STUDY_GOALS_PROVIDER
+from app.presentation.api.dependencies import (
+    LEARNER_PROFILE_PROVIDER,
+    STUDY_GOALS_PROVIDER,
+    TOPIC_PROGRESS_PROVIDER,
+)
+from tests.api.conftest import Progress
 from tests.api.onboarding_fixtures import DEFAULT_TIMEZONE, Onboarding
 
 GOALS = "/api/v1/study-goals"
 LEARNER = "/api/v1/learner"
+PROGRESS = "/api/v1/progress/topics"
 
 
 class TransactionLog:
@@ -132,3 +139,58 @@ def test_a_not_found_rolls_back_rather_than_committing(
 
     assert response.status_code == 404
     assert (transaction_log.commits, transaction_log.rollbacks) == (0, 1)
+
+
+@pytest.fixture
+def progress_transactional_client(
+    progress: Progress, transaction_log: TransactionLog
+) -> Iterator[TestClient]:
+    """A client whose progress provider commits and rolls back as the real one does."""
+
+    @contextmanager
+    def provide_progress() -> Iterator[ManageTopicProgress]:
+        try:
+            yield ManageTopicProgress(learners=progress.learners, progress=progress.progress)
+        except BaseException:
+            transaction_log.rollbacks += 1
+            raise
+        transaction_log.commits += 1
+
+    app = create_app()
+    setattr(app.state, TOPIC_PROGRESS_PROVIDER, provide_progress)
+    with TestClient(app) as client:
+        yield client
+
+
+def test_a_recorded_stage_commits(progress_transactional_client, transaction_log, progress):
+    response = progress_transactional_client.patch(
+        f"{PROGRESS}/{progress.trackable.id}", json={"learning_stage": "practice_ready"}
+    )
+
+    assert response.status_code == 200
+    assert (transaction_log.commits, transaction_log.rollbacks) == (1, 0)
+
+
+def test_a_rejected_stage_rolls_back_rather_than_committing(
+    progress_transactional_client, transaction_log, progress
+):
+    """A 422 must leave no progress record behind, however the route raised it."""
+    response = progress_transactional_client.patch(
+        f"{PROGRESS}/{progress.trackable.id}", json={"learning_stage": "mastered"}
+    )
+
+    assert response.status_code == 422
+    assert (transaction_log.commits, transaction_log.rollbacks) == (0, 1)
+    assert progress.progress.records == []
+
+
+def test_a_grouping_topic_rejection_rolls_back_rather_than_committing(
+    progress_transactional_client, transaction_log, progress
+):
+    response = progress_transactional_client.patch(
+        f"{PROGRESS}/{progress.grouping.id}", json={"learning_stage": "practice_ready"}
+    )
+
+    assert response.status_code == 422
+    assert (transaction_log.commits, transaction_log.rollbacks) == (0, 1)
+    assert progress.progress.records == []

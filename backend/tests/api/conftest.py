@@ -27,11 +27,17 @@ from app.application.ports.curriculum_seed_repository import (
     TopicRecord,
     TopicRelationshipRecord,
 )
+from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.composition.app_factory import create_app
-from app.presentation.api.dependencies import READ_CURRICULUM_PROVIDER
+from app.presentation.api.dependencies import (
+    READ_CURRICULUM_PROVIDER,
+    TOPIC_PROGRESS_PROVIDER,
+)
 from tests.api.onboarding_fixtures import Onboarding, install_onboarding
 from tests.unit.fake_curriculum_repository import FakeCurriculumRepository
+from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
+from tests.unit.fake_topic_progress_repository import FakeTopicProgressRepository, topic
 
 PUBLISHED_AT = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
 
@@ -139,5 +145,57 @@ def onboarding_client(onboarding: Onboarding) -> Iterator[TestClient]:
     """
     app = create_app()
     install_onboarding(app, onboarding)
+    with TestClient(app) as client:
+        yield client
+
+
+class Progress:
+    """A learner, one trackable topic, and one grouping topic beside it.
+
+    The grouping topic is what the "a heading cannot hold a stage" rejection is
+    tested against, and it is the shape the curated GATE CSE curriculum actually
+    has: a parent topic that only groups subtopics.
+    """
+
+    def __init__(self) -> None:
+        self.learner = learner()
+        self.curriculum_version_id = uuid.uuid4()
+        self.subject_id = uuid.uuid4()
+        self.trackable = topic(
+            name="CPU scheduling",
+            subject_id=self.subject_id,
+            curriculum_version_id=self.curriculum_version_id,
+        )
+        self.grouping = topic(
+            name="Operating Systems",
+            is_trackable=False,
+            subject_id=self.subject_id,
+            curriculum_version_id=self.curriculum_version_id,
+        )
+        self.learners = FakeLearnerRepository((self.learner,))
+        self.progress = FakeTopicProgressRepository((self.trackable, self.grouping))
+
+
+@pytest.fixture
+def progress() -> Progress:
+    """The learner and topics the progress-endpoint tests read and write."""
+    return Progress()
+
+
+@pytest.fixture
+def progress_client(progress: Progress) -> Iterator[TestClient]:
+    """A client whose progress endpoints share one set of stores.
+
+    Shared across requests deliberately: a test can record a stage over PRG-004
+    and read it back over PRG-002, which is the sequence the curriculum screen
+    performs.
+    """
+    app = create_app()
+
+    @contextmanager
+    def provide() -> Iterator[ManageTopicProgress]:
+        yield ManageTopicProgress(learners=progress.learners, progress=progress.progress)
+
+    setattr(app.state, TOPIC_PROGRESS_PROVIDER, provide)
     with TestClient(app) as client:
         yield client

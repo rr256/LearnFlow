@@ -2,7 +2,7 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-01
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - overview.md
@@ -12,6 +12,7 @@ related:
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../deployment/environments.md
 ---
 
@@ -115,6 +116,7 @@ The applied revisions are:
 | `20260731_01` | `create_curriculum_tables` — learning programs, curriculum versions, subjects, topics, and topic relationships. |
 | `20260731_02` | `add_topic_code_unique_constraint` — `uq_topics_subject_id_code`, so a topic code identifies one topic within its subject. Additive; safe on populated tables. |
 | `20260801_01` | `create_examination_schedule_and_learner_goal_tables` — examination schedules and their dated periods, plus the first two learner-planning tables, `learners` and `study_goals`. Creates four empty tables; adds nothing to an existing one. |
+| `20260805_01` | `create_learner_topic_progress_table` — the first table of the progress area, holding one learning stage per learner and topic. Creates one empty table with five of its eight documented columns; adds nothing to an existing one. See [schema.md](schema.md#learner_topic_progress) for which three are deferred and why. |
 
 ## What Requires a Migration
 
@@ -193,7 +195,9 @@ Before accepting a migration:
 migrations to an empty database, compares the models against the resulting schema, attempts the
 writes each documented constraint forbids, and downgrades back to empty. Both seeds are exercised
 against the same database, each including a repeat run that must write nothing, and the whole local
-setup path — curriculum, schedule, goal — runs end to end against the bundled data files. The tests read
+setup path — curriculum, schedule, goal — runs end to end against the bundled data files. Topic
+progress is exercised over HTTP against the seeded curriculum, so the stage a learner records is
+written against a real syllabus topic rather than an invented one. The tests read
 `TEST_DATABASE_URL` and skip when it is unset, so they never touch development or learner data;
 [environments and configuration](../deployment/environments.md) records why it has no fallback. The
 CI `database` job supplies an ephemeral PostgreSQL service and fails if that database is
@@ -439,6 +443,7 @@ An AI assistant may propose or generate a migration, but it must not:
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — why the schema is migrated one area at a time
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — the durable rationale for the seed's matching, update, and never-delete rules
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the rationale for the examination schedule seed and the study goal it feeds
+- [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why revision `20260805_01` creates five of its table's eight documented columns
 - [CI/CD strategy](../deployment/ci-cd.md) — the `database` job that runs these migrations on every pull request
 - [Environments and configuration](../deployment/environments.md) — the authoritative catalogue for `DATABASE_URL` and `TEST_DATABASE_URL`
 - [API endpoints](../api/endpoints.md) — the curriculum endpoints that read what the curriculum seed writes

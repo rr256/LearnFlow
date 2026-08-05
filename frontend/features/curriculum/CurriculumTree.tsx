@@ -1,6 +1,9 @@
 import { Notice } from "@/components/Notice";
 import styles from "@/features/curriculum/CurriculumTree.module.css";
+import { TopicStageControl } from "@/features/progress/TopicStageControl";
+import { stageFor } from "@/features/progress/stages";
 import type { CurriculumTree as CurriculumTreeData, Subject, Topic } from "@/types/curriculum";
+import type { LearningStage } from "@/types/progress";
 
 /**
  * Collect every topic in the tree by id, at any depth.
@@ -27,7 +30,17 @@ function humaniseRelationshipType(relationshipType: string): string {
   return relationshipType.replace(/_/g, " ");
 }
 
-function TopicList({ topics }: { topics: Topic[] }) {
+interface TopicListProps {
+  topics: Topic[];
+  /**
+   * The learner's recorded stages, keyed by topic. Null when this view is not
+   * showing progress at all -- no stage control is rendered then, which is what
+   * keeps the tree usable before a learner has completed setup.
+   */
+  stages: Map<string, LearningStage> | null;
+}
+
+function TopicList({ topics, stages }: TopicListProps) {
   return (
     <ul className={styles.topics}>
       {topics.map((topic) => (
@@ -43,22 +56,48 @@ function TopicList({ topics }: { topics: Topic[] }) {
           */}
           {topic.is_trackable ? null : <span className={styles.grouping}>(grouping only)</span>}
           {topic.description ? <p className={styles.topicDescription}>{topic.description}</p> : null}
-          {topic.subtopics.length > 0 ? <TopicList topics={topic.subtopics} /> : null}
+          {/*
+            Only a trackable topic gets a control, which is the same rule the
+            API enforces: PRG-004 refuses a stage on a grouping heading.
+          */}
+          {stages && topic.is_trackable ? (
+            <TopicStageControl
+              learningStage={stageFor(stages, topic.id)}
+              topicId={topic.id}
+              topicName={topic.name}
+            />
+          ) : null}
+          {topic.subtopics.length > 0 ? (
+            <TopicList stages={stages} topics={topic.subtopics} />
+          ) : null}
         </li>
       ))}
     </ul>
   );
 }
 
+interface CurriculumTreeProps {
+  tree: CurriculumTreeData;
+  /**
+   * The learner's recorded stages, keyed by topic, or null to render the tree
+   * as reference data alone. Null is what a caller passes when it cannot reach
+   * the progress endpoint, so an unreadable stage costs the reader the control
+   * rather than the whole syllabus.
+   */
+  stages?: Map<string, LearningStage> | null;
+}
+
 /**
  * One curriculum version's subjects, topics, and subtopics, as CUR-003 returns
- * them.
+ * them, with the learner's recorded stage beside each trackable topic.
  *
  * Nothing is sorted or filtered here. Subjects and topics arrive ordered by the
  * position the syllabus teaches them in, and reordering them in the browser
- * would put a curriculum rule in the frontend.
+ * would put a curriculum rule in the frontend. No stage is calculated either:
+ * `stages` holds what PRG-002 returned, and a topic absent from it has recorded
+ * nothing.
  */
-export function CurriculumTree({ tree }: { tree: CurriculumTreeData }) {
+export function CurriculumTree({ tree, stages = null }: CurriculumTreeProps) {
   if (tree.subjects.length === 0) {
     return (
       <Notice title="This curriculum version has no subjects yet">
@@ -84,7 +123,7 @@ export function CurriculumTree({ tree }: { tree: CurriculumTreeData }) {
               <p className={styles.subjectDescription}>{subject.description}</p>
             ) : null}
             {subject.topics.length > 0 ? (
-              <TopicList topics={subject.topics} />
+              <TopicList stages={stages} topics={subject.topics} />
             ) : (
               <p className={styles.empty}>No topics are recorded for this subject yet.</p>
             )}

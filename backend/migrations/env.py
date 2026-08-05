@@ -18,6 +18,7 @@ from app.infrastructure.persistence import (  # noqa: F401  -- registers models
     curriculum,
     examination_schedule,
     learner_planning,
+    progress,
 )
 from app.infrastructure.persistence.base import Base
 from app.infrastructure.persistence.engine import create_database_engine

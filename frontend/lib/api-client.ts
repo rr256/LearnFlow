@@ -26,6 +26,11 @@ import type {
   LearnerProfileUpdate,
 } from "@/types/learner";
 import type {
+  TopicProgress,
+  TopicProgressCollectionResponse,
+  TopicProgressResponse,
+} from "@/types/progress";
+import type {
   ExaminationSchedule,
   ExaminationScheduleCollectionResponse,
   NewStudyGoal,
@@ -318,6 +323,65 @@ export async function listStudyGoals({
   unwrapCollection(body, "a study goal collection");
 
   return (body as StudyGoalCollectionResponse).data;
+}
+
+/**
+ * PRG-002 -- list the stages the local learner has recorded.
+ *
+ * Only topics with a stored record are returned. A topic that is absent has no
+ * recorded stage, which reads as *Not explored*; the curriculum endpoints are
+ * where every topic is listed.
+ *
+ * Returns an empty list before setup has created a learner.
+ *
+ * @param curriculumVersionId Restrict to topics of one curriculum version.
+ */
+export async function listTopicProgress({
+  curriculumVersionId,
+  limit = MAX_PAGE_SIZE,
+  offset = 0,
+}: {
+  curriculumVersionId?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<TopicProgress[]> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (curriculumVersionId) {
+    query.set("curriculum_version_id", curriculumVersionId);
+  }
+  const body = await requestJson(`/api/v1/progress/topics?${query.toString()}`);
+  unwrapCollection(body, "a topic progress collection");
+
+  return (body as TopicProgressCollectionResponse).data;
+}
+
+/**
+ * PRG-004 -- record the local learner's stage for one topic.
+ *
+ * Creates the record on first use and rewrites it afterwards. There is no way
+ * to clear one: a learner who has changed their mind records `not_explored`.
+ *
+ * @throws ApiError with `isNotFound` when no such topic is stored, or a
+ *   `validation_error` when the topic only groups subtopics.
+ */
+export async function recordTopicStage(
+  topicId: string,
+  learningStage: string,
+): Promise<TopicProgress> {
+  const body = await requestJson(`/api/v1/progress/topics/${encodeURIComponent(topicId)}`, {
+    method: "PATCH",
+    body: { learning_stage: learningStage },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned a malformed topic progress record.",
+      null,
+    );
+  }
+  return (body as TopicProgressResponse).data;
 }
 
 /** GOAL-004 -- change a study goal's examination cycle, target date, or status. */

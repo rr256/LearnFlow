@@ -2,12 +2,13 @@
 title: LearnFlow Domain Model
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-31
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - entities.md
   - terminology.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../requirements/functional.md
   - ../database/schema.md
 ---
@@ -132,6 +133,8 @@ Strong understanding
 
 These stages guide the next action. They must not be presented as a permanent or guaranteed claim of mastery.
 
+The labels above are what a learner reads. [Terminology](terminology.md) is authoritative for them and for the `snake_case` form each is stored and sent as; do not restate the stored values here. A stage a learner sets themselves is distinguished from one derived from evidence, which is what makes rule 5 below enforceable. See [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md).
+
 ### Revision Record
 
 A record that a topic was recommended for revision, scheduled, completed, skipped, or postponed.
@@ -229,6 +232,7 @@ This document intentionally does not define database fields, table names, API en
 - [Project context](../00-project-context.md)
 - [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — quiz-topic cardinality, mistake sources, and evidence boundaries
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination schedule concept and what a study goal aims at
+- [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — which part of learner topic progress is persisted today, and how a learner-set stage is told from a derived one
 - [Functional requirements](../requirements/functional.md)
 - [Domain entities](entities.md)
 - [Terminology](terminology.md)
