@@ -14,6 +14,7 @@ related:
   - ../adr/ADR-010-feature-delivery-workflow.md
   - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
+  - ../domain/terminology.md
 ---
 
 # LearnFlow Repository and Folder Structure
@@ -258,6 +259,11 @@ external-tests/
 
 Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `curriculum/` and `onboarding/` exist today.
 
+`onboarding/` holds the **learner setup** capability's screen. The module keeps the narrower name
+because a module directory names a UI flow, which is the one use
+[terminology](../domain/terminology.md) permits for *onboarding*; prose, endpoint groupings, and UI
+copy say *learner setup*.
+
 | Path | Responsibility |
 | --- | --- |
 | `curriculum/LearningProgramList.tsx` | The program list CUR-001 returns, with its CSS Module. |
@@ -304,9 +310,9 @@ TypeScript types based on public API contracts. Do not copy database/ORM types i
 
 ### `frontend/tests/`
 
-Vitest specs for the API client, the configuration reader, the curriculum and onboarding components,
-the setup form's submission parsing, and the `"use server"` export rule. They stub `fetch` and reach
-no live backend, so `npm test` needs nothing running.
+Vitest specs for the API client, the configuration reader, the curriculum and learner-setup
+components, the setup form's submission parsing, and the `"use server"` export rule. They stub
+`fetch` and reach no live backend, so `npm test` needs nothing running.
 
 ## Docker and Scripts
 
@@ -404,7 +410,8 @@ Local data locations are configured through environment variables and Docker vol
 - [Technology stack](tech-stack.md)
 - [Coding standards](coding-standards.md)
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the decisions the frontend structure implements
-- [ADR-016: Fix the learner onboarding API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the server-action write path the `onboarding/` module implements
+- [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the server-action write path the `onboarding/` module implements
+- [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [Database migrations](../database/migrations.md) — the authoritative description of the curriculum seed named in `backend/scripts/`
 - [Docker strategy](../deployment/docker.md) — what `compose.yaml`, `docker/`, and `.dockerignore` contain today

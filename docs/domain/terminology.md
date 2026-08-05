@@ -2,12 +2,13 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-31
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - domain-model.md
   - entities.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../development/coding-standards.md
 ---
 
@@ -37,6 +38,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Examination window** | The span from the first published sitting day to the last. | Use this, never a single examination date, unless the examining body has published one. Derived from the examination periods; not stored. |
 | **Provisional** | A published schedule whose source says the dates are still liable to change. | The honest default before an examining body confirms. Say so wherever the dates are shown. |
 | **Confirmed** | A published schedule whose dates the examining body has confirmed. | Set it only on the examining body's word, never on age or proximity. |
+| **Learner setup** | The capability by which a learner establishes their profile, active learning program, and study goal before planning begins. | The canonical name for the capability, wherever it is named: requirements, API documentation, endpoint groupings, and UI copy. It is not only a first-time activity — a learner returns to it whenever their goal changes. |
 | **Study goal** | The learner's target outcome and deadline. | Aims at an examination cycle, a target completion date, or both — never at neither. |
 | **Target date** | A learner's own completion date, for a learner following no published examination. | Not a substitute for an examination window. Leave it empty rather than guessing a paper date. |
 | **Availability** | Time the learner can realistically allocate to study. | A planning input, not a measure of commitment or ability. |
@@ -77,6 +79,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Complete | Material completed; plan item completed | Clarify whether material or a planned task was completed. |
 | Exam date; examination date | Examination window; examination period | A body that publishes several sitting days has not named the learner's day. A single date presents a guess as a deadline. |
 | Exam; GATE date | Examination cycle; examination schedule | Keeps platform-core language reusable across learning programs. |
+| Onboarding | Learner setup | Use **learner setup** for the capability. **Onboarding** is permitted for one narrower thing only: the first-time UI flow a learner walks through before they have a profile or a goal. It never names the capability, its endpoints, or the ongoing ability to change a goal — a learner who edits an established goal is not being onboarded. |
 | Test integration | Manual external test result entry | The MVP does not connect to third-party test platforms. |
 | AI memory | Learner progress, resource retrieval, or conversation context | Store durable facts in the application/database, not in model memory. |
 | GATE topic | Topic in the GATE CSE learning program | Keeps platform-core language reusable. |
@@ -95,11 +98,18 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
   is a migration decision rather than a wording one.
 - State a published date's status wherever it is shown. A provisional date presented without that
   word reads as settled fact.
+- Two existing names retain **onboarding** and are not renamed, for the same reason the dated-span
+  rule leaves `target_date` alone — a rename costs more than the inconsistency. The frontend module
+  `frontend/features/onboarding/` holds the first-time flow, which the rule above permits; and
+  `docs/adr/ADR-016-learner-onboarding-api-contracts.md` keeps its file name because an accepted
+  ADR's path is a stable identifier that other documents already link to. Its title uses the
+  canonical term. New names use *learner setup*.
 
 ## Related Documents
 
 - [Project context](../00-project-context.md)
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination vocabulary above
+- [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the capability *learner setup* names, and the endpoints that serve it
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)

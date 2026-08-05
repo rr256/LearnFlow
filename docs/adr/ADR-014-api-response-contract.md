@@ -257,7 +257,7 @@ it needs a major version.
 - [ADR-001: Adopt Clean Architecture](ADR-001-clean-architecture.md) — why HTTP mapping stays in the presentation layer
 - [ADR-010: Deliver features through pull requests with automated gates](ADR-010-feature-delivery-workflow.md) — the gate at which a public contract decision is raised
 - [ADR-013: Model an examination period as a published window of reference data](ADR-013-examination-schedule-and-study-goal.md) — the endpoints this contract will shape once their client exists
-- [ADR-016: Fix the learner onboarding API contracts](ADR-016-learner-onboarding-api-contracts.md) — the record that shaped them, and that added `conflict` to the catalogue above
+- [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the record that shaped them, and that added `conflict` to the catalogue above
 - [API conventions](../api/conventions.md) — the catalogue this record decides
 - [API endpoint catalog](../api/endpoints.md) — the per-endpoint error codes
 - [API versioning](../api/versioning.md) — what makes a change to this contract breaking

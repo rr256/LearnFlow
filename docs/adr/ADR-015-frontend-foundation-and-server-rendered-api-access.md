@@ -46,7 +46,7 @@ no API address appears in the served HTML or in any client script.
 
 Three statements are overtaken, and as elsewhere the accepted text is left as written:
 
-- Under [Neutral](#neutral), "Only the curriculum reads have a client today" — the onboarding
+- Under [Neutral](#neutral), "Only the curriculum reads have a client today" — the learner setup
   endpoints have one too.
 - Under [Implementation notes](#implementation-notes), "the learner and study-goal endpoints remain
   deferred by ADR-013" describes the state at acceptance. ADR-016 discharges that deferral for all
@@ -260,7 +260,7 @@ convenience.
 - [ADR-009: Name and validate configuration variables explicitly](ADR-009-configuration-naming-and-validation.md) — the `API_BASE_URL` deferral this record settles
 - [ADR-013: Model an examination period as a published window of reference data](ADR-013-examination-schedule-and-study-goal.md) — the endpoint deferral this frontend's existence affects
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the contract this client parses
-- [ADR-016: Fix the learner onboarding API contracts](ADR-016-learner-onboarding-api-contracts.md) — the first learner-owned screen, which inherits this record's call topology for its writes
+- [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the first learner-owned screen, which inherits this record's call topology for its writes
 - [Architecture overview](../architecture/overview.md) — the web application component this record gives a call topology
 - [Technology stack](../development/tech-stack.md)
 - [Repository and folder structure](../development/folder-structure.md)

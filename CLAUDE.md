@@ -70,9 +70,12 @@ schedule keeps its source and its `provisional`/`confirmed` status. See
 [`docs/adr/ADR-013-examination-schedule-and-study-goal.md`](docs/adr/ADR-013-examination-schedule-and-study-goal.md).
 
 The learner and study-goal endpoints are contracted by
-[`docs/adr/ADR-016-learner-onboarding-api-contracts.md`](docs/adr/ADR-016-learner-onboarding-api-contracts.md),
-which is `proposed` and awaiting acceptance. No request accepts a `learner_id`; the effective learner
-is resolved server-side.
+[`docs/adr/ADR-016-learner-onboarding-api-contracts.md`](docs/adr/ADR-016-learner-onboarding-api-contracts.md).
+No request accepts a `learner_id`; the effective learner is resolved server-side.
+
+**Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
+copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
+keeps that name. See [`docs/domain/terminology.md`](docs/domain/terminology.md).
 
 ## Frontend quick reference
 

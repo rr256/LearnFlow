@@ -1,10 +1,11 @@
 ---
-title: "ADR-016: Fix the Learner Onboarding API Contracts"
-status: proposed
+title: "ADR-016: Fix the Learner Setup API Contracts"
+status: accepted
 owner: architecture-and-api
 last_updated: 2026-08-05
 related:
   - ../00-project-context.md
+  - ../domain/terminology.md
   - ADR-009-configuration-naming-and-validation.md
   - ADR-011-sqlalchemy-persistence-implementation.md
   - ADR-013-examination-schedule-and-study-goal.md
@@ -18,17 +19,23 @@ related:
   - ../requirements/functional.md
   - ../development/folder-structure.md
   - ../roadmap/milestones.md
+  - ../roadmap/future-ideas.md
   - ../architecture/decisions.md
 ---
 
-# ADR-016: Fix the Learner Onboarding API Contracts
+# ADR-016: Fix the Learner Setup API Contracts
 
 ## Status
 
-Proposed — 2026-08-05
+Accepted — 2026-08-05
 
 Discharges the deferral [ADR-013](ADR-013-examination-schedule-and-study-goal.md) recorded, for six
 of its seven endpoints. ADR-013 itself is unchanged and remains accepted.
+
+**This record's file name retains "onboarding".** It was written before
+[terminology](../domain/terminology.md#naming-rules) settled *learner setup* as the name of the
+capability, and renaming an accepted ADR breaks every link that already points at it. The title above
+uses the canonical term; the file name is a stable identifier, not vocabulary.
 
 ## Context
 
@@ -61,7 +68,7 @@ Four further questions surfaced while writing them, none with a recorded answer:
    double-submitted form silently discard the goal a plan was built from.
 
 4. **Whether the browser gains a direct route to the API.** ADR-015 forbids acquiring a CORS
-   allow-list *incidentally*. Onboarding is the first write in the product, so this was the first
+   allow-list *incidentally*. Learner setup is the first write in the product, so this was the first
    feature that could have.
 
 ## Decision
@@ -278,9 +285,17 @@ of a form is exactly what ADR-011 exists to prevent.
   renders, a no-JavaScript form submission creates the profile and the goal, a resubmission updates
   them without creating a second goal, a rejected field and a `409` are both reported in the page, and
   no API address appears in the served HTML or in any client script.
-- Open and deliberately not settled here: GOAL-005 and the `day_of_week` convention; whether a learner
-  may hold active goals for more than one learning program at a time; and how a learner switches
-  programs, which today means updating or archiving the existing goal by hand.
+- Open and deliberately not settled here: GOAL-005 and the `day_of_week` convention, and whether a
+  learner may hold active goals for more than one learning program at a time.
+- Two things this record deliberately does **not** add, each recorded with its trigger in
+  [deferred ideas](../roadmap/future-ideas.md):
+  - **A database constraint for "one active goal per program."** The rule lives in the use case. A
+    partial unique index would make it structural, but no writer today can race another into breaking
+    it, and the index would make `scripts.set_study_goal`'s upsert fail where it currently succeeds.
+  - **A screen for switching learning programs.** The capability exists over HTTP — GOAL-004 pauses
+    or archives a goal, after which GOAL-001 accepts a new one — but no UI offers it, so today it
+    means editing a goal by hand. Designing that screen needs the multi-program question above
+    answered first.
 - Recorded as DEC-028 in [the decision register](../architecture/decisions.md).
 
 ## Related Documents
@@ -299,4 +314,6 @@ of a form is exactly what ADR-011 exists to prevent.
 - [Functional requirements](../requirements/functional.md) — FR-002, and the criterion still unmet
 - [Repository and folder structure](../development/folder-structure.md) — where the new modules live
 - [Delivery milestones](../roadmap/milestones.md) — the Milestone 2 items these endpoints deliver
+- [Deferred ideas](../roadmap/future-ideas.md) — the constraint and the program-switch screen this record leaves out, with their triggers
+- [Terminology](../domain/terminology.md) — *learner setup*, the canonical name for the capability these endpoints serve
 - [Architecture decision register](../architecture/decisions.md) — DEC-028

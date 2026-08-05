@@ -358,7 +358,7 @@ curriculum area's first-API-contract review as pending for the same reason.
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](ADR-012-curriculum-seed-and-reconciliation.md) — the seed rules this record reuses
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the envelope and error contract the deferred goal endpoints will answer in
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the client whose existence reopens the deferral above
-- [ADR-016: Fix the learner onboarding API contracts](ADR-016-learner-onboarding-api-contracts.md) — the record that discharges that deferral, and the endpoint schemas this one left open
+- [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the record that discharges that deferral, and the endpoint schemas this one left open
 - [Database schema](../database/schema.md) — the tables and constraints this record decides
 - [Database migrations](../database/migrations.md) — the seed's commands and operational rules
 - [Domain model](../domain/domain-model.md) — the examination schedule concept

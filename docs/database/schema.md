@@ -846,9 +846,11 @@ The learner and study-goal endpoints, defined in
   new goal to the program's active version instead of accepting one from a client.
 - The "one active goal per program" rule GOAL-001 enforces is **not** a database constraint. A partial
   unique index on `(learner_id, learning_program_id) WHERE status = 'active'` would express it, and
-  was deliberately not added: the rule belongs to the create path only, and no other writer exists —
-  `scripts.set_study_goal` updates its own active goal by design. Add the index with the second
-  writer, or when concurrent requests become possible.
+  was deliberately not added: the rule belongs to the create path only, no other writer exists —
+  `scripts.set_study_goal` updates its own active goal by design — and the index would make that
+  command's upsert fail where it currently succeeds. Recorded as intentional future work in
+  [deferred ideas](../roadmap/future-ideas.md#deferred-architecture-and-operations-ideas), with the
+  triggers that would justify adding it.
 - No index beyond the keys was needed, as recorded above. A single-learner installation holds one
   learner and a handful of goals, so every access is a sequential scan of a few rows.
 - `planning_preferences` stays uncreated, and GOAL-004 accordingly does not accept it.
@@ -861,7 +863,7 @@ The learner and study-goal endpoints, defined in
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — the migration ordering and the constraint choices this document records
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — why `uq_topics_subject_id_code` exists and how the curriculum tables are populated
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why the examination is periods rather than a date, and why `study_goals.target_date` is nullable
-- [ADR-016: Fix the learner onboarding API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the endpoint contracts the two API reviews above were taken against
+- [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the endpoint contracts the two API reviews above were taken against
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated

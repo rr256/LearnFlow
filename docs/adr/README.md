@@ -35,14 +35,12 @@ Two files in this directory are not decisions, so they are normal documentation 
 
 ## Accepted ADRs
 
-[ADR-001](ADR-001-clean-architecture.md) · [ADR-002](ADR-002-provider-pattern.md) · [ADR-003](ADR-003-postgresql-persistence.md) · [ADR-004](ADR-004-ollama-local-ai-provider.md) · [ADR-005](ADR-005-docker-compose-local-development.md) · [ADR-006](ADR-006-custom-agent-orchestration.md) · [ADR-007](ADR-007-documentation-and-adr-policy.md) · [ADR-008](ADR-008-assessment-and-mistake-evidence-model.md) · [ADR-009](ADR-009-configuration-naming-and-validation.md) · [ADR-010](ADR-010-feature-delivery-workflow.md) · [ADR-011](ADR-011-sqlalchemy-persistence-implementation.md) · [ADR-012](ADR-012-curriculum-seed-and-reconciliation.md) · [ADR-013](ADR-013-examination-schedule-and-study-goal.md) · [ADR-014](ADR-014-api-response-contract.md) · [ADR-015](ADR-015-frontend-foundation-and-server-rendered-api-access.md)
+[ADR-001](ADR-001-clean-architecture.md) · [ADR-002](ADR-002-provider-pattern.md) · [ADR-003](ADR-003-postgresql-persistence.md) · [ADR-004](ADR-004-ollama-local-ai-provider.md) · [ADR-005](ADR-005-docker-compose-local-development.md) · [ADR-006](ADR-006-custom-agent-orchestration.md) · [ADR-007](ADR-007-documentation-and-adr-policy.md) · [ADR-008](ADR-008-assessment-and-mistake-evidence-model.md) · [ADR-009](ADR-009-configuration-naming-and-validation.md) · [ADR-010](ADR-010-feature-delivery-workflow.md) · [ADR-011](ADR-011-sqlalchemy-persistence-implementation.md) · [ADR-012](ADR-012-curriculum-seed-and-reconciliation.md) · [ADR-013](ADR-013-examination-schedule-and-study-goal.md) · [ADR-014](ADR-014-api-response-contract.md) · [ADR-015](ADR-015-frontend-foundation-and-server-rendered-api-access.md) · [ADR-016](ADR-016-learner-onboarding-api-contracts.md)
 
-## Proposed ADRs
-
-Drafted and awaiting project-owner acceptance. Implement in line with an ADR only once it is
-accepted; a proposed one records a direction still under review.
-
-[ADR-016](ADR-016-learner-onboarding-api-contracts.md)
+A file name is a stable identifier and is not renamed once an ADR is accepted, so it may not match
+the record's title. `ADR-016-learner-onboarding-api-contracts.md` is titled *Fix the Learner Setup
+API Contracts*, because [terminology](../domain/terminology.md#naming-rules) settled that name after
+the file was created.
 
 The [architecture decision register](../architecture/decisions.md) maps each ADR to the decision it records.
 

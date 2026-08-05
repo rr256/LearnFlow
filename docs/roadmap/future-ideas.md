@@ -2,12 +2,14 @@
 title: LearnFlow Deferred Ideas
 status: approved
 owner: product-and-architecture
-last_updated: 2026-07-29
+last_updated: 2026-08-05
 related:
   - ../00-project-context.md
   - roadmap.md
   - milestones.md
   - ../requirements/mvp.md
+  - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-016-learner-onboarding-api-contracts.md
 ---
 
 # LearnFlow Deferred Ideas
@@ -38,6 +40,7 @@ Do not start implementation from this document alone.
 | Optional cloud AI providers | Higher-quality reasoning for learners who choose it. | Ollama supports local-first and lower recurring cost initially. | Local model quality/capacity is insufficient for a validated use case. |
 | Other GATE branches | Expands LearnFlow beyond GATE CSE. | First validate complete GATE CSE workflow and curated curriculum process. | GATE CSE is stable and another branch has verified curriculum/resources. |
 | Syllabus-PDF setup wizard | Lets a learner create a draft program from a syllabus. | Extraction can be inaccurate; GATE CSE should be curated first. | Review/edit/approval workflow is designed and tested. |
+| Switching learning programs in the UI | A learner moving between programs — another GATE branch, say — would not have to edit a goal by hand. | Deliberately out of scope for [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md). GOAL-001 refuses a second *active* goal for a program, and GOAL-004 can pause or archive one, so the capability exists over HTTP; only a screen for it does not. Designing that screen means first deciding whether a learner may hold active goals for more than one program at once, which [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) left open. | A second learning program is curated, or a learner needs to change programs in practice. |
 | University/certification/interview programs | Broadens LearnFlow to general structured learning. | Requires validated domain/content patterns beyond GATE. | Generic curriculum model is proven with more than one real program. |
 | Video transcription and indexing | Makes video lectures searchable. | Adds cost, processing, storage, and quality complexity. | PDF/RAG workflow is stable and video search is a real learner pain point. |
 | OCR for scanned PDFs | Makes image-only notes searchable. | Extraction quality and local compute need validation. | Learners commonly use scanned notes and PDF extraction is insufficient. |
@@ -59,6 +62,7 @@ Do not start implementation from this document alone.
 | Managed vector database | ChromaDB is suitable for local RAG. | Scale, filtering, cloud hosting, or operational needs justify migration. |
 | Public CI/CD deployment | Local-first MVP does not need hosted delivery. | Staging/production environment, security, backups, and release process are approved. |
 | Advanced observability platform | Basic safe logs/health checks come first. | Hosted/multi-user operation needs centralized metrics/traces/alerts. |
+| A partial unique index enforcing one active study goal per program | "At most one active goal per learner and learning program" is enforced by the `ManageStudyGoals` use case, not by the database. A partial unique index on `(learner_id, learning_program_id) WHERE status = 'active'` would make it structural. | Deliberately omitted from [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md). The rule belongs to one create path, the installation is single-learner and single-process, and `scripts.set_study_goal` updates its own active goal by design — so no writer today can race another into breaking it. Adding the index would also make the command's upsert fail where it currently succeeds. | A second writer appears, requests can run concurrently, or multiple learner accounts arrive. |
 
 ## Explicitly Rejected for the MVP
 

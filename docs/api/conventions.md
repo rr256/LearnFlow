@@ -306,7 +306,7 @@ Each endpoint entry in `endpoints.md` must define:
 
 - [Project context](../00-project-context.md)
 - [ADR-014: Fix the public HTTP API response contract](../adr/ADR-014-api-response-contract.md) — the durable rationale for the envelope, the pagination block, and the error-code catalogue
-- [ADR-016: Fix the learner onboarding API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the change that added `conflict` to the catalogue above
+- [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the change that added `conflict` to the catalogue above
 - [API endpoints](endpoints.md)
 - [API versioning](versioning.md)
 - [Clean Architecture](../architecture/clean-architecture.md)
