@@ -141,6 +141,59 @@ def test_a_not_found_rolls_back_rather_than_committing(
     assert (transaction_log.commits, transaction_log.rollbacks) == (0, 1)
 
 
+def test_a_saved_week_commits(transactional_client, transaction_log, onboarding):
+    transactional_client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+    goal = transactional_client.post(
+        GOALS,
+        json={
+            "learning_program_id": str(onboarding.schedule.learning_program_id),
+            "target_date": "2027-01-31",
+        },
+    ).json()["data"]
+    transaction_log.commits = 0
+
+    response = transactional_client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={"slots": [{"day_of_week": "monday", "available_minutes": 120}]},
+    )
+
+    assert response.status_code == 200
+    assert (transaction_log.commits, transaction_log.rollbacks) == (1, 0)
+
+
+def test_a_rejected_week_rolls_back_rather_than_committing(
+    transactional_client, transaction_log, onboarding
+):
+    """A week refused for its second day must not leave its first day stored.
+
+    Validation runs before the first write, so nothing is written either way --
+    but the rollback is what makes that structural rather than incidental.
+    """
+    transactional_client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+    goal = transactional_client.post(
+        GOALS,
+        json={
+            "learning_program_id": str(onboarding.schedule.learning_program_id),
+            "target_date": "2027-01-31",
+        },
+    ).json()["data"]
+    transaction_log.commits = 0
+
+    response = transactional_client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={
+            "slots": [
+                {"day_of_week": "monday", "available_minutes": 120},
+                {"day_of_week": "moonday", "available_minutes": 60},
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+    assert (transaction_log.commits, transaction_log.rollbacks) == (0, 1)
+    assert onboarding.goals.availability == []
+
+
 @pytest.fixture
 def progress_transactional_client(
     progress: Progress, transaction_log: TransactionLog

@@ -1,16 +1,20 @@
 """SQLAlchemy implementation of the study-goal management repository port.
 
-Serves GOAL-001 to GOAL-004. It maps rows to the application's plain records and
-back, and reads the curriculum reference data a goal binds to.
+Serves GOAL-001 to GOAL-005. It maps rows to the application's plain records and
+back, reads the curriculum reference data a goal binds to, and reads and writes
+the availability slots a goal owns.
 
 It decides nothing. Whether a goal aims at enough to be valid, whether a second
-active goal may exist, and which curriculum version a new goal binds to are all
-settled by the use case (docs/architecture/dependency-rules.md).
+active goal may exist, which curriculum version a new goal binds to, which days a
+week may name, and which of a week's days are added, rewritten, or removed are
+all settled by the use case (docs/architecture/dependency-rules.md). In
+particular, nothing here deletes a slot the use case did not name.
 
 The session's transaction is owned by the caller. Nothing here commits.
 """
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -19,9 +23,10 @@ from app.application.ports.curriculum_seed_repository import (
     CurriculumVersionRecord,
     LearningProgramRecord,
 )
+from app.application.ports.study_goal_management_repository import AvailabilitySlotRecord
 from app.application.ports.study_goal_repository import StudyGoalRecord
 from app.infrastructure.persistence.curriculum import CurriculumVersion, LearningProgram
-from app.infrastructure.persistence.learner_planning import StudyGoal
+from app.infrastructure.persistence.learner_planning import AvailabilitySlot, StudyGoal
 
 ACTIVE_STATUS = "active"
 
@@ -123,6 +128,51 @@ class SqlAlchemyStudyGoalManagementRepository:
         model.target_date = record.target_date
         model.status = record.status
 
+    def list_availability_slots(
+        self, study_goal_ids: Sequence[uuid.UUID]
+    ) -> tuple[AvailabilitySlotRecord, ...]:
+        """Every availability slot belonging to the goals named, in no order.
+
+        Unordered deliberately: week order is Monday-first presentation, and
+        nothing stored ranks one day above another, so the use case sorts.
+        """
+        if not study_goal_ids:
+            return ()
+        models = self._session.scalars(
+            select(AvailabilitySlot).where(AvailabilitySlot.study_goal_id.in_(study_goal_ids))
+        )
+        return tuple(_availability_record(model) for model in models)
+
+    def add_availability_slot(self, record: AvailabilitySlotRecord) -> None:
+        """Store a new availability slot."""
+        self._session.add(
+            AvailabilitySlot(
+                id=record.id,
+                study_goal_id=record.study_goal_id,
+                day_of_week=record.day_of_week,
+                available_minutes=record.available_minutes,
+            )
+        )
+
+    def update_availability_slot(self, record: AvailabilitySlotRecord) -> None:
+        """Overwrite the stored slot identified by ``record.id``.
+
+        Only the minutes are written. A slot's goal and day are its identity --
+        moving Monday's time to Tuesday is removing one day and adding another,
+        which the use case expresses as exactly that.
+        """
+        model = self._session.get(AvailabilitySlot, record.id)
+        if model is None:
+            raise LookupError(f"Availability slot {record.id} is not stored.")
+        model.available_minutes = record.available_minutes
+
+    def delete_availability_slot(self, availability_slot_id: uuid.UUID) -> None:
+        """Remove the stored slot with this identifier."""
+        model = self._session.get(AvailabilitySlot, availability_slot_id)
+        if model is None:
+            raise LookupError(f"Availability slot {availability_slot_id} is not stored.")
+        self._session.delete(model)
+
 
 def _program_record(model: LearningProgram) -> LearningProgramRecord:
     return LearningProgramRecord(
@@ -138,6 +188,15 @@ def _version_record(model: CurriculumVersion) -> CurriculumVersionRecord:
         status=model.status,
         source_reference=model.source_reference,
         published_at=model.published_at,
+    )
+
+
+def _availability_record(model: AvailabilitySlot) -> AvailabilitySlotRecord:
+    return AvailabilitySlotRecord(
+        id=model.id,
+        study_goal_id=model.study_goal_id,
+        day_of_week=model.day_of_week,
+        available_minutes=model.available_minutes,
     )
 
 

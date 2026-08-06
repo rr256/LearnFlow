@@ -33,7 +33,14 @@ from app.infrastructure.persistence.examination_schedule import (
     ExaminationPeriod,
     ExaminationSchedule,
 )
-from app.infrastructure.persistence.learner_planning import STUDY_GOAL_STATUSES, Learner, StudyGoal
+from app.infrastructure.persistence.learner_planning import (
+    MINUTES_IN_A_DAY,
+    STUDY_GOAL_STATUSES,
+    WEEKDAYS,
+    AvailabilitySlot,
+    Learner,
+    StudyGoal,
+)
 from app.infrastructure.persistence.progress import (
     LEARNING_STAGES,
     STAGE_SOURCES,
@@ -56,6 +63,7 @@ EXAMINATION_TABLES = (
 LEARNER_PLANNING_TABLES = (
     "learners",
     "study_goals",
+    "availability_slots",
 )
 
 PROGRESS_TABLES = ("learner_topic_progress",)
@@ -208,12 +216,11 @@ def test_topic_ordering_and_trackability_use_the_documented_types():
 
 
 def test_the_remaining_schema_areas_are_absent():
-    """Guards the agreed scope. `availability_slots` and `study_plans` complete the
-    learner-planning area in later milestones, and `revision_records` and
+    """Guards the agreed scope. `study_plans` and `plan_items` complete the
+    learner-planning area in Milestone 3, and `revision_records` and
     `study_activities` complete the progress area; each waits for the code that
-    reads it, so no column fixes a convention before a requirement constrains it."""
+    reads it, so no column fixes a shape before a requirement constrains it."""
     for table_name in (
-        "availability_slots",
         "study_plans",
         "plan_items",
         "study_activities",
@@ -353,6 +360,88 @@ def test_learner_owned_records_carry_a_learner_id():
     """Kept from the start so multiple accounts stay an authentication change."""
     assert "learner_id" in StudyGoal.__table__.columns
     assert "user_id" not in StudyGoal.__table__.columns
+
+
+# -- availability -----------------------------------------------------------
+
+
+def test_the_day_of_week_is_stored_as_a_name_not_a_number():
+    """ADR-018. docs/database/schema.md first described a `smallint` holding 0-6
+    "according to documented convention", which left a numbering for a reader or
+    a client to get wrong -- and Python, JavaScript, and PostgreSQL disagree about
+    which day is zero. A stored name has no convention to mis-map, and it matches
+    every other controlled value in the schema."""
+    columns = AvailabilitySlot.__table__.columns
+
+    assert isinstance(columns["day_of_week"].type, String)
+    assert columns["day_of_week"].nullable is False
+    assert not isinstance(columns["day_of_week"].type, Integer)
+
+
+def test_the_day_of_week_is_constrained_to_the_seven_documented_days():
+    ddl = compiled("availability_slots")
+
+    assert "ck_availability_slots_day_of_week_is_known" in ddl
+    for day in WEEKDAYS:
+        assert f"'{day}'" in ddl
+
+
+def test_the_stored_days_are_the_seven_of_a_week_in_week_order():
+    """The order is presentation, not a stored rank: no column carries it, and
+    nothing compares two days."""
+    assert WEEKDAYS == (
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    )
+
+
+def test_a_goal_holds_one_availability_slot_per_day():
+    """What makes saving a week rewrite the days it names rather than appending a
+    second Monday beside the first."""
+    ddl = compiled("availability_slots")
+
+    assert (
+        "CONSTRAINT uq_availability_slots_study_goal_id_day_of_week "
+        "UNIQUE (study_goal_id, day_of_week)" in ddl
+    )
+
+
+def test_available_minutes_cannot_exceed_the_minutes_in_a_day():
+    """schema.md approves the lower bound. The upper bound is added because a day
+    holds 1440 minutes, so anything larger is a mistake rather than ambition."""
+    ddl = compiled("availability_slots")
+    columns = AvailabilitySlot.__table__.columns
+
+    assert "ck_availability_slots_available_minutes_within_a_day" in ddl
+    assert f"available_minutes >= 0 AND available_minutes <= {MINUTES_IN_A_DAY}" in ddl
+    assert isinstance(columns["available_minutes"].type, Integer)
+    assert columns["available_minutes"].nullable is False
+
+
+def test_availability_belongs_to_a_study_goal_rather_than_to_a_learner():
+    """A learner who archives one goal and starts another is describing a
+    different week, so the row hangs off the goal -- as schema.md has it."""
+    columns = AvailabilitySlot.__table__.columns
+
+    assert {key.column.table.name for key in columns["study_goal_id"].foreign_keys} == {
+        "study_goals"
+    }
+    assert "learner_id" not in columns
+
+
+def test_availability_stores_no_clock_time():
+    """A slot is a day's worth of minutes, not a sitting between two times.
+    Storing wall-clock times would raise which zone reads them, which nothing
+    this feature does needs."""
+    columns = AvailabilitySlot.__table__.columns
+
+    assert "starts_at" not in columns
+    assert "ends_at" not in columns
 
 
 # -- progress ---------------------------------------------------------------

@@ -60,7 +60,8 @@ Tests, lint, and formatting are part of the repository check set below.
 Database — PostgreSQL through SQLAlchemy and Alembic. `DATABASE_URL` is required and has no default.
 Migrations are never applied automatically, by startup or by a container entrypoint. The schema is
 migrated one area per milestone; the curriculum tables, the examination schedule tables, `learners`
-and `study_goals`, and `learner_topic_progress` exist today. Curated content is loaded by idempotent seeds, not by
+and `study_goals`, `learner_topic_progress`, and `availability_slots` exist today. Curated content is
+loaded by idempotent seeds, not by
 migrations — each matches records on a natural key and never deletes, so both are safe to repeat.
 Run them in the order above; each refuses to run ahead of its predecessor. See
 [`docs/database/migrations.md`](docs/database/migrations.md).
@@ -71,6 +72,8 @@ schedule keeps its source and its `provisional`/`confirmed` status. See
 
 The learner and study-goal endpoints are contracted by
 [`docs/adr/ADR-016-learner-onboarding-api-contracts.md`](docs/adr/ADR-016-learner-onboarding-api-contracts.md),
+weekly availability by
+[`docs/adr/ADR-018-weekly-availability-slots.md`](docs/adr/ADR-018-weekly-availability-slots.md),
 and the topic-progress endpoints by
 [`docs/adr/ADR-017-topic-progress-api-and-schema.md`](docs/adr/ADR-017-topic-progress-api-and-schema.md).
 No request accepts a `learner_id`; the effective learner is resolved server-side.
@@ -80,6 +83,13 @@ A **learning stage** is stored and sent as `snake_case` — `not_explored`, `bui
 [`docs/domain/terminology.md`](docs/domain/terminology.md). A topic with no record has no stage and
 reads as *Not explored*; nothing creates a record on a learner's behalf, and there is no way to clear
 one. Only a topic with `is_trackable` may hold a stage.
+
+A **day of the week** is stored and sent as its `snake_case` name — `monday` to `sunday` — never as an
+index; there is deliberately no numbering convention, because Python, JavaScript, and PostgreSQL
+disagree about which day is zero. **Weekly availability** belongs to a study goal and is replaced a
+week at a time: the days GOAL-005 names become the week, a day left out is removed, and an empty list
+clears it. Zero minutes is a day deliberately kept free, which is not the same as a day with no row.
+Nothing totals a week — that is planning work, and no plan is generated yet.
 
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
@@ -98,8 +108,9 @@ API from its own server — learner-facing pages are React Server Components and
 server action, so the browser never reaches the backend, no CORS configuration exists, and
 `API_BASE_URL` is server-side only. Today it serves a curriculum view over CUR-001 to CUR-003 that
 also reads the learner's recorded stages over PRG-002 and writes one over PRG-004, a `/setup` screen
-over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004, and a home screen at `/` that reads the
-saved setup back over LRN-001, GOAL-002, and EXM-001.
+over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-005, and a home screen at `/` that reads the
+saved setup back over LRN-001, GOAL-002, and EXM-001. A goal response carries the saved study week, so
+neither screen calls anything extra to show it.
 
 The frontend serves its own static `/health` for the container health check, distinct from the
 backend's `GET /health`. It reaches nothing, so the probe asks only whether the frontend process is

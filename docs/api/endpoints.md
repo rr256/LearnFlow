@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-05
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - conventions.md
@@ -17,6 +17,7 @@ related:
   - ../adr/ADR-014-api-response-contract.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
+  - ../adr/ADR-018-weekly-availability-slots.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -142,7 +143,7 @@ Supports **FR-002 — Initial Learner Setup**.
 | GOAL-002 | `GET /api/v1/study-goals` | List the learner's goals. | Goal collection. | Implemented |
 | GOAL-003 | `GET /api/v1/study-goals/{goal_id}` | Read one study goal. | Goal. | Implemented |
 | GOAL-004 | `PATCH /api/v1/study-goals/{goal_id}` | Update the examination cycle, target date, or status. | Updated goal. | Implemented |
-| GOAL-005 | `PUT /api/v1/study-goals/{goal_id}/availability` | Replace recurring weekly available study time. | Saved availability slots. | **Deferred** |
+| GOAL-005 | `PUT /api/v1/study-goals/{goal_id}/availability` | Replace recurring weekly available study time. | Saved availability slots. | Implemented |
 
 A goal aims at an examination cycle, a target date, or both, and never at neither — a rule the
 database enforces and the application refuses before the database sees it. A response reports an
@@ -154,9 +155,10 @@ None of these endpoints accepts a `learner_id`: the effective learner is resolve
 the [identity assumption](#identity-assumption) above. All are synchronous.
 
 The deferral [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) recorded is
-**discharged for LRN-001, LRN-002, and GOAL-001 to GOAL-004**, whose contracts are fixed by
-[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md) and defined below. GOAL-005 stays
-deferred for a different reason, given under it.
+**discharged in full**. LRN-001, LRN-002, and GOAL-001 to GOAL-004 are contracted by
+[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md); GOAL-005, which waited on a schema
+decision rather than on a caller, is contracted by
+[ADR-018](../adr/ADR-018-weekly-availability-slots.md).
 
 ### LRN-001 — `GET /api/v1/learner/profile`
 
@@ -193,10 +195,16 @@ a client cannot attach a learner to a draft or retired syllabus by naming its id
 one later, once a reason exists to study an older version, is a compatible addition.
 
 A goal response carries `id`, `learner_id`, `status`, `target_date`, `learning_program`
-(`id`, `code`, `name`), `curriculum_version` (`id`, `version_label`, `status`), and `examination` —
+(`id`, `code`, `name`), `curriculum_version` (`id`, `version_label`, `status`), `examination` —
 `null` for a goal aiming at a target date alone, and otherwise the schedule's `id`, `cycle_label`,
 `name`, `organising_body`, `source_reference`, `source_checked_on`, `schedule_status`, and
-`examination_window`.
+`examination_window` — and `availability`.
+
+`availability` is `{slots: [...]}`, the week GOAL-005 writes, in week order with Monday first. Each
+slot is `day_of_week` and `available_minutes`, and nothing else: GOAL-005 addresses a week rather than
+a row, so no slot identifier is reported. A goal whose availability has never been saved carries
+`{"slots": []}` rather than `null` or an absent key, so no client needs a branch for a goal created
+before a week was. There is deliberately **no weekly total**; see GOAL-005 below.
 
 Errors: `422` `validation_error` when the request aims at neither a cycle nor a date, when the
 program or schedule is not stored, when the schedule belongs to another program, or when the program
@@ -217,10 +225,9 @@ rather than a failure. Errors: `422` `validation_error` for a window outside tho
 
 ### GOAL-003 — `GET /api/v1/study-goals/{goal_id}`
 
-`goal_id` is a UUID. Returns `200` with one goal under `data`, in the shape GOAL-001 returns.
-
-**No availability summary is returned**, unlike this catalogue's original intent line: `availability_slots`
-does not exist, for the reason given under GOAL-005.
+`goal_id` is a UUID. Returns `200` with one goal under `data`, in the shape GOAL-001 returns —
+including the `availability` summary this catalogue's original intent line promised, which
+[ADR-018](../adr/ADR-018-weekly-availability-slots.md) supplies.
 
 Errors: `404` `not_found` when no such goal is stored *or it belongs to another learner* —
 `conventions.md` treats "not visible to the caller" as a `404`, and saying "that exists but is not
@@ -246,31 +253,77 @@ Errors: `404` `not_found` as for GOAL-003; `422` `validation_error` when the upd
 goal aiming at nothing, names an unknown status, names no field to change, or names a schedule that
 is not stored or belongs to another program; `409` `conflict` when more than one learner is stored.
 
-### GOAL-005 — deferred
+### GOAL-005 — `PUT /api/v1/study-goals/{goal_id}/availability`
 
-`PUT /api/v1/study-goals/{goal_id}/availability` is **not implemented**, and the reason is a schema
-decision rather than a contract one. It needs `availability_slots`, which does not exist: creating it
-would fix the `day_of_week` numbering convention that
-[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) records as open and no requirement
-yet constrains. It arrives with that decision.
+`goal_id` is a UUID. Request body: `slots`, a list of at most seven entries, each carrying
+`day_of_week` and `available_minutes`. An unknown field is rejected. Returns `200` with the saved week
+under `data`, as `{"slots": [...]}` in week order with Monday first.
 
-Three of [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s five acceptance
-criteria are met — setting a target examination schedule or completion date, confirming the active
-learning program, and reviewing the saved setup, which the home screen reads back over LRN-001,
-GOAL-002, and EXM-001. Two are not:
+`day_of_week` is a **day name** — `monday`, `tuesday`, `wednesday`, `thursday`, `friday`, `saturday`,
+or `sunday` — never an index. Python, JavaScript, and PostgreSQL disagree about which day is zero, and
+a client that guesses wrong would misfile a whole week with no error anywhere, so
+[ADR-018](../adr/ADR-018-weekly-availability-slots.md) removed the numbering rather than documenting
+one. `available_minutes` is 0 to 1440, the number of minutes in a day.
 
-- *"The learner can set available study time and basic planning preferences"* — GOAL-005, waiting on
-  the decision above.
-- *"The learner can start with no previous progress and still receive an initial plan"* — no plan is
-  generated at all. PLN-001 arrives with [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision).
+**This replaces the week; it does not merge into it.** The days named become the learner's
+availability, and any day the request does not name is removed. Adding a day, changing a day, and
+removing a day are therefore the same request, and each is one transaction — an edit spanning three
+days cannot leave one saved and two lost. Saving the week that is already stored is accepted and
+writes nothing, as recording an unchanged stage is under PRG-004.
 
-Related entities: [learner](../domain/entities.md#learner) and
-[study goal](../domain/entities.md#study-goal). Related tables:
+`slots` is **required**. An explicit `[]` clears the goal's availability, which is how a learner takes
+it all back; a body that omitted the field would otherwise clear it by accident, so that is a `422`.
+
+**Zero minutes is a day the learner deliberately keeps free**, and it is stored. A day with no entry
+is one they have not set, and it is absent from the week entirely. The two are different claims — the
+same distinction PRG-002 draws between an explicit `not_explored` and a topic with no record — which
+is why the stored constraint is `>= 0` rather than `> 0`.
+
+**No total is reported**, on this response or on a goal. Availability is a planning input, and
+[terminology](../domain/terminology.md) calls it "not a measure of commitment or ability"; turning a
+week into an hours figure is planning work, and PLN-001 is what should do it with the trade-offs
+visible.
+
+The response is an object rather than a bare array, per
+[ADR-014](../adr/ADR-014-api-response-contract.md), and carries **no `pagination` block**: a week
+holds at most seven days belonging to one goal, so there is no window to page through.
+
+Errors: `404` `not_found` when no such goal is stored *or it belongs to another learner*, as for
+GOAL-003; `422` `validation_error` when a day is not one of the seven, when a day is named more than
+once, when `available_minutes` falls outside 0 to 1440, when `slots` is absent or holds more than
+seven entries, or when the request names an unknown field — `details` names `body.slots` and never
+echoes the rejected value; `409` `conflict` when more than one learner is stored.
+
+Related entity: [availability slot](../domain/entities.md#availability-slot). Related table:
+[`availability_slots`](../database/schema.md#availability_slots).
+
+Related entities: [learner](../domain/entities.md#learner),
+[study goal](../domain/entities.md#study-goal), and
+[availability slot](../domain/entities.md#availability-slot). Related tables:
 [learner planning schema area](../database/schema.md#schema-areas). These endpoints read and write
 through the `ManageLearnerProfile` and `ManageStudyGoals` application use cases; the same rows are
 also maintained from the command line by
 [`scripts.set_study_goal`](../database/migrations.md#setting-the-local-learners-study-goal), which
-upserts the learner's active goal rather than refusing a second one.
+upserts the learner's active goal rather than refusing a second one and does not touch availability.
+
+### FR-002 acceptance criteria
+
+**Three of [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s five acceptance
+criteria are met in full, a fourth in part, and one not at all.** This section is authoritative for
+the count; documents that cite it link here rather than repeating it.
+
+Met in full: setting a target examination schedule or completion date; confirming the active learning
+program; and reviewing the saved setup without re-entering it, which the home screen reads back over
+LRN-001, GOAL-002, and EXM-001.
+
+- *"The learner can set available study time and basic planning preferences"* — **partly met.**
+  GOAL-005 sets available study time. Planning preferences are not accepted anywhere:
+  `study_goals.planning_preferences` is not created, and
+  [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) holds its shape undecided, so the
+  field would promise storage the database has not got. See GOAL-004.
+- *"The learner can start with no previous progress and still receive an initial plan"* — **unmet.**
+  No plan is generated at all. PLN-001 arrives with
+  [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision).
 
 ## Planning Endpoints
 
@@ -464,8 +517,8 @@ Implement in an order that enables one working learner flow:
 
 1. Operational health and curriculum reads. **Done** — OPS-001 and CUR-001 to CUR-003.
 2. Learner setup and study-goal creation. **Done** — EXM-001, LRN-001, LRN-002, and GOAL-001 to
-   GOAL-004, contracted by [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md). GOAL-005
-   waits on the `day_of_week` decision, not on a client.
+   GOAL-004, contracted by [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md), and
+   GOAL-005, contracted by [ADR-018](../adr/ADR-018-weekly-availability-slots.md).
 3. Progress reads/updates and basic study activities. **Partly done** — PRG-002 and PRG-004 record a
    learning stage and read it back, contracted by
    [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). PRG-001, PRG-003, ACT-001, and
@@ -480,11 +533,12 @@ Implement in an order that enables one working learner flow:
 ## Related Documents
 
 - [Project context](../00-project-context.md)
-- [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — the open `day_of_week` decision GOAL-005 waits on
+- [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](../adr/ADR-011-sqlalchemy-persistence-implementation.md) — the per-milestone schema ordering these endpoints follow
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — what a study goal aims at, and the deferral ADR-016 discharges
 - [ADR-014: Fix the public HTTP API response contract](../adr/ADR-014-api-response-contract.md) — the envelope, pagination block, and error codes every endpoint here returns
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the request and response fields of EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the request and response fields of PRG-002 and PRG-004, and why the other four progress endpoints stay uncontracted
+- [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the request and response fields of GOAL-005, and the `availability` object every goal response carries
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

@@ -31,6 +31,7 @@ import type {
   TopicProgressResponse,
 } from "@/types/progress";
 import type {
+  AvailabilitySlot,
   ExaminationSchedule,
   ExaminationScheduleCollectionResponse,
   NewStudyGoal,
@@ -38,6 +39,8 @@ import type {
   StudyGoalCollectionResponse,
   StudyGoalResponse,
   StudyGoalUpdate,
+  WeeklyAvailability,
+  WeeklyAvailabilityResponse,
 } from "@/types/study-goal";
 
 /** Default page size, matching the API's own default. */
@@ -116,7 +119,7 @@ function toApiError(status: number, body: unknown): ApiError {
 
 /** A request body sent to the API, and the method that carries it. */
 interface WriteRequest {
-  method: "POST" | "PATCH";
+  method: "POST" | "PATCH" | "PUT";
   body: unknown;
 }
 
@@ -399,4 +402,37 @@ export async function updateStudyGoal(
     throw new ApiError("malformed_response", "The API returned a malformed study goal.", null);
   }
   return (body as StudyGoalResponse).data;
+}
+
+/**
+ * GOAL-005 -- replace the weekly availability saved against one study goal.
+ *
+ * A replacement, not a merge: the days in `slots` become the learner's week, and
+ * any day left out is removed. An empty list clears the goal's availability.
+ *
+ * A day is named -- `monday`, not `0` -- so no numbering convention has to be
+ * agreed between this client and the API.
+ *
+ * @throws ApiError with `isNotFound` when the goal is not stored or is not the
+ *   local learner's, or a `validation_error` when a day is unknown, named twice,
+ *   or claims minutes a day does not hold.
+ */
+export async function replaceAvailability(
+  studyGoalId: string,
+  slots: AvailabilitySlot[],
+): Promise<WeeklyAvailability> {
+  const body = await requestJson(
+    `/api/v1/study-goals/${encodeURIComponent(studyGoalId)}/availability`,
+    { method: "PUT", body: { slots } },
+  );
+  const data = unwrapData(body);
+
+  if (!isRecord(data) || !Array.isArray((data as Record<string, unknown>).slots)) {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned a week of availability without a `slots` list.",
+      null,
+    );
+  }
+  return (body as WeeklyAvailabilityResponse).data;
 }

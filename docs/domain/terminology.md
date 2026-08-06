@@ -2,7 +2,7 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-05
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -10,6 +10,7 @@ related:
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
+  - ../adr/ADR-018-weekly-availability-slots.md
   - ../development/coding-standards.md
 ---
 
@@ -43,7 +44,11 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Home screen** | The application's landing screen, which shows the learner's saved learner setup — their profile, their study goal, and the published dates of the examination that goal aims at. | Read-only: it reports what is stored and links to *learner setup* to change it. It is not a *dashboard*; see the row below. Its UI heading is "Your study setup". |
 | **Study goal** | The learner's target outcome and deadline. | Aims at an examination cycle, a target completion date, or both — never at neither. |
 | **Target date** | A learner's own completion date, for a learner following no published examination. | Not a substitute for an examination window. Leave it empty rather than guessing a paper date. |
-| **Availability** | Time the learner can realistically allocate to study. | A planning input, not a measure of commitment or ability. |
+| **Availability** | Time the learner can realistically allocate to study. | A planning input, not a measure of commitment or ability. Never presented as a total, a target, or a score. |
+| **Availability slot** | The study time available on one day of the week, belonging to one study goal. | A goal holds at most seven, one per day. A slot is a quantity of minutes, not a sitting between two clock times. |
+| **Weekly availability** | The whole set of a goal's availability slots. | Saved as a week at a time: the days named become the week, and a day left out is removed. |
+| **Day of the week** | One of `monday`, `tuesday`, `wednesday`, `thursday`, `friday`, `saturday`, or `sunday`. | Stored and sent as the `snake_case` name, never as a number. Python, JavaScript, and PostgreSQL disagree about which day is zero, so LearnFlow has no numbering to mis-map. See [ADR-018](../adr/ADR-018-weekly-availability-slots.md). |
+| **Kept free** | A day the learner deliberately recorded as having no study time. | Stored as an availability slot of zero minutes. Distinct from a day they have not set, which has no slot at all — the same distinction *Not explored* draws against a topic with no record. |
 | **Study plan** | A roadmap, monthly plan, weekly plan, or daily plan of recommended work. | Generated against a study goal and current evidence. |
 | **Plan item** | One actionable recommendation in a study plan. | Examples: study, practise, revise, or review mistakes. |
 | **Study activity** | A record of actual study, practice, or revision work completed by the learner. | May record duration and related resources/topics. |
@@ -84,6 +89,8 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Exam; GATE date | Examination cycle; examination schedule | Keeps platform-core language reusable across learning programs. |
 | Onboarding | Learner setup | Use **learner setup** for the capability. **Onboarding** is permitted for one narrower thing only: the first-time UI flow a learner walks through before they have a profile or a goal. It never names the capability, its endpoints, or the ongoing ability to change a goal — a learner who edits an established goal is not being onboarded. |
 | Dashboard (for the home screen) | Home screen | **Dashboard** is reserved for the progress overview [FR-011](../requirements/functional.md#fr-011-progress-overview) describes and PRG-001 will serve: progress by subject and topic, upcoming work, revisions due, and priority focus areas. None of that is built. Calling the setup overview a dashboard would make one word mean two things, and would take the name before the screen that earns it exists. Use **home screen** for the landing screen; the word *dashboard* stays free for progress content. |
+| Weekly study hours; total available time | Weekly availability; the availability of one day | A total is planning arithmetic, and it invites a judgement about whether a week is *enough*. FR-003's planner is what should form that view, with the trade-offs visible; until it exists, report each day and add nothing up. |
+| Time slot; study session (for availability) | Availability slot | An availability slot is a quantity of minutes on a day, not a booking between two clock times. Nothing stores a time of day. |
 | Test integration | Manual external test result entry | The MVP does not connect to third-party test platforms. |
 | AI memory | Learner progress, resource retrieval, or conversation context | Store durable facts in the application/database, not in model memory. |
 | GATE topic | Topic in the GATE CSE learning program | Keeps platform-core language reusable. |
@@ -106,6 +113,10 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
   reads. The five learning stages follow the same rule as `late_registration` and
   `recommended_before`, so rewording a label stays a text change rather than a migration over learner
   rows. Keep the two in step: a new stage needs a value, a label, and a next action.
+- Name a member of a fixed set by its name, not by its position. The seven days are `monday` to
+  `sunday` in the database and on the wire, because an index is the one form of a controlled value
+  that can be read wrongly without any error appearing. Where an order is needed — Monday first — it
+  is presentation, held in the application rather than stored.
 - Name a screen for what a learner does there, not for a UI genre. *Home screen* says where it sits;
   *dashboard* would say what it looks like, and that word is already spoken for above.
 - Two existing names retain **onboarding** and are not renamed, for the same reason the dated-span
@@ -121,6 +132,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination vocabulary above
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the capability *learner setup* names, and the endpoints that serve it
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why the stage labels above and their stored values are separate representations
+- [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the availability vocabulary above, and why a day is named rather than numbered
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)

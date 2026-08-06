@@ -2,7 +2,7 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-05
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - overview.md
@@ -13,6 +13,7 @@ related:
   - ../adr/ADR-012-curriculum-seed-and-reconciliation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
+  - ../adr/ADR-018-weekly-availability-slots.md
   - ../deployment/environments.md
 ---
 
@@ -117,6 +118,7 @@ The applied revisions are:
 | `20260731_02` | `add_topic_code_unique_constraint` — `uq_topics_subject_id_code`, so a topic code identifies one topic within its subject. Additive; safe on populated tables. |
 | `20260801_01` | `create_examination_schedule_and_learner_goal_tables` — examination schedules and their dated periods, plus the first two learner-planning tables, `learners` and `study_goals`. Creates four empty tables; adds nothing to an existing one. |
 | `20260805_01` | `create_learner_topic_progress_table` — the first table of the progress area, holding one learning stage per learner and topic. Creates one empty table with five of its eight documented columns; adds nothing to an existing one. See [schema.md](schema.md#learner_topic_progress) for which three are deferred and why. |
+| `20260806_01` | `create_availability_slots_table` — the third learner-planning table, holding one day's available study time per study goal. Creates one empty table; adds nothing to an existing one. `day_of_week` holds a day *name* rather than the `smallint` [schema.md](schema.md#availability_slots) first documented, which retires the numbering convention rather than answering it. |
 
 ## What Requires a Migration
 
@@ -444,6 +446,7 @@ An AI assistant may propose or generate a migration, but it must not:
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](../adr/ADR-012-curriculum-seed-and-reconciliation.md) — the durable rationale for the seed's matching, update, and never-delete rules
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the rationale for the examination schedule seed and the study goal it feeds
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why revision `20260805_01` creates five of its table's eight documented columns
+- [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — why revision `20260806_01` stores a day name rather than an index
 - [CI/CD strategy](../deployment/ci-cd.md) — the `database` job that runs these migrations on every pull request
 - [Environments and configuration](../deployment/environments.md) — the authoritative catalogue for `DATABASE_URL` and `TEST_DATABASE_URL`
 - [API endpoints](../api/endpoints.md) — the curriculum endpoints that read what the curriculum seed writes

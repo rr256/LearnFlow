@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-05
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -16,6 +16,7 @@ related:
   - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
+  - ../adr/ADR-018-weekly-availability-slots.md
   - ../domain/terminology.md
 ---
 
@@ -230,7 +231,8 @@ app/
 │       └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
-                                            # writes LRN-002 and GOAL-001/GOAL-004 via a server action
+                                            # writes LRN-002, GOAL-001/GOAL-004, and
+                                            # GOAL-005 via server actions
 ```
 
 Every home, curriculum, and setup route sets `dynamic = "force-dynamic"`. The curriculum lives in the
@@ -291,10 +293,13 @@ onboarded — and it writes nothing.
 | `home/StudySetupOverview.tsx` | The saved profile and study goal, read-only, with its CSS Module. It does not reuse `onboarding/StudyGoalSummary.tsx`, whose empty state points at the form beneath it. |
 | `home/ExaminationDates.tsx` | The goal's examination: its window, every published period, the source, and the provisional status — gathered in one panel so that status is stated once beside every date it qualifies. |
 | `home/dates.ts` | Date and period-type presentation. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings; converting one to a `Date` would parse it as UTC midnight and could move a sitting day back by a day. |
+| `home/WeeklyAvailability.tsx` | The study week saved against the goal, read-only, with its CSS Module. It comes off the goal GOAL-002 already returned, so it costs the home screen no further request. |
 | `onboarding/LearnerSetupForm.tsx` | The setup form. A client component only so it can show the last submission's result beside the field responsible; it calls no API itself. |
 | `onboarding/StudyGoalSummary.tsx` | The goal the learner has already set, with its examination window, source, and provisional status. |
-| `onboarding/submission.ts` | Reads the form into the two requests it makes, and owns the form's state shape. Plain functions, so they are testable without a running server. |
-| `onboarding/actions.ts` | The `"use server"` module holding the write path. |
+| `onboarding/AvailabilityForm.tsx` | The weekly availability form: one box per day, saved as a whole week. A separate form from the setup one above, because a week belongs to the goal that form creates. |
+| `onboarding/submission.ts` | Reads the setup form into the two requests it makes, and owns that form's state shape. Plain functions, so they are testable without a running server. |
+| `onboarding/availability.ts` | Reads the availability form into the request it makes, owns that form's state shape, and writes a saved week the way a learner reads it. Plain functions, for the same reason. |
+| `onboarding/actions.ts` | The `"use server"` module holding both write paths. |
 | `progress/TopicStageControl.tsx` | The learning-stage control beside one trackable topic, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. |
 | `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
 | `progress/submission.ts` | Reads the stage form into the request it makes, and owns the control's state shape. |
@@ -304,16 +309,17 @@ A goal response carries the examination **window** but not the dated periods, pe
 [endpoints](../api/endpoints.md#learner-setup-and-goal-endpoints), so a screen wanting the
 registration and results dates reads EXM-001 and matches the goal's cycle by id. That is why the home
 screen makes a third call rather than a second, and why it skips it entirely for a goal aiming at a
-target date alone.
+target date alone. It carries the saved **week**, however, so weekly availability needs no call of its
+own on either screen.
 
 The home screen shows the learner's **active** goal, falling back to the most recent one when they
 have none active — a paused or archived goal is history, and is shown only when it is all they have.
 
 **A `"use server"` module may export only async functions.** Exporting a constant from one throws
 `A "use server" file can only export async functions` on the first request that reaches it — a `500`
-that neither `tsc --noEmit` nor `next build` reports. That is why the setup state shape and its
-initial value live in `submission.ts` rather than beside the action, and why
-`frontend/tests/server-actions.test.ts` checks the rule for every such module.
+that neither `tsc --noEmit` nor `next build` reports. That is why the setup and availability state
+shapes and their initial values live in `submission.ts` and `availability.ts` rather than beside the
+actions, and why `frontend/tests/server-actions.test.ts` checks the rule for every such module.
 
 A server action is still the Next.js server calling the API, so a write does not make the browser
 reach the backend and introduces no CORS; see
@@ -330,7 +336,7 @@ Frontend-only utilities, including the typed API client, request/error helpers, 
 | Path | Responsibility |
 | --- | --- |
 | `config.ts` | Resolves and validates `API_BASE_URL`. Takes the environment as a parameter so validation is testable without mutating `process.env`. |
-| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, study-goal, and topic-progress endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
+| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, study-goal, availability, and topic-progress endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
 
 When the API answers with a failure, `ApiError.code` is the API's own code from the closed catalogue
 in [API conventions](../api/conventions.md#error-codes). Two client-side codes cover what the
@@ -347,8 +353,8 @@ TypeScript types based on public API contracts. Do not copy database/ORM types i
 ### `frontend/tests/`
 
 Vitest specs for the API client, the configuration reader, the curriculum, learner-setup, home, and
-progress components, the setup and stage forms' submission parsing, the home screen's date
-presentation, the stage-to-topic join, and the `"use server"` export rule. They stub `fetch` and
+progress components, the setup, availability, and stage forms' submission parsing, the home screen's
+date presentation, the stage-to-topic join, and the `"use server"` export rule. They stub `fetch` and
 reach no live backend, so `npm test` needs nothing running.
 
 ## Docker and Scripts
@@ -449,6 +455,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the decisions the frontend structure implements
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the server-action write path the `onboarding/` module implements
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the contracts the `progress/` module implements, and why its control sits inside the curriculum view
+- [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the contract the availability form and panel implement, and why a week is saved all at once
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

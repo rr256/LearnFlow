@@ -11,18 +11,23 @@
  * renegotiates.
  *
  * It holds no business rule. Whether a goal aims at enough, whether a timezone
- * is real, and whether an active goal already exists are decided by the backend;
- * this maps the form onto two API calls and maps the answer back into something
- * the form can show.
+ * is real, whether an active goal already exists, and which days a week may name
+ * are decided by the backend; this maps a form onto API calls and maps the answer
+ * back into something the form can show.
  *
- * **This module exports one async function and nothing else.** A `"use server"`
+ * **This module exports async functions and nothing else.** A `"use server"`
  * file may export only async functions, and a constant exported from one fails
  * at runtime with a `500` that neither `tsc` nor `next build` reports. The
- * state shape and its initial value therefore live in `submission.ts`.
+ * state shapes and their initial values therefore live in `submission.ts` and
+ * `availability.ts`.
  */
 
 import { revalidatePath } from "next/cache";
 
+import {
+  readAvailabilitySubmission,
+  type AvailabilityState,
+} from "@/features/onboarding/availability";
 import {
   readSetupSubmission,
   toNewStudyGoal,
@@ -30,7 +35,13 @@ import {
   type SetupField,
   type SetupState,
 } from "@/features/onboarding/submission";
-import { ApiError, createStudyGoal, updateLearnerProfile, updateStudyGoal } from "@/lib/api-client";
+import {
+  ApiError,
+  createStudyGoal,
+  replaceAvailability,
+  updateLearnerProfile,
+  updateStudyGoal,
+} from "@/lib/api-client";
 
 /** Map an API `details` field path onto the form control that produced it. */
 function toSetupField(path: string): SetupField | null {
@@ -116,5 +127,70 @@ export async function saveLearnerSetup(
     status: "saved",
     message: "Your setup is saved. You can change it here at any time.",
     field: null,
+  };
+}
+
+/**
+ * Save the learner's weekly availability against their study goal.
+ *
+ * One request writes the whole week, so an edit spanning several days cannot
+ * leave some saved and others lost -- unlike the profile-and-goal pair above,
+ * which is two writes and reports a partial outcome when the second fails.
+ *
+ * A day the form left blank is absent from the week, which GOAL-005 treats as a
+ * removal. Adding, editing, and removing a day are therefore all the same
+ * request.
+ */
+export async function saveAvailability(
+  _previous: AvailabilityState,
+  form: FormData,
+): Promise<AvailabilityState> {
+  const read = readAvailabilitySubmission(form);
+  if ("problem" in read) {
+    return { status: "error", message: read.problem.message, day: read.problem.day };
+  }
+  const { submission } = read;
+
+  let saved;
+  try {
+    saved = await replaceAvailability(submission.studyGoalId, submission.slots);
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    if (error.isUnreachable) {
+      return {
+        status: "error",
+        message:
+          "The LearnFlow API could not be reached, so nothing was saved. Check that the backend is running, then try again.",
+        day: null,
+      };
+    }
+    if (error.isNotFound) {
+      return {
+        status: "error",
+        message: "That study goal is no longer stored. Reload this page and try again.",
+        day: null,
+      };
+    }
+    return { status: "error", message: error.message, day: null };
+  }
+
+  // The home screen reads the saved week back off the goal, so it has to be
+  // re-rendered for the change to survive a navigation to it.
+  revalidatePath("/setup");
+  revalidatePath("/");
+
+  if (saved.slots.length === 0) {
+    return {
+      status: "saved",
+      message: "Your weekly availability is now empty. Add a day whenever you are ready.",
+      day: null,
+    };
+  }
+  return {
+    status: "saved",
+    message: `Saved ${saved.slots.length === 1 ? "1 day" : `${saved.slots.length} days`} of study time.`,
+    day: null,
   };
 }

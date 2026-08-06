@@ -2,7 +2,7 @@
 title: "ADR-016: Fix the Learner Setup API Contracts"
 status: accepted
 owner: architecture-and-api
-last_updated: 2026-08-05
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - ../domain/terminology.md
@@ -11,6 +11,7 @@ related:
   - ADR-013-examination-schedule-and-study-goal.md
   - ADR-014-api-response-contract.md
   - ADR-015-frontend-foundation-and-server-rendered-api-access.md
+  - ADR-018-weekly-availability-slots.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -70,8 +71,42 @@ to the backend, and `API_CORS_ALLOWED_ORIGINS` stays planned rather than impleme
   of five are now met.** The two that are not are exactly the two this record named, unchanged and
   waiting on the same work: weekly availability, which needs the `day_of_week` decision, and receiving
   an initial plan, which needs Milestone 3.
-  [endpoints.md](../api/endpoints.md#goal-005-deferred) carries the current count and stays
+  [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the current count and stays
   authoritative for it.
+
+## Implementation status — 2026-08-06
+
+*Note added 2026-08-06. The decision below is unchanged: no implemented endpoint was added or removed,
+no request field changed, and no status code moved. As elsewhere in this repository, the accepted text
+is left as written.*
+
+**GOAL-005 is implemented, so the one deferral this record kept is discharged.**
+[ADR-018](ADR-018-weekly-availability-slots.md) creates `availability_slots` and fixes GOAL-005's
+contract. The schema decision this record identified as the blocker — "creating it would fix the
+`day_of_week` numbering convention ADR-011 records as an open project-owner decision" — was taken
+deliberately rather than as a side effect of a form, which is what
+[the alternative this record rejected](#implement-goal-005-alongside-the-rest) asked for. It was
+**retired rather than chosen**: the column stores a day name, so no numbering exists.
+
+**Three statements are overtaken:**
+
+- Under [the decision](#the-deferral-is-discharged-for-lrn-001-lrn-002-and-goal-001-to-goal-004),
+  "GOAL-005 stays deferred, for a different reason." It no longer does.
+- **The acceptance-criteria arithmetic, again.** The criterion this record counted as unmet — "The
+  learner can set available study time and basic planning preferences" — is now **partly met**:
+  available study time is set through GOAL-005, and planning preferences remain unaccepted because
+  `study_goals.planning_preferences` is not created, which is the same reason GOAL-004 gives.
+  Receiving an initial plan is still unmet and still waits on Milestone 3.
+  [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the current count.
+- **A goal response gained a field.** `availability` now travels on GOAL-001 to GOAL-004, which
+  discharges the availability summary GOAL-003's catalogue entry originally promised and this record
+  explicitly withheld. It is a compatible addition under
+  [versioning](../api/versioning.md#compatible-changes-within-a-major-version), and no existing field
+  changed.
+
+**Two of this record's positions were inherited rather than renegotiated,** which is what it says
+later screens do: the write goes through the same `"use server"` module — which still exports only
+async functions — and the backend still gains no CORS.
 
 ## Context
 
@@ -121,7 +156,7 @@ convention [ADR-011](ADR-011-sqlalchemy-persistence-implementation.md) records a
 requirement yet constrains. That is a schema decision, not a contract one, so a caller's existence
 does not unblock it. Two of FR-002's four acceptance criteria are accordingly still unmet — weekly
 availability, and receiving an initial plan, the second of which needs Milestone 3's planning work
-rather than anything this record decides. [endpoints.md](../api/endpoints.md#goal-005-deferred) names
+rather than anything this record decides. [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) names
 both rather than leaving them to be inferred.
 
 ### EXM-001 exposes the published schedules, as reference data
@@ -338,7 +373,8 @@ of a form is exactly what ADR-011 exists to prevent.
 
 - [Project context](../00-project-context.md)
 - [ADR-009: Name and validate configuration variables explicitly](ADR-009-configuration-naming-and-validation.md) — why the default timezone reaches the use case from the composition root
-- [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](ADR-011-sqlalchemy-persistence-implementation.md) — the open `day_of_week` decision GOAL-005 waits on
+- [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](ADR-011-sqlalchemy-persistence-implementation.md) — the `day_of_week` decision GOAL-005 waited on
+- [ADR-018: Store weekly availability as named days replaced a week at a time](ADR-018-weekly-availability-slots.md) — the record that takes that decision and discharges the GOAL-005 deferral this one kept
 - [ADR-013: Model an examination period as a published window of reference data](ADR-013-examination-schedule-and-study-goal.md) — the deferral this record discharges, and the window rule it implements
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the envelope and catalogue these contracts answer in
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the call topology the setup screen inherits
