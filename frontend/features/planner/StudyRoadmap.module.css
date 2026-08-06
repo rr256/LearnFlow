@@ -1,0 +1,69 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+.summary {
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+}
+
+.reason {
+  margin: 0 0 var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.items {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  /*
+   * Numbered, because the order is the substance of a roadmap. The counter is
+   * drawn here rather than by the default marker so a long topic name wraps
+   * against the text rather than under the number.
+   */
+  list-style: none;
+  counter-reset: roadmap;
+}
+
+.item {
+  counter-increment: roadmap;
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+.item::before {
+  content: counter(roadmap) ".";
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.topic {
+  margin: 0;
+  font-weight: 600;
+}
+
+.meta {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.why {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+}

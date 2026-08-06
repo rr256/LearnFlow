@@ -31,6 +31,13 @@ import type {
   TopicProgressResponse,
 } from "@/types/progress";
 import type {
+  GenerateStudyPlanResponse,
+  GeneratedStudyPlans,
+  StudyPlan,
+  StudyPlanCollectionResponse,
+  StudyPlanResponse,
+} from "@/types/study-plan";
+import type {
   AvailabilitySlot,
   ExaminationSchedule,
   ExaminationScheduleCollectionResponse,
@@ -435,4 +442,94 @@ export async function replaceAvailability(
     );
   }
   return (body as WeeklyAvailabilityResponse).data;
+}
+
+
+/**
+ * PLN-001 -- generate a study plan for one of the learner's goals.
+ *
+ * Only the goal is named. Everything the plan is built from -- the curriculum,
+ * the horizon, the saved week, the planning preferences, and the recorded stages
+ * -- comes from what the learner has already stored, so nothing this client sends
+ * can invent a preference on their behalf.
+ *
+ * Generating again supersedes the goal's existing active plans rather than
+ * refusing or duplicating, so calling this twice is safe.
+ *
+ * @throws ApiError with `isNotFound` when the goal is not stored or is not the
+ *   local learner's, or `isConflict` when setup has not created a learner yet.
+ */
+export async function generateStudyPlan(studyGoalId: string): Promise<GeneratedStudyPlans> {
+  const body = await requestJson("/api/v1/study-plans/generate", {
+    method: "POST",
+    body: { study_goal_id: studyGoalId },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data) || !Array.isArray((data as Record<string, unknown>).plans)) {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned a generated plan without a `plans` list.",
+      null,
+    );
+  }
+  return (body as GenerateStudyPlanResponse).data;
+}
+
+/**
+ * PLN-002 -- list the local learner's study plans, newest first.
+ *
+ * Items are not included: `item_count` says how large each plan is, and
+ * {@link readStudyPlan} returns the items of the one being shown.
+ *
+ * Returns an empty list before setup has created a learner.
+ *
+ * @param studyGoalId Restrict to plans belonging to one goal.
+ * @param status Restrict to one plan status, such as `active`.
+ */
+export async function listStudyPlans({
+  studyGoalId,
+  status,
+  limit = DEFAULT_PAGE_SIZE,
+  offset = 0,
+}: {
+  studyGoalId?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<StudyPlan[]> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (studyGoalId) {
+    query.set("study_goal_id", studyGoalId);
+  }
+  if (status) {
+    query.set("status", status);
+  }
+  const body = await requestJson(`/api/v1/study-plans?${query.toString()}`);
+  unwrapCollection(body, "a study plan collection");
+
+  return (body as StudyPlanCollectionResponse).data;
+}
+
+/**
+ * PLN-003 -- read one study plan with its items, in plan order.
+ *
+ * A superseded plan reads back exactly as it was written, which is the point of
+ * superseding rather than deleting.
+ *
+ * @throws ApiError with `isNotFound` when no such plan is stored or it is not
+ *   the local learner's.
+ */
+export async function readStudyPlan(studyPlanId: string): Promise<StudyPlan> {
+  const body = await requestJson(`/api/v1/study-plans/${encodeURIComponent(studyPlanId)}`);
+  const data = unwrapData(body);
+
+  if (!isRecord(data) || !Array.isArray((data as Record<string, unknown>).items)) {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned a study plan without an `items` list.",
+      null,
+    );
+  }
+  return (body as StudyPlanResponse).data;
 }

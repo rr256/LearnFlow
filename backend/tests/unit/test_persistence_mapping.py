@@ -37,12 +37,18 @@ from app.infrastructure.persistence.learner_planning import (
     MAXIMUM_SESSION_MINUTES,
     MINIMUM_SESSION_MINUTES,
     MINUTES_IN_A_DAY,
+    PLAN_ITEM_ACTIONS,
+    PLAN_ITEM_STATUSES,
+    PLAN_STATUSES,
+    PLAN_TYPES,
     STUDY_GOAL_STATUSES,
     TOPIC_SEQUENCING_CHOICES,
     WEEKDAYS,
     AvailabilitySlot,
     Learner,
+    PlanItem,
     StudyGoal,
+    StudyPlan,
 )
 from app.infrastructure.persistence.progress import (
     LEARNING_STAGES,
@@ -67,6 +73,8 @@ LEARNER_PLANNING_TABLES = (
     "learners",
     "study_goals",
     "availability_slots",
+    "study_plans",
+    "plan_items",
 )
 
 PROGRESS_TABLES = ("learner_topic_progress",)
@@ -219,13 +227,13 @@ def test_topic_ordering_and_trackability_use_the_documented_types():
 
 
 def test_the_remaining_schema_areas_are_absent():
-    """Guards the agreed scope. `study_plans` and `plan_items` complete the
-    learner-planning area in Milestone 3, and `revision_records` and
-    `study_activities` complete the progress area; each waits for the code that
-    reads it, so no column fixes a shape before a requirement constrains it."""
+    """Guards the agreed scope. `study_plans` and `plan_items` have arrived with
+    the planning code that reads them, completing the learner-planning area;
+    `revision_records` and `study_activities` complete the progress area, and the
+    resource and assessment areas follow with their own milestones. Each waits for
+    the code that reads it, so no column fixes a shape before a requirement
+    constrains it."""
     for table_name in (
-        "study_plans",
-        "plan_items",
         "study_activities",
         "revision_records",
         "resources",
@@ -581,3 +589,118 @@ def test_a_stage_always_has_a_value_and_a_source():
     assert columns["learning_stage"].server_default is None
     assert columns["stage_source"].nullable is False
     assert columns["stage_source"].server_default is None
+
+
+# -- study plans ------------------------------------------------------------
+
+
+def test_plan_type_is_constrained_to_the_documented_values():
+    """docs/database/schema.md describes `plan_type` as bare `text`. It is
+    validated text guarded by a CHECK here, following that document's own
+    Conventions and ADR-011's rule, as `day_of_week` and `topic_sequencing`
+    already do. ADR-020 records the departure."""
+    ddl = compiled("study_plans")
+
+    assert "ck_study_plans_plan_type_is_known" in ddl
+    for plan_type in PLAN_TYPES:
+        assert f"'{plan_type}'" in ddl
+
+
+def test_plan_status_is_constrained_to_the_documented_values():
+    ddl = compiled("study_plans")
+
+    assert "ck_study_plans_status_is_known" in ddl
+    for status in PLAN_STATUSES:
+        assert f"'{status}'" in ddl
+
+
+def test_a_plan_type_is_stored_as_text_rather_than_a_number():
+    columns = StudyPlan.__table__.columns
+
+    assert isinstance(columns["plan_type"].type, String)
+    assert columns["plan_type"].nullable is False
+
+
+def test_a_plan_can_be_superseded_rather_than_deleted():
+    """docs/database/schema.md asks that plans be superseded so a learner's plan
+    history stays explainable; the status is what carries that."""
+    assert "superseded" in PLAN_STATUSES
+
+
+def test_a_plan_carries_both_the_learner_and_the_goal():
+    """schema.md carries both, and the required index leads on `learner_id`, so
+    a learner's plans are reachable without joining through their goals."""
+    columns = StudyPlan.__table__.columns
+
+    assert columns["learner_id"].nullable is False
+    assert columns["study_goal_id"].nullable is False
+    assert "user_id" not in columns
+
+
+def test_a_plan_period_may_be_open_at_either_end():
+    """A roadmap has no end date when the goal aims at an examination schedule
+    publishing no sitting day and carries no target date beside it."""
+    columns = StudyPlan.__table__.columns
+
+    assert columns["period_start"].nullable is True
+    assert columns["period_end"].nullable is True
+    assert isinstance(columns["period_start"].type, Date)
+
+
+def test_the_plan_index_is_the_one_schema_md_requires():
+    names = {index.name for index in StudyPlan.__table__.indexes}
+
+    assert "ix_study_plans_learner_id_study_goal_id_status_period_start" in names
+
+
+# -- plan items -------------------------------------------------------------
+
+
+def test_plan_item_action_is_constrained_to_the_documented_values():
+    ddl = compiled("plan_items")
+
+    assert "ck_plan_items_action_type_is_known" in ddl
+    for action in PLAN_ITEM_ACTIONS:
+        assert f"'{action}'" in ddl
+
+
+def test_plan_item_status_is_constrained_to_the_documented_values():
+    ddl = compiled("plan_items")
+
+    assert "ck_plan_items_status_is_known" in ddl
+    for status in PLAN_ITEM_STATUSES:
+        assert f"'{status}'" in ddl
+
+
+def test_an_item_cannot_be_estimated_at_zero_minutes():
+    """schema.md approves the bound. An item of zero minutes is scheduling
+    overhead rather than study."""
+    ddl = compiled("plan_items")
+
+    assert "ck_plan_items_estimated_minutes_is_positive" in ddl
+    assert "estimated_minutes IS NULL OR estimated_minutes > 0" in ddl
+
+
+def test_an_item_may_recommend_work_belonging_to_no_topic():
+    """schema.md has `topic_id` nullable. Nothing writes one today; every item the
+    planner produces names a topic."""
+    assert PlanItem.__table__.columns["topic_id"].nullable is True
+
+
+def test_an_item_always_has_a_priority_and_a_status():
+    columns = PlanItem.__table__.columns
+
+    assert columns["priority"].nullable is False
+    assert columns["status"].nullable is False
+    assert columns["status"].server_default is None
+
+
+def test_a_roadmap_item_can_carry_no_date():
+    """A roadmap says what order to work in, not which day to do it on."""
+    assert PlanItem.__table__.columns["scheduled_for"].nullable is True
+
+
+def test_the_plan_item_index_is_the_one_schema_md_requires():
+    names = {index.name for index in PlanItem.__table__.indexes}
+
+    assert "ix_plan_items_study_plan_id_scheduled_for_status" in names

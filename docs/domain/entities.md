@@ -11,6 +11,7 @@ related:
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
+  - ../adr/ADR-020-initial-study-plan-generation.md
   - ../database/schema.md
 ---
 
@@ -148,13 +149,26 @@ Represents a time-bounded set of recommendations toward a study goal.
 
 **Key relationships:** belongs to a learner and study goal; contains plan items.
 
+A plan is derived from what the learner set up rather than entered by them, so a newer plan
+*supersedes* an older one rather than conflicting with it, and the older one is kept: plan history is
+what makes a change of direction explainable. A plan also records why it looks the way it does, in the
+terms that were true when it was generated.
+
+A roadmap and a weekly plan are generated today; monthly and daily plans remain part of the model. See
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md).
+
 ### Plan Item
 
 Represents one recommended action in a study plan.
 
-**Responsible for:** recording the planned work, target time period, action type, status, and associated topic where applicable.
+**Responsible for:** recording the planned work, target time period, action type, status, and associated topic where applicable, together with the reason it is recommended.
 
 **Key relationships:** belongs to a study plan; usually links to a topic and may result in a study activity or revision record.
+
+An item's position within its plan is an order, not a ranking: nothing scores a topic, and a topic
+later in a plan is not one the learner is worse at. Its reason is a statement about the plan's
+reasoning rather than about the learner, and it is not rewritten, so a superseded plan still explains
+itself.
 
 ### Study Activity
 
@@ -283,6 +297,7 @@ Topic ── Learning Resource
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — which part of the learner topic progress entity is persisted today
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the availability slot entity, and why it holds minutes rather than clock times
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the planning preferences the study goal owns, and why they are attributes rather than an entity
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the study plan and plan item entities as they are persisted today
 - [Domain model](domain-model.md)
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)

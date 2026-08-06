@@ -4,6 +4,7 @@ status: accepted
 owner: architecture-and-data
 last_updated: 2026-08-06
 related:
+  - ADR-020-initial-study-plan-generation.md
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
   - ADR-013-examination-schedule-and-study-goal.md
@@ -66,6 +67,31 @@ departs from a documented `schema.md` target the way this record did, and for a 
 
 **Nothing else changed.** `availability_slots` is unaltered, nothing totals a week, and no plan is
 generated from either input.
+
+*Note added 2026-08-06, later the same day. The decision below is unchanged: GOAL-005's contract, the
+day-name column, and the whole-week replace are all untouched.*
+
+**Availability is now read.** [ADR-020](ADR-020-initial-study-plan-generation.md) generates a study
+plan from it, which discharges the Neutral consequence below that "Nothing reads availability yet …
+no plan is built from it".
+
+**Three statements are overtaken:**
+
+- In the earlier note above, "nothing totals a week, and no plan is generated from either input". A
+  plan is now generated from both.
+- Under [Decision](#nothing-totals-a-week), "nothing derives a plan from a week". A plan places
+  sessions on the days a week names.
+- Under [Positive](#positive), "The learner-planning schema area is one table from complete:
+  `study_plans` and `plan_items`" — two tables, and both now exist, created by migration
+  `20260806_03`.
+
+**What this record decided still holds, and the planner depends on it.** A day is still named rather
+than numbered, and the planner maps a calendar date onto a day *name*, with a test pinning the one
+place the two meet. Zero minutes is still a day kept free, distinct in storage from a day never set —
+the planner treats both as no capacity, because neither says the learner can study, but the
+distinction survives. And **nothing still totals a week**: the plan places work on days and reports no
+total, on any response or any screen. Whether a week can reach a goal's horizon is a trade-off
+judgement that waits on FR-004.
 
 ## Context
 
@@ -353,6 +379,7 @@ form that opinion, with the trade-offs visible, and it does not exist.
 - [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the GOAL-005 deferral this record discharges
 - [ADR-017: Record manual topic progress as a learner-owned stage](ADR-017-topic-progress-api-and-schema.md) — the stored-form rule and the absent-versus-explicit distinction this record reuses
 - [ADR-019: Store planning preferences as typed columns replaced as a group](ADR-019-study-goal-planning-preferences.md) — the other half of FR-002's criterion, which reuses this record's replace-as-a-group and unset-versus-set rules
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](ADR-020-initial-study-plan-generation.md) — the planner that reads the week this record stores, and that still reports no total
 - [API conventions](../api/conventions.md) — the envelope, the error codes, and the `snake_case` rule
 - [API endpoint catalog](../api/endpoints.md) — the contract this record decides
 - [API versioning](../api/versioning.md) — what makes a change to it breaking

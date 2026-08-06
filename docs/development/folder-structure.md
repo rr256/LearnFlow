@@ -18,6 +18,7 @@ related:
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
+  - ../adr/ADR-020-initial-study-plan-generation.md
   - ../domain/terminology.md
 ---
 
@@ -126,6 +127,14 @@ Examples:
 - Domain exceptions.
 
 Must not contain FastAPI, SQLAlchemy, provider SDKs, filesystem code, or environment configuration.
+It must not import the application layer either: dependencies point inward, so a use case maps its
+records onto these values rather than the other way round.
+
+| Path | Responsibility |
+| --- | --- |
+| `study_planning.py` | The two deterministic rules a study plan is made of: what order the topics are worked through, and which day each session lands on. Pure functions over plain values — no clock, no session, no configuration — which is what makes a plan replayable and exhaustively testable rather than merely observable. It knows nothing of day *names*, learning stages, or storage; a capacity arrives as a date and a number of minutes. See [ADR-020](../adr/ADR-020-initial-study-plan-generation.md). |
+
+The package exists from the change that first needed it, which is the folder-creation rule below.
 
 ### `backend/app/application/`
 
@@ -162,6 +171,12 @@ Contains concrete technology adapters.
 | `providers/` | Ollama, embeddings, ChromaDB/retrieval adapters, future cloud adapters. |
 | `storage/` | Local filesystem storage adapter and future cloud storage adapters. |
 | `rag/` | PDF extraction, chunking, indexing, and retrieval implementation details. |
+
+One module sits at the root of `infrastructure/` rather than in a subfolder: `clock.py`, the system
+clock behind the `Clock` port. The operating system's clock is not persistence, a provider, storage,
+or RAG, and a four-line adapter does not earn a folder of its own under the rule below. It is an
+adapter at all because every date in a generated plan derives from "now", so the application asks a
+port and the composition root decides what answers.
 
 ### `backend/app/composition/`
 
@@ -230,6 +245,11 @@ app/
 │       ├── page.tsx                        # CUR-002, CUR-003, and PRG-002;
 │       │                                   # writes PRG-004 via a server action
 │       └── page.module.css
+├── plan/
+│   ├── page.tsx                            # PLN-002 and PLN-003 over the learner's
+│   │                                       # active goal; writes PLN-001 via a
+│   │                                       # server action
+│   └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
                                             # writes LRN-002, GOAL-001/GOAL-004 — which
@@ -237,7 +257,7 @@ app/
                                             # GOAL-005, via server actions
 ```
 
-Every home, curriculum, and setup route sets `dynamic = "force-dynamic"`. The curriculum lives in the
+Every home, curriculum, setup, and plan route sets `dynamic = "force-dynamic"`. The curriculum lives in the
 database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
 goal are learner data that changes on submission — and the container build has no API to reach.
 
@@ -257,8 +277,8 @@ behaviours. The program page suspends only the curriculum-tree half: the program
 `404` runs outside any boundary, and the slower tree fetch streams in behind a loading message. Put a
 new boundary below whatever call can raise `notFound()`, never above it.
 
-The home screen keeps its two navigation links outside its boundary as well, so an unreachable API
-leaves a learner a way forward rather than a dead first screen.
+The home screen keeps its navigation links outside its boundary as well, so an unreachable API
+leaves a learner a way forward rather than a dead first screen. The plan screen does the same.
 
 ### `frontend/features/`
 
@@ -277,7 +297,7 @@ quizzes/
 external-tests/
 ```
 
-Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, and `progress/` exist today.
+Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, and `progress/` exist today.
 
 `onboarding/` holds the **learner setup** capability's screen. The module keeps the narrower name
 because a module directory names a UI flow, which is the one use
@@ -296,7 +316,7 @@ onboarded — and it writes nothing.
 | `home/ExaminationDates.tsx` | The goal's examination: its window, every published period, the source, and the provisional status — gathered in one panel so that status is stated once beside every date it qualifies. |
 | `home/dates.ts` | Date and period-type presentation. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings; converting one to a `Date` would parse it as UTC midnight and could move a sitting day back by a day. |
 | `home/WeeklyAvailability.tsx` | The study week saved against the goal, read-only, with its CSS Module. It comes off the goal GOAL-002 already returned, so it costs the home screen no further request. |
-| `home/PlanningPreferences.tsx` | The planning preferences saved against the goal, read-only, with its CSS Module. Off the same goal response, so it costs no further request either. A preference the learner has not set is left out rather than shown as a default, and the panel says plainly that no plan acts on one yet. |
+| `home/PlanningPreferences.tsx` | The planning preferences saved against the goal, read-only, with its CSS Module. Off the same goal response, so it costs no further request either. A preference the learner has not set is left out rather than shown as a default, and the panel says plainly what a plan does with one. |
 | `onboarding/LearnerSetupForm.tsx` | The setup form, including the planning-preference controls, which ride on the same goal write rather than needing a form of their own. A client component only so it can show the last submission's result beside the field responsible; it calls no API itself. |
 | `onboarding/StudyGoalSummary.tsx` | The goal the learner has already set, with its examination window, source, and provisional status. |
 | `onboarding/AvailabilityForm.tsx` | The weekly availability form: one box per day, saved as a whole week. A separate form from the setup one above, because a week belongs to the goal that form creates. |
@@ -304,6 +324,12 @@ onboarded — and it writes nothing.
 | `onboarding/availability.ts` | Reads the availability form into the request it makes, owns that form's state shape, and writes a saved week the way a learner reads it. Plain functions, for the same reason. |
 | `onboarding/preferences.ts` | Writes a saved planning preference the way a learner reads it. Presentation only — the reading half lives in `submission.ts`, because preferences ride on the goal write that form already makes. Plain functions, for the same reason, and used by the home panel as well as the setup screen. |
 | `onboarding/actions.ts` | The `"use server"` module holding both write paths. |
+| `planner/StudyRoadmap.tsx` | The order the plan works through the curriculum, read-only, with its CSS Module. Every item shows the reason it is where it is, which is what FR-003 asks a recommendation to carry. It reorders nothing: ordering is a planning rule. |
+| `planner/PlanWeek.tsx` | The work the plan places on each of the coming days, read-only, with its CSS Module. A day with no work is absent rather than shown empty, and no day or week is totalled. |
+| `planner/GeneratePlanForm.tsx` | The button that asks for a plan, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says plainly that rebuilding keeps the previous plan. |
+| `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. |
+| `planner/submission.ts` | Reads the generate-plan form into the request it makes, and owns that form's state shape. It reads no preference: a plan is built from what the learner stored, never from what a client sends. |
+| `planner/actions.ts` | The `"use server"` module holding the generate path. |
 | `progress/TopicStageControl.tsx` | The learning-stage control beside one trackable topic, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. |
 | `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
 | `progress/submission.ts` | Reads the stage form into the request it makes, and owns the control's state shape. |
@@ -340,7 +366,7 @@ Frontend-only utilities, including the typed API client, request/error helpers, 
 | Path | Responsibility |
 | --- | --- |
 | `config.ts` | Resolves and validates `API_BASE_URL`. Takes the environment as a parameter so validation is testable without mutating `process.env`. |
-| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, study-goal, availability, and topic-progress endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
+| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, study-goal, availability, topic-progress, and study-plan endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
 
 When the API answers with a failure, `ApiError.code` is the API's own code from the closed catalogue
 in [API conventions](../api/conventions.md#error-codes). Two client-side codes cover what the
@@ -356,10 +382,10 @@ TypeScript types based on public API contracts. Do not copy database/ORM types i
 
 ### `frontend/tests/`
 
-Vitest specs for the API client, the configuration reader, the curriculum, learner-setup, home, and
-progress components, the setup, availability, and stage forms' submission parsing, the home screen's
-date presentation, the planning-preference presentation, the stage-to-topic join, and the
-`"use server"` export rule. They stub `fetch` and reach no live backend, so `npm test` needs nothing
+Vitest specs for the API client, the configuration reader, the curriculum, learner-setup, home,
+progress, and planner components, the setup, availability, stage, and generate-plan forms' submission
+parsing, the home screen's date presentation, the planning-preference presentation, the plan
+presentation, the stage-to-topic join, and the `"use server"` export rule. They stub `fetch` and reach no live backend, so `npm test` needs nothing
 running.
 
 ## Docker and Scripts
@@ -462,6 +488,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the contracts the `progress/` module implements, and why its control sits inside the curriculum view
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the contract the availability form and panel implement, and why a week is saved all at once
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the contract the preference controls and panel implement, and why they need no form or action of their own
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — why the planning rules live in the domain layer, and the contracts the `planner/` module implements
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

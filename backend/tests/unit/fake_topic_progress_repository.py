@@ -44,6 +44,11 @@ class FakeTopicProgressRepository:
         matching = list(reversed(self._matching(learner_id, curriculum_version_id)))
         return tuple(matching[offset : offset + limit])
 
+    def list_recorded_stages(
+        self, *, learner_id: uuid.UUID, curriculum_version_id: uuid.UUID
+    ) -> tuple[TopicProgressRecord, ...]:
+        return tuple(self._matching(learner_id, curriculum_version_id))
+
     def find_topic_progress(
         self, *, learner_id: uuid.UUID, topic_id: uuid.UUID
     ) -> TopicProgressRecord | None:

@@ -27,17 +27,20 @@ from app.application.ports.curriculum_seed_repository import (
     TopicRecord,
     TopicRelationshipRecord,
 )
+from app.application.use_cases.manage_study_plans import ManageStudyPlans
 from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.composition.app_factory import create_app
 from app.presentation.api.dependencies import (
     READ_CURRICULUM_PROVIDER,
+    STUDY_PLANS_PROVIDER,
     TOPIC_PROGRESS_PROVIDER,
 )
 from tests.api.onboarding_fixtures import Onboarding, install_onboarding
 from tests.unit.fake_curriculum_repository import FakeCurriculumRepository
 from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
 from tests.unit.fake_topic_progress_repository import FakeTopicProgressRepository, topic
+from tests.unit.planning_fixtures import Planning
 
 PUBLISHED_AT = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
 
@@ -197,5 +200,35 @@ def progress_client(progress: Progress) -> Iterator[TestClient]:
         yield ManageTopicProgress(learners=progress.learners, progress=progress.progress)
 
     setattr(app.state, TOPIC_PROGRESS_PROVIDER, provide)
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture
+def planning() -> Planning:
+    """The learner, goal, curriculum, and week the plan endpoints work from.
+
+    The same fixture the use-case tests use, so a rule proved against one cannot
+    quietly differ in the other. The learner can study two hours on the Thursday
+    the fixed clock reports, so a generated week has something in it.
+    """
+    return Planning(availability={"thursday": 120})
+
+
+@pytest.fixture
+def planning_client(planning: Planning) -> Iterator[TestClient]:
+    """A client whose plan endpoints share one set of stores.
+
+    Shared across requests deliberately: a test can generate a plan over PLN-001
+    and then read it back over PLN-002 and PLN-003, which is the sequence the plan
+    screen performs.
+    """
+    app = create_app()
+
+    @contextmanager
+    def provide() -> Iterator[ManageStudyPlans]:
+        yield planning.planner()
+
+    setattr(app.state, STUDY_PLANS_PROVIDER, provide)
     with TestClient(app) as client:
         yield client

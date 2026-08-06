@@ -73,6 +73,21 @@ class SqlAlchemyTopicProgressRepository:
         )
         return tuple(_progress_record(model) for model in models)
 
+    def list_recorded_stages(
+        self, *, learner_id: uuid.UUID, curriculum_version_id: uuid.UUID
+    ) -> tuple[TopicProgressRecord, ...]:
+        """Every stage this learner has recorded under this curriculum version.
+
+        Ordered by topic so a caller reading the whole set twice sees it the same
+        way, though nothing in the contract promises an order.
+        """
+        models = self._session.scalars(
+            select(LearnerTopicProgress)
+            .where(*_filters(learner_id, curriculum_version_id))
+            .order_by(LearnerTopicProgress.topic_id)
+        )
+        return tuple(_progress_record(model) for model in models)
+
     def find_topic_progress(
         self, *, learner_id: uuid.UUID, topic_id: uuid.UUID
     ) -> TopicProgressRecord | None:

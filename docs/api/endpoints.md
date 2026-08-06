@@ -19,6 +19,7 @@ related:
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
+  - ../adr/ADR-020-initial-study-plan-generation.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -232,7 +233,9 @@ On this endpoint, omitting `planning_preferences` and sending `null` mean the sa
 has nothing stored to leave alone, so both create a goal with no preferences. They differ on GOAL-004.
 
 **No preference is totalled, ranked, or scored**, on this response or anywhere else. Preferences are
-planning inputs beside availability, and nothing consumes one yet.
+planning inputs beside availability, and both are now consumed by the plan PLN-001 generates — a
+session length decides how long an item runs, and a topic order decides the sequence — which
+[the FR-002 criteria](#fr-002-acceptance-criteria) records.
 
 Errors: `422` `validation_error` when the request aims at neither a cycle nor a date, when the
 program or schedule is not stored, when the schedule belongs to another program, when the program
@@ -325,8 +328,10 @@ is why the stored constraint is `>= 0` rather than `> 0`.
 
 **No total is reported**, on this response or on a goal. Availability is a planning input, and
 [terminology](../domain/terminology.md) calls it "not a measure of commitment or ability"; turning a
-week into an hours figure is planning work, and PLN-001 is what should do it with the trade-offs
-visible.
+week into an hours figure is planning work. PLN-001 now performs the part of that work a plan needs —
+it places sessions on the days a week names — and deliberately reports no total either. Whether a
+week can reach a goal's horizon is a trade-off judgement that waits on
+[FR-004](../requirements/functional.md#fr-004-plan-adaptation).
 
 The response is an object rather than a bare array, per
 [ADR-014](../adr/ADR-014-api-response-contract.md), and carries **no `pagination` block**: a week
@@ -352,13 +357,14 @@ upserts the learner's active goal rather than refusing a second one and does not
 
 ### FR-002 acceptance criteria
 
-**Four of [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s five acceptance
-criteria are met in full, and one not at all.** This section is authoritative for the count; documents
-that cite it link here rather than repeating it.
+**All five of [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s acceptance
+criteria are met in full.** This section is authoritative for the count; documents that cite it link
+here rather than repeating it.
 
 Met in full: setting a target examination schedule or completion date; setting available study time and
-basic planning preferences; confirming the active learning program; and reviewing the saved setup
-without re-entering it, which the home screen reads back over LRN-001, GOAL-002, and EXM-001.
+basic planning preferences; confirming the active learning program; reviewing the saved setup
+without re-entering it, which the home screen reads back over LRN-001, GOAL-002, and EXM-001; and
+receiving an initial plan with no previous progress, which PLN-001 generates.
 
 - *"The learner can set available study time and basic planning preferences"* — **met in full**, having
   been partly met since GOAL-005 arrived. Available study time is set through GOAL-005; planning
@@ -367,24 +373,174 @@ without re-entering it, which the home screen reads back over LRN-001, GOAL-002,
   [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) had held back. Both are read back on
   the setup screen and on the home screen.
 
-  **Nothing consumes either yet.** No plan is generated, no week is totalled, and no preference is
-  ranked or scored. The criterion is about what a learner can *set*, which they now can; what reads it
-  arrives with [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision).
-- *"The learner can start with no previous progress and still receive an initial plan"* — **unmet.**
-  No plan is generated at all. PLN-001 arrives with
-  [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision).
+  **Both are now consumed**, by the plan PLN-001 generates: a week decides which days hold work, and a
+  session length decides how long each item runs. Nothing still totals a week or ranks a preference —
+  a plan places work on days, which is the arithmetic
+  [ADR-018](../adr/ADR-018-weekly-availability-slots.md) said belonged to a planner, and no more of it.
+- *"The learner can start with no previous progress and still receive an initial plan"* — **met in
+  full.** PLN-001 generates a roadmap over the whole curriculum and a plan for the coming week,
+  deterministically and with no AI provider, from the goal's horizon, the saved availability, the
+  planning preferences, and any recorded stages. A learner who has recorded no progress receives the
+  same plan they would with it — a stage explains an item, it does not rank one. Contracted by
+  [ADR-020](../adr/ADR-020-initial-study-plan-generation.md).
 
 ## Planning Endpoints
 
-Supports **FR-003 — Study Timeline and Plan** and **FR-004 — Plan Adaptation**.
+Supports **FR-003 — Study Timeline and Plan** and **FR-004 — Plan Adaptation**, and completes
+**FR-002**'s last acceptance criterion.
 
-| ID | Method and path | Purpose | Primary request/result |
-| --- | --- | --- | --- |
-| PLN-001 | `POST /api/v1/study-plans/generate` | Generate or replan roadmap/monthly/weekly/daily recommendations for a goal. | Created plan; reason for generation/replan. |
-| PLN-002 | `GET /api/v1/study-plans` | List plans, filterable by goal, type, status, and period. | Plan collection. |
-| PLN-003 | `GET /api/v1/study-plans/{plan_id}` | Read one plan and its ordered items. | Plan + plan items. |
-| PLN-004 | `PATCH /api/v1/plan-items/{plan_item_id}` | Mark a planned item completed, skipped, or postponed. | Updated plan item. |
-| PLN-005 | `POST /api/v1/study-plans/{plan_id}/adapt` | Request an updated plan after missed work or changed availability. | New/superseding plan or accepted operation. |
+| ID | Method and path | Purpose | Primary request/result | State |
+| --- | --- | --- | --- | --- |
+| PLN-001 | `POST /api/v1/study-plans/generate` | Generate or replan roadmap/monthly/weekly/daily recommendations for a goal. | Created plan; reason for generation/replan. | Implemented |
+| PLN-002 | `GET /api/v1/study-plans` | List plans, filterable by goal, type, status, and period. | Plan collection. | Implemented |
+| PLN-003 | `GET /api/v1/study-plans/{plan_id}` | Read one plan and its ordered items. | Plan + plan items. | Implemented |
+| PLN-004 | `PATCH /api/v1/plan-items/{plan_item_id}` | Mark a planned item completed, skipped, or postponed. | Updated plan item. | Not implemented |
+| PLN-005 | `POST /api/v1/study-plans/{plan_id}/adapt` | Request an updated plan after missed work or changed availability. | New/superseding plan or accepted operation. | Not implemented |
+
+PLN-001 to PLN-003 are implemented, and their contracts are fixed by
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md). None of them accepts a `learner_id`: the
+effective learner is resolved server-side, per the [identity assumption](#identity-assumption) above.
+All three are synchronous, and all three read and write through the `ManageStudyPlans` application
+use case.
+
+**A plan is deterministic.** The same goal, curriculum, week, preferences, and date produce the same
+plan every time, and no AI provider is involved — which is what
+[LearnFlow product agents](../ai/learnflow-agents.md) requires of the planner. **A plan is also
+explainable**: every plan carries `generation_reason` and every item `recommendation_reason`, written
+when the plan was generated and never rewritten, which is
+[FR-003](../requirements/functional.md#fr-003-study-timeline-and-plan)'s fourth acceptance criterion.
+
+**Nothing here judges a learner.** A recorded learning stage appears in an item's reason and changes
+neither the order nor the time allowed; `priority` is a position in a list, not a score; and no total
+is reported for a day, a week, or a plan.
+
+### PLN-001 — `POST /api/v1/study-plans/generate`
+
+Request body: `study_goal_id` (a UUID). It is required, and an unknown field is rejected. Returns
+`201` with the generation under `data`.
+
+**Only the goal is named.** Everything a plan is built from — the curriculum and its topic
+relationships, the goal's horizon, the saved weekly availability, the planning preferences, and the
+recorded learning stages — is read from what the learner has already stored, so no client can plan
+with a preference the learner never set. A body carrying `preferred_session_minutes` is a `422`, not
+a silently ignored field.
+
+`data` carries `study_goal_id`, `generated_on`, `plans`, and `superseded_plan_ids`.
+
+- `generated_on` is the date in the **learner's own timezone**, from `learners.timezone`, not the
+  server's. A plan generated late on a Sunday evening in `Asia/Kolkata` starts on Sunday.
+- `plans` holds what was written, each with its items. **A `roadmap` always**, ordering every
+  trackable topic across the goal's horizon with no dates; and a **`weekly`** plan when the learner's
+  saved week has room for at least one session, placing the first of those topics onto the next seven
+  days.
+- `superseded_plan_ids` names the plans this generation set aside. They are kept, not deleted, and
+  each is still readable through PLN-003.
+
+**Generating again supersedes rather than refusing.** The goal's existing `active` plans become
+`superseded` and a new pair is written, so a learner whose availability changed simply asks again.
+That is deliberately unlike GOAL-001's refusal of a second active goal: a goal is what a plan is built
+*from* and is expensive to re-enter, while a plan is derived and is preserved rather than destroyed.
+
+**How the plan is built**, in full, because a learner is entitled to know and because
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md) fixes each rule:
+
+- **Which topics.** Every topic with `is_trackable`. A topic that only groups subtopics is a heading
+  rather than work — the rule PRG-004 applies when it refuses a stage against one.
+- **What order.** `syllabus_order`, and an unset `topic_sequencing`, follow the stored `position` of
+  subjects and topics, parent before child — the order CUR-003 renders.
+  `prerequisites_first` is a topological order over the `prerequisite` relationships, taking the
+  earliest syllabus position among the topics ready at each step, so one defined order results rather
+  than one of many valid ones. `recommended_before` and `related` do not constrain it. **The curated
+  GATE CSE curriculum stores no prerequisite relationship**, so `prerequisites_first` currently yields
+  syllabus order, and the plan's own reason says so rather than claiming otherwise.
+- **The horizon.** `period_end` on the roadmap is the earlier of the examination window's first
+  sitting day and the goal's `target_date`, whichever the goal has. It is `null` only when the goal
+  aims at a schedule publishing no sitting day and carries no target date, which `generation_reason`
+  then states. The examination is read on every generation rather than copied, so a corrected
+  schedule reaches the next plan.
+- **How long each item is.** `preferred_session_minutes`, or **60 minutes when the learner has set
+  none** — chosen by the planner and named in the plan as the planner's choice, never stored against
+  the goal. A preference nobody set still reads as unset on GOAL-002.
+- **Which day each item falls on.** Each of the next seven days is filled with whole sessions while
+  it has room for one; a day with time left but less than a full session gets a single shorter
+  session only if nothing else was placed on it, so thirty minutes a day still yields a topic. No
+  topic is split across days or scheduled twice.
+- **A day with no availability holds no work**, whether the learner kept it free with zero minutes or
+  never set it. The two remain different statements in storage; neither says they can study. A goal
+  with **no saved availability at all** gets the roadmap and no week, with the reason saying so.
+- **A recorded learning stage explains an item**, appearing in its `recommendation_reason`. It changes
+  neither the order nor the time allowed: a stage guides the next action rather than scoring a topic
+  ([FR-005](../requirements/functional.md#fr-005-topic-progress-and-learning-evidence)).
+
+Errors: `404` `not_found` when no such goal is stored *or it belongs to another learner*, as for
+GOAL-003; `422` `validation_error` when the body names no goal, names one that is not a UUID, or
+names an unknown field; `409` `conflict` when no learner exists yet to own the plan, or when more
+than one learner is stored.
+
+### PLN-002 — `GET /api/v1/study-plans`
+
+Query parameters `study_goal_id` (a UUID, optional), `plan_type` (optional), `status` (optional),
+`limit` (1–100, default 25), and `offset` (0 or greater, default 0). Returns `200` with the `data`
+array and the `pagination` block, newest first.
+
+Each item carries `id`, `learner_id`, `study_goal_id`, `plan_type`, `period_start`, `period_end`,
+`status`, `generation_reason`, `item_count`, and `items`.
+
+**`items` is empty on a listed plan.** A page of plans each carrying every item would be an unbounded
+payload inside a paginated one, which the [pagination block](conventions.md#success-response-shapes)
+cannot describe; `item_count` says how large each plan is, and PLN-003 returns the items of the one a
+client opens.
+
+A `study_goal_id` that matches nothing returns an empty page rather than `404`: a filter that matches
+nothing is an empty result, not a missing record. An unknown `plan_type` or `status` is different and
+is refused — a client asking for `status=finished` has misread the contract, and returning nothing
+would let it keep doing so.
+
+An installation where setup has not run has no learner and therefore no plans, which is an empty page.
+
+Errors: `422` `validation_error` for a `limit`, `offset`, or `study_goal_id` outside those bounds or
+shapes, or for a `plan_type` or `status` outside the documented values — `details` names
+`query.plan_type` or `query.status` and never echoes the rejected value; `409` `conflict` when more
+than one learner is stored.
+
+### PLN-003 — `GET /api/v1/study-plans/{plan_id}`
+
+`plan_id` is a UUID. Returns `200` with one plan under `data`, in the shape PLN-002 returns per item,
+with `items` filled and ordered by `priority`.
+
+Each item carries `id`, `topic`, `action_type`, `scheduled_for`, `estimated_minutes`, `priority`,
+`status`, and `recommendation_reason`.
+
+- `topic` is the topic's `id`, `code`, `name`, `subject_id`, and `subject_name`, embedded so a client
+  showing a plan needs no second request to name what it recommends. It is `null` only for an item
+  recommending work belonging to no single topic; nothing writes one today.
+- `scheduled_for` is `null` on a roadmap item — a roadmap says what order to work in, not which day —
+  and set on every weekly item.
+- `priority` is where the item falls in its plan, counting from 1. **An order, not a score.**
+- `action_type` is `study` on everything generated today. `practice`, `revise`, and `review_mistakes`
+  name work the product does not yet model.
+- `status` is `planned` on everything. Moving one is PLN-004's work.
+
+**A superseded plan is readable and reads exactly as it was written**, including the reasons. That is
+the point of superseding rather than deleting.
+
+Errors: `404` `not_found` when no such plan is stored *or it belongs to another learner*; `422`
+`validation_error` when the path segment is not a UUID; `409` `conflict` when more than one learner
+is stored.
+
+### PLN-004 and PLN-005 — not implemented
+
+Both belong to [FR-004](../requirements/functional.md#fr-004-plan-adaptation) rather than to FR-002,
+and both wait on decisions this change deliberately did not take. PLN-004 moves a plan item to
+`completed`, `skipped`, or `postponed` — the column exists and nothing writes anything but `planned`.
+PLN-005 re-plans after missed work or changed availability, which needs the trade-off reporting
+FR-004's third criterion asks for. Generating again through PLN-001 is what a learner does in the
+meantime, and it supersedes rather than duplicating.
+
+Related entities: [study plan](../domain/entities.md#study-plan) and
+[plan item](../domain/entities.md#plan-item). Related tables:
+[`study_plans`](../database/schema.md#study_plans) and
+[`plan_items`](../database/schema.md#plan_items).
 
 ## Progress and Study-Activity Endpoints
 
@@ -477,9 +633,11 @@ is stored.
 
 Each waits on something that does not exist rather than on a decision:
 
-- **PRG-001** reports the current plan, revisions due, and priority focus areas. `study_plans`,
-  `plan_items`, and `revision_records` all arrive with
-  [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision).
+- **PRG-001** reports the current plan, revisions due, and priority focus areas. The current plan
+  now exists — `study_plans` and `plan_items` are created and PLN-002 reads them — so what remains is
+  `revision_records`, which arrives with
+  [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision), and the evidence a
+  priority focus area would be drawn from, which nothing stores.
 - **PRG-003** promises a progress summary, evidence, and a next action. The only evidence stored is
   the stage itself, so today it would return exactly what PRG-002 returns per item.
 - **ACT-001** and **ACT-002** need `study_activities`, which is not created.
@@ -574,8 +732,11 @@ Implement in an order that enables one working learner flow:
 3. Progress reads/updates and basic study activities. **Partly done** — PRG-002 and PRG-004 record a
    learning stage and read it back, contracted by
    [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). PRG-001, PRG-003, ACT-001, and
-   ACT-002 wait on the plan, revision, and study-activity records described above.
-4. Plan generation/read/update.
+   ACT-002 wait on the revision and study-activity records described above; PRG-001 also reports the
+   current plan, which PLN-001 now generates.
+4. Plan generation/read/update. **Partly done** — PLN-001, PLN-002, and PLN-003 generate a plan and
+   read it back, contracted by [ADR-020](../adr/ADR-020-initial-study-plan-generation.md). PLN-004
+   and PLN-005 belong to FR-004 and wait on plan adaptation.
 5. Revision reads/updates.
 6. Resource registration and ingestion status.
 7. Mentor questions and grounded retrieval.
@@ -592,6 +753,7 @@ Implement in an order that enables one working learner flow:
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the request and response fields of PRG-002 and PRG-004, and why the other four progress endpoints stay uncontracted
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the request and response fields of GOAL-005, and the `availability` object every goal response carries
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the `planning_preferences` group GOAL-001 and GOAL-004 accept, and the criterion it completes
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the request and response fields of PLN-001 to PLN-003, and the rules a generated plan follows
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

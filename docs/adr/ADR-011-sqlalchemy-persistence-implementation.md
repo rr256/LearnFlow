@@ -4,6 +4,7 @@ status: accepted
 owner: architecture-and-data
 last_updated: 2026-08-06
 related:
+  - ADR-020-initial-study-plan-generation.md
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
   - ADR-005-docker-compose-local-development.md
@@ -161,6 +162,34 @@ precedent.
 the same reasoning applied to `day_of_week`. And **the one open item is still the one open item**:
 numeric precision for score columns, in tables that do not exist. The learner-planning area remains one
 migration from complete, since this change adds columns to an existing table rather than a table.
+
+*Note added 2026-08-06, later the same day. The decision below is unchanged; this records the
+completion of one schema area and narrows where the ordering rule still applies.*
+
+**The learner-planning area is complete.** Migration `20260806_03` creates `study_plans` and
+`plan_items`, the two tables this record's notes above described as "one migration from complete", and
+they arrive **with** the planning code that reads them — which is the ordering rule below applied
+rather than departed from. [ADR-020](ADR-020-initial-study-plan-generation.md) records the decision.
+
+**Three statements above are overtaken**: "The learner-planning area is one migration from complete";
+"[the ordering rule] still governs `study_plans`, `plan_items`, `study_activities`,
+`revision_records`, and every resource and assessment table, none of which exists"; and "The
+learner-planning area remains one migration from complete." The rule now governs `study_activities`,
+`revision_records`, and every resource and assessment table.
+
+Two further points of fact, neither altering the decision:
+
+- **The validated-text rule was applied a fourth time.** `plan_type`, `study_plans.status`,
+  `plan_items.action_type`, and `plan_items.status` are `varchar(32)` guarded by a `CHECK` rather than
+  the bare `text` [schema.md](../database/schema.md#study_plans) documented, following `day_of_week`
+  and `topic_sequencing`.
+- **`plan_items.status` is a third recorded exception to the ordering rule**, after
+  `learner_topic_progress.stage_source` under ADR-017 and the planning preferences under ADR-019. It
+  is created although nothing writes anything but `planned`, for the reason ADR-017 gave: a state
+  added after learners hold plans could only be backfilled by guessing.
+
+**The one open item is still the one open item**: numeric precision for score columns, in tables that
+do not exist.
 
 ## Context
 
@@ -324,6 +353,7 @@ constraint where practical.
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the contract the first endpoints reading these tables answer in
 - [ADR-018: Store weekly availability as named days replaced a week at a time](ADR-018-weekly-availability-slots.md) — retires the `day_of_week` convention this record left open
 - [ADR-019: Store planning preferences as typed columns replaced as a group](ADR-019-study-goal-planning-preferences.md) — the recorded exception to the per-milestone ordering rule above, and the validated-text rule applied again
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](ADR-020-initial-study-plan-generation.md) — the change that completes the learner-planning area, following the ordering rule rather than departing from it
 - [API endpoints](../api/endpoints.md) — CUR-001 to CUR-003, the first endpoints to read these tables
 - [Database schema](../database/schema.md)
 - [Database migrations](../database/migrations.md)

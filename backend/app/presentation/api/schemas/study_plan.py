@@ -1,0 +1,242 @@
+"""Request and response schemas for the study-plan endpoints (PLN-001 to PLN-003).
+
+No request accepts a `learner_id`: the effective learner is resolved server-side
+(docs/api/conventions.md). Generation names the *goal* to plan for, because a
+learner may hold several, and whether that goal is theirs is decided by the use
+case.
+
+A plan reports the reason it exists and every item the reason it is there. Those
+sentences are written when the plan is generated and never rewritten, so a
+superseded plan still explains itself in the terms that produced it, which is what
+FR-003 asks of a recommendation.
+
+A listed plan carries no items and a read plan does. A page of plans each holding
+every item would be an unbounded payload inside a paginated one, which the
+pagination block in docs/api/conventions.md cannot describe; `item_count` says how
+large a listed plan is.
+"""
+
+import uuid
+from datetime import date
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.application.dto.study_plan import (
+    PLAN_ITEM_ACTIONS,
+    PLAN_ITEM_STATUSES,
+    PLAN_STATUSES,
+    PLAN_TYPES,
+    GeneratedStudyPlans,
+    PlanGenerationRequest,
+    PlanItemDetail,
+    PlanItemTopic,
+    StudyPlanDetail,
+    StudyPlanPage,
+)
+from app.presentation.api.schemas.pagination import Pagination
+
+
+class PlanItemTopicSchema(BaseModel):
+    """The topic a plan item recommends work on."""
+
+    id: uuid.UUID
+    code: str | None
+    name: str
+    subject_id: uuid.UUID
+    subject_name: str = Field(
+        description="The subject the topic belongs to, so a plan reads without the whole tree."
+    )
+
+    @classmethod
+    def of(cls, topic: PlanItemTopic) -> PlanItemTopicSchema:
+        """Build the schema from its application DTO."""
+        return cls(
+            id=topic.id,
+            code=topic.code,
+            name=topic.name,
+            subject_id=topic.subject_id,
+            subject_name=topic.subject_name,
+        )
+
+
+class PlanItemSchema(BaseModel):
+    """One recommended action within a plan."""
+
+    id: uuid.UUID
+    topic: PlanItemTopicSchema | None = Field(
+        description="Null only for an item recommending work belonging to no single topic."
+    )
+    action_type: str = Field(description=f"One of: {', '.join(PLAN_ITEM_ACTIONS)}.")
+    scheduled_for: date | None = Field(
+        description=(
+            "The day this work is recommended for. Null on a roadmap item, which says what "
+            "order to work in rather than which day to do it on."
+        )
+    )
+    estimated_minutes: int | None = Field(
+        description=(
+            "How long this item is expected to take. It is the learner's preferred session "
+            "length, or what remains of a day too short to hold a whole session."
+        )
+    )
+    priority: int = Field(
+        description=(
+            "Where this item falls in its plan, counting from 1. An order, not a score: "
+            "nothing here ranks one topic above another by anything but position."
+        )
+    )
+    status: str = Field(description=f"One of: {', '.join(PLAN_ITEM_STATUSES)}.")
+    recommendation_reason: str | None = Field(
+        description="Why this item is here, as written when the plan was generated."
+    )
+
+    @classmethod
+    def of(cls, item: PlanItemDetail) -> PlanItemSchema:
+        """Build the schema from its application DTO."""
+        return cls(
+            id=item.id,
+            topic=None if item.topic is None else PlanItemTopicSchema.of(item.topic),
+            action_type=item.action_type,
+            scheduled_for=item.scheduled_for,
+            estimated_minutes=item.estimated_minutes,
+            priority=item.priority,
+            status=item.status,
+            recommendation_reason=item.recommendation_reason,
+        )
+
+
+class StudyPlanSchema(BaseModel):
+    """One study plan, with its items when a single plan was asked for."""
+
+    id: uuid.UUID
+    learner_id: uuid.UUID
+    study_goal_id: uuid.UUID
+    plan_type: str = Field(
+        description=(
+            f"One of: {', '.join(PLAN_TYPES)}. Generation produces a `roadmap` and, when the "
+            "learner has saved study time the coming week can use, a `weekly` plan."
+        )
+    )
+    period_start: date | None = Field(description="First day the plan covers.")
+    period_end: date | None = Field(
+        description=(
+            "Last day the plan covers. On a roadmap this is the goal's horizon — the earlier "
+            "of the examination window's first sitting day and the target date. Null only "
+            "when the goal has neither, which `generation_reason` then states."
+        )
+    )
+    status: str = Field(
+        description=(
+            f"One of: {', '.join(PLAN_STATUSES)}. Generating again sets the goal's existing "
+            "`active` plans to `superseded` rather than deleting them."
+        )
+    )
+    generation_reason: str | None = Field(
+        description="Why this plan looks the way it does, as written when it was generated."
+    )
+    item_count: int = Field(description="How many items the plan holds, whether or not listed.")
+    items: list[PlanItemSchema] = Field(
+        description=(
+            "The plan's items in plan order. Empty on a listed plan: read one plan to get "
+            "its items."
+        )
+    )
+
+    @classmethod
+    def of(cls, plan: StudyPlanDetail) -> StudyPlanSchema:
+        """Build the schema from its application DTO."""
+        return cls(
+            id=plan.id,
+            learner_id=plan.learner_id,
+            study_goal_id=plan.study_goal_id,
+            plan_type=plan.plan_type,
+            period_start=plan.period_start,
+            period_end=plan.period_end,
+            status=plan.status,
+            generation_reason=plan.generation_reason,
+            item_count=plan.item_count,
+            items=[PlanItemSchema.of(item) for item in plan.items],
+        )
+
+
+class StudyPlanResponse(BaseModel):
+    """One study plan, under the documented `data` envelope."""
+
+    data: StudyPlanSchema
+
+
+class StudyPlanCollectionResponse(BaseModel):
+    """A page of study plans, under the documented collection envelope."""
+
+    data: list[StudyPlanSchema]
+    pagination: Pagination
+
+    @classmethod
+    def of(cls, page: StudyPlanPage) -> StudyPlanCollectionResponse:
+        """Build the response from its application DTO."""
+        return cls(
+            data=[StudyPlanSchema.of(plan) for plan in page.plans],
+            pagination=Pagination(limit=page.limit, offset=page.offset, total=page.total),
+        )
+
+
+class GenerateStudyPlanRequest(BaseModel):
+    """A learner asking for a plan to be generated.
+
+    Only the goal is named. Everything else a plan is built from — the
+    curriculum, the horizon, the saved week, the planning preferences, and the
+    recorded stages — is read from what the learner has already stored, so a
+    client cannot pass a preference the learner did not set.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    study_goal_id: uuid.UUID = Field(description="The goal to plan for.")
+
+    def to_generation_request(self) -> PlanGenerationRequest:
+        """Map the request onto the application's generation structure."""
+        return PlanGenerationRequest(study_goal_id=self.study_goal_id)
+
+
+class GeneratedStudyPlansSchema(BaseModel):
+    """What one generation produced."""
+
+    study_goal_id: uuid.UUID
+    generated_on: date = Field(
+        description=(
+            "The date the plan was built around, in the learner's own timezone rather than "
+            "the server's."
+        )
+    )
+    plans: list[StudyPlanSchema] = Field(
+        description=(
+            "The plans written, each with its items. A roadmap always; a week when one fits."
+        )
+    )
+    superseded_plan_ids: list[uuid.UUID] = Field(
+        description=(
+            "The plans this generation set aside. They are kept, not deleted, so an earlier "
+            "plan can still be read."
+        )
+    )
+
+    @classmethod
+    def of(cls, generated: GeneratedStudyPlans) -> GeneratedStudyPlansSchema:
+        """Build the schema from its application DTO."""
+        return cls(
+            study_goal_id=generated.study_goal_id,
+            generated_on=generated.generated_on,
+            plans=[StudyPlanSchema.of(plan) for plan in generated.plans],
+            superseded_plan_ids=list(generated.superseded_plan_ids),
+        )
+
+
+class GenerateStudyPlanResponse(BaseModel):
+    """A generated plan, under the documented `data` envelope.
+
+    An object rather than a bare array, per ADR-014, and with no `pagination`
+    block: one generation writes a known handful of plans belonging to one goal,
+    so there is no window to page through.
+    """
+
+    data: GeneratedStudyPlansSchema

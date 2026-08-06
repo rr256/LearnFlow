@@ -2,9 +2,11 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-31
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
+  - ../adr/ADR-020-initial-study-plan-generation.md
+  - ../api/endpoints.md
   - ../architecture/overview.md
   - ../architecture/clean-architecture.md
   - ../domain/terminology.md
@@ -80,6 +82,25 @@ Create and adapt the learner's roadmap, monthly, weekly, and daily plan.
 ### Implementation direction
 
 Core scheduling and prioritization are deterministic application rules. An AI provider may help phrase explanations, but the plan must remain usable when Ollama is unavailable.
+
+### What is built today
+
+The planner is partly implemented, by
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md) and PLN-001 to PLN-003; see
+[planning endpoints](../api/endpoints.md#planning-endpoints).
+
+Of the inputs above, four are read: the active study goal and its horizon, the availability slots and
+planning preferences, the curriculum structure and topic relationships, and topic progress. Revision
+records, pending plan items, and assessment evidence are not — none of them is stored yet.
+
+Of the outputs, two exist: study plans and plan items, and a transparent rationale, which every plan
+and every item carries as prose written when the plan was generated. The third — a warning when
+available time is insufficient for the target scope — is **not** produced, and belongs with
+[FR-004](../requirements/functional.md#fr-004-plan-adaptation)'s plan adaptation.
+
+The implementation direction above is met in the strong form: **no AI provider is involved at all**.
+The two rules that decide a plan live as pure functions in `backend/app/domain/study_planning.py`, so
+the same inputs always produce the same plan.
 
 ## Mentor Service
 
@@ -273,5 +294,7 @@ Potential future needs include long-running workflow checkpoints, multi-agent ha
 - [Clean Architecture](../architecture/clean-architecture.md)
 - [Domain terminology](../domain/terminology.md) — the canonical vocabulary for stages, evidence, and focus areas used here
 - [RAG overview](../rag/overview.md)
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the part of the Planner Service that is built, and the rules it follows
+- [API endpoint catalog](../api/endpoints.md) — the planning endpoints that serve it
 - [Functional requirements](../requirements/functional.md)
 - [Engineering AI workflow](engineering-ai.md) — the engineering assistant subagents, a separate sense of “agent” from the product agents defined here
