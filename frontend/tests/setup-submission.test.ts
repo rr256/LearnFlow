@@ -147,6 +147,7 @@ describe("request bodies", () => {
     expect(Object.keys(body).sort()).toEqual([
       "examination_schedule_id",
       "learning_program_id",
+      "planning_preferences",
       "target_date",
     ]);
   });
@@ -160,6 +161,91 @@ describe("request bodies", () => {
       }),
     );
 
-    expect(body).toEqual({ examination_schedule_id: null, target_date: "2027-01-31" });
+    expect(body).toEqual({
+      examination_schedule_id: null,
+      target_date: "2027-01-31",
+      // The whole preference group travels on every update, because the form
+      // shows every preference: a box the learner cleared has to reach the API
+      // as null to be unset.
+      planning_preferences: { preferred_session_minutes: null, topic_sequencing: null },
+    });
+  });
+});
+
+describe("planning preferences", () => {
+  it("reads both preferences off the form", () => {
+    const read = readSetupSubmission(
+      form({
+        learning_program_id: PROGRAM_ID,
+        goal_target: "target_date",
+        target_date: "2027-01-31",
+        preferred_session_minutes: "90",
+        topic_sequencing: "prerequisites_first",
+      }),
+    );
+
+    expect("submission" in read && read.submission.planningPreferences).toEqual({
+      preferred_session_minutes: 90,
+      topic_sequencing: "prerequisites_first",
+    });
+  });
+
+  it("sends a preference the learner left blank as null", () => {
+    const read = readSetupSubmission(
+      form({
+        learning_program_id: PROGRAM_ID,
+        goal_target: "target_date",
+        target_date: "2027-01-31",
+        preferred_session_minutes: "",
+        topic_sequencing: "",
+      }),
+    );
+
+    expect("submission" in read && read.submission.planningPreferences).toEqual({
+      preferred_session_minutes: null,
+      topic_sequencing: null,
+    });
+  });
+
+  it("reports a session length that is not a whole number against its own field", () => {
+    const read = readSetupSubmission(
+      form({
+        learning_program_id: PROGRAM_ID,
+        goal_target: "target_date",
+        target_date: "2027-01-31",
+        preferred_session_minutes: "an hour",
+      }),
+    );
+
+    expect("problem" in read && read.problem.field).toBe("preferred_session_minutes");
+  });
+
+  it.each(["5", "600", "-30"])(
+    "reports a session length outside the bounds: %s",
+    (minutes: string) => {
+      const read = readSetupSubmission(
+        form({
+          learning_program_id: PROGRAM_ID,
+          goal_target: "target_date",
+          target_date: "2027-01-31",
+          preferred_session_minutes: minutes,
+        }),
+      );
+
+      expect("problem" in read && read.problem.field).toBe("preferred_session_minutes");
+    },
+  );
+
+  it("reports a topic order this build does not know against its own field", () => {
+    const read = readSetupSubmission(
+      form({
+        learning_program_id: PROGRAM_ID,
+        goal_target: "target_date",
+        target_date: "2027-01-31",
+        topic_sequencing: "alphabetical_order",
+      }),
+    );
+
+    expect("problem" in read && read.problem.field).toBe("topic_sequencing");
   });
 });

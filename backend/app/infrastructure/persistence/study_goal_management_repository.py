@@ -19,6 +19,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.application.dto.planning_preferences import PlanningPreferences
 from app.application.ports.curriculum_seed_repository import (
     CurriculumVersionRecord,
     LearningProgramRecord,
@@ -115,11 +116,19 @@ class SqlAlchemyStudyGoalManagementRepository:
                 examination_schedule_id=record.examination_schedule_id,
                 target_date=record.target_date,
                 status=record.status,
+                preferred_session_minutes=record.planning_preferences.preferred_session_minutes,
+                topic_sequencing=record.planning_preferences.topic_sequencing,
             )
         )
 
     def update_study_goal(self, record: StudyGoalRecord) -> None:
-        """Overwrite the stored goal identified by ``record.id``."""
+        """Overwrite the stored goal identified by ``record.id``.
+
+        The preference columns are written from the record's whole group, so a
+        preference the use case resolved to None is cleared rather than left
+        behind. Deciding which of them the update meant to change is the use
+        case's work, not this method's.
+        """
         model = self._session.get(StudyGoal, record.id)
         if model is None:
             raise LookupError(f"Study goal {record.id} is not stored.")
@@ -127,6 +136,8 @@ class SqlAlchemyStudyGoalManagementRepository:
         model.examination_schedule_id = record.examination_schedule_id
         model.target_date = record.target_date
         model.status = record.status
+        model.preferred_session_minutes = record.planning_preferences.preferred_session_minutes
+        model.topic_sequencing = record.planning_preferences.topic_sequencing
 
     def list_availability_slots(
         self, study_goal_ids: Sequence[uuid.UUID]
@@ -209,4 +220,8 @@ def _goal_record(model: StudyGoal) -> StudyGoalRecord:
         examination_schedule_id=model.examination_schedule_id,
         target_date=model.target_date,
         status=model.status,
+        planning_preferences=PlanningPreferences(
+            preferred_session_minutes=model.preferred_session_minutes,
+            topic_sequencing=model.topic_sequencing,
+        ),
     )

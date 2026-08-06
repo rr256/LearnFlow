@@ -30,6 +30,7 @@ function goal(overrides: Partial<StudyGoal> = {}): StudyGoal {
       examination_window: { starts_on: "2027-02-06", ends_on: "2027-02-21" },
     },
     availability: { slots: [] },
+    planning_preferences: { preferred_session_minutes: null, topic_sequencing: null },
     ...overrides,
   };
 }

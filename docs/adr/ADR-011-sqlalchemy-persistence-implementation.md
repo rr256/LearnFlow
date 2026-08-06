@@ -12,6 +12,7 @@ related:
   - ADR-013-examination-schedule-and-study-goal.md
   - ADR-014-api-response-contract.md
   - ADR-018-weekly-availability-slots.md
+  - ADR-019-study-goal-planning-preferences.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../api/endpoints.md
@@ -137,6 +138,29 @@ Three points of fact, none altering the decision:
 exist. This supersedes, in part, the *Remaining open items* bullet under
 [Implementation notes](#implementation-notes) and the same statement in the two notes above. As
 elsewhere in this repository, the accepted text is left as written.
+
+*Note added 2026-08-06, later the same day. The decision below is unchanged, and this records a
+deliberate exception to one part of it rather than an amendment.*
+
+**`study_goals` gained two planning-preference columns before any code reads them**, which is a
+departure from the per-milestone ordering rule this record sets out under
+[the first migration creates the curriculum area only](#the-first-migration-creates-the-curriculum-area-only).
+[ADR-019](ADR-019-study-goal-planning-preferences.md) takes that decision and records both sides of it:
+no planner exists, so the risk this record names is real, but
+[FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s criterion asks what a learner can
+*set*, and availability was counted on the same basis one change earlier.
+
+**The rule itself is not weakened.** It still governs `study_plans`, `plan_items`,
+`study_activities`, `revision_records`, and every resource and assessment table, none of which exists.
+ADR-019 is the second recorded exception to it, after `learner_topic_progress.stage_source` under
+[ADR-017](ADR-017-topic-progress-api-and-schema.md); each is argued individually rather than by
+precedent.
+
+**Two things did not change.** The validated-text rule was followed rather than departed from —
+`topic_sequencing` is `varchar(32)` guarded by a `CHECK`, not a key inside a `jsonb` payload, which is
+the same reasoning applied to `day_of_week`. And **the one open item is still the one open item**:
+numeric precision for score columns, in tables that do not exist. The learner-planning area remains one
+migration from complete, since this change adds columns to an existing table rather than a table.
 
 ## Context
 
@@ -298,6 +322,8 @@ constraint where practical.
 - [ADR-012: Load curriculum as reconciled reference data from a versioned file](ADR-012-curriculum-seed-and-reconciliation.md) — the first code to read and write the tables this record created
 - [ADR-013: Model an examination period as a published window of reference data](ADR-013-examination-schedule-and-study-goal.md) — settles the default learner timezone this record left open
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the contract the first endpoints reading these tables answer in
+- [ADR-018: Store weekly availability as named days replaced a week at a time](ADR-018-weekly-availability-slots.md) — retires the `day_of_week` convention this record left open
+- [ADR-019: Store planning preferences as typed columns replaced as a group](ADR-019-study-goal-planning-preferences.md) — the recorded exception to the per-milestone ordering rule above, and the validated-text rule applied again
 - [API endpoints](../api/endpoints.md) — CUR-001 to CUR-003, the first endpoints to read these tables
 - [Database schema](../database/schema.md)
 - [Database migrations](../database/migrations.md)

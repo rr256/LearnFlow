@@ -52,6 +52,7 @@ const goal: StudyGoal = {
     examination_window: { starts_on: "2027-02-06", ends_on: "2027-02-21" },
   },
   availability: { slots: [] },
+  planning_preferences: { preferred_session_minutes: null, topic_sequencing: null },
 };
 
 function renderForm(overrides: Partial<Parameters<typeof LearnerSetupForm>[0]> = {}) {
@@ -156,5 +157,70 @@ describe("LearnerSetupForm", () => {
     renderForm();
 
     expect(screen.getByText(/active curriculum version/i)).toBeDefined();
+  });
+
+  it("offers a control for each planning preference", () => {
+    renderForm();
+
+    expect(screen.getByRole("spinbutton", { name: /Preferred session length/i })).toBeDefined();
+    expect(screen.getByRole("combobox", { name: /Topic order/i })).toBeDefined();
+  });
+
+  it("offers no preference as a real choice rather than defaulting to an order", () => {
+    renderForm();
+
+    const order = screen.getByRole("combobox", { name: /Topic order/i });
+
+    expect(order).toHaveProperty("value", "");
+    expect(screen.getByRole("option", { name: /No preference/i })).toBeDefined();
+  });
+
+  it("bounds the session length control the way the API does", () => {
+    renderForm();
+
+    const session = screen.getByRole("spinbutton", { name: /Preferred session length/i });
+
+    expect(session.getAttribute("min")).toBe("15");
+    expect(session.getAttribute("max")).toBe("480");
+  });
+
+  it("fills the preference controls from the goal already saved", () => {
+    renderForm({
+      goal: {
+        ...goal,
+        planning_preferences: {
+          preferred_session_minutes: 90,
+          topic_sequencing: "prerequisites_first",
+        },
+      },
+    });
+
+    expect(screen.getByRole("spinbutton", { name: /Preferred session length/i })).toHaveProperty(
+      "value",
+      "90",
+    );
+    expect(screen.getByRole("combobox", { name: /Topic order/i })).toHaveProperty(
+      "value",
+      "prerequisites_first",
+    );
+  });
+
+  it("says what each topic order means, so the choice is not a guess", () => {
+    renderForm();
+
+    expect(screen.getByText(/order the syllabus lists them/i)).toBeDefined();
+    expect(screen.getByText(/groundwork before the topics that build on it/i)).toBeDefined();
+  });
+
+  it("says that a session length is a duration rather than a time of day", () => {
+    renderForm();
+
+    expect(screen.getByText(/not when in the day it starts/i)).toBeDefined();
+  });
+
+  it("says that leaving a preference empty is a fine answer", () => {
+    renderForm();
+
+    expect(screen.getByText(/leaving either of these empty is a fine answer/i)).toBeDefined();
   });
 });

@@ -19,6 +19,7 @@ related:
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
+  - ../adr/ADR-019-study-goal-planning-preferences.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -97,13 +98,15 @@ rather than chosen: the column stores a day name. See
 
 The learner setup half of this milestone is now delivered: EXM-001, LRN-001, LRN-002, and GOAL-001 to
 GOAL-004, and the `/setup` screen that consumes them, contracted by
-[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md) and needing no migration; and GOAL-005,
+[ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md) and needing no migration; GOAL-005,
 which records weekly availability, contracted by
-[ADR-018](../adr/ADR-018-weekly-availability-slots.md) and needing one. The home
+[ADR-018](../adr/ADR-018-weekly-availability-slots.md) and needing one; and the planning preferences
+GOAL-001 and GOAL-004 now accept, contracted by
+[ADR-019](../adr/ADR-019-study-goal-planning-preferences.md) and needing one more. The home
 screen at `/` is a second consumer, reading that saved setup back over LRN-001, GOAL-002, and
 EXM-001 — which is the acceptance criterion later added to
 [FR-002](../requirements/functional.md#fr-002-initial-learner-setup); it needed no endpoint of its
-own, and the saved week arrived on it the same way.
+own, and the saved week and the saved preferences both arrived on it the same way.
 
 The first half of progress tracking has now arrived too: a learner can mark a trackable topic with a
 learning stage and change it later, over PRG-004, and see the saved stage while browsing the
@@ -148,10 +151,15 @@ remain.
   kept free. A day is named rather than numbered, which retires the `day_of_week` convention that held
   this item open rather than answering it. The saved week reads back on `/setup` and on the home
   screen, off the goal response, so neither screen makes a further call. Nothing totals a week —
-  planning arithmetic belongs to Milestone 3. **Basic planning preferences are still not accepted**:
-  `study_goals.planning_preferences` is not created, so
-  [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s second criterion is partly
-  met; [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the count.
+  planning arithmetic belongs to Milestone 3. **Basic planning preferences are now accepted too**, over
+  GOAL-001 and GOAL-004 and the two columns migration `20260806_02` adds to `study_goals`, contracted
+  by [ADR-019](../adr/ADR-019-study-goal-planning-preferences.md): a preferred session length and a
+  topic order, each optional and neither given a default, so a preference nobody set never reads as one
+  somebody chose. They are two controls on the same setup form and ride on the same goal write, so no
+  endpoint and no further request were added, and they read back on `/setup` and on the home screen off
+  the goal response. Nothing consumes a preference any more than it consumes a week. That completes
+  [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s second criterion;
+  [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the count.
 - [x] Learner can browse curriculum in the frontend without hardcoded topic data. `/curriculum` lists
   the learning programs from CUR-001, and `/curriculum/programs/{id}` reads one program from CUR-002
   and renders its active version's subjects, topics, nested subtopics, and topic relationships from
@@ -292,4 +300,5 @@ remain.
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the contracts behind the learner setup items in Milestone 2
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the contracts and the migration behind the progress items in Milestone 2
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the contract and the migration behind the weekly availability item in Milestone 2
+- [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the contract and the migration behind the planning-preference half of the same item
 - [Deferred ideas](future-ideas.md)

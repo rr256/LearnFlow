@@ -22,6 +22,7 @@ function goal(overrides: Partial<StudyGoal> = {}): StudyGoal {
     curriculum_version: { id: "version-1", version_label: "2027", status: "active" },
     examination: null,
     availability: { slots: [] },
+    planning_preferences: { preferred_session_minutes: null, topic_sequencing: null },
     ...overrides,
   };
 }

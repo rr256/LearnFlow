@@ -12,6 +12,7 @@ related:
   - ADR-014-api-response-contract.md
   - ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ADR-018-weekly-availability-slots.md
+  - ADR-019-study-goal-planning-preferences.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -107,6 +108,35 @@ deliberately rather than as a side effect of a form, which is what
 **Two of this record's positions were inherited rather than renegotiated,** which is what it says
 later screens do: the write goes through the same `"use server"` module — which still exports only
 async functions — and the backend still gains no CORS.
+
+## Implementation status — 2026-08-06, later the same day
+
+*Note added 2026-08-06. The decision below is unchanged: no endpoint was added or removed, no existing
+field changed, and no status code moved. As elsewhere in this repository, the accepted text is left as
+written.*
+
+**GOAL-004 now accepts planning preferences,** which this record explicitly withheld.
+[ADR-019](ADR-019-study-goal-planning-preferences.md) creates the two columns to hold them and fixes
+the contract; GOAL-001 accepts them too, and every goal response carries them. Both are compatible
+additions under [versioning](../api/versioning.md#compatible-changes-within-a-major-version).
+
+**Three statements are overtaken:**
+
+- Under [the decision](#a-partial-update-leaves-unmentioned-fields-alone-and-an-explicit-null-clears),
+  the absent-versus-`null` rule is now joined by a **group** rule that record did not need: a supplied
+  `planning_preferences` object replaces the stored group whole, so a member left out of it is unset.
+  The scalar rule is unchanged, and ADR-019 records why a group needs the different one — a form shows
+  every preference at once, so a control the learner cleared has to reach the API as a clearance.
+- **The acceptance-criteria arithmetic, a third time.** The criterion the 2026-08-06 note above reported
+  as partly met — "The learner can set available study time and basic planning preferences" — is now
+  **met in full**. [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the count.
+- The `Neutral` bullet about client count is overtaken again in the same direction as before: the
+  preference controls are a fieldset on the setup screen the two existing clients already share.
+
+**This record's positions were again inherited rather than renegotiated:** the write goes through the
+same `"use server"` module, which still exports only async functions, the backend still gains no CORS,
+and `scripts.set_study_goal` still keeps its own port — it copies a stored preference across rather than
+managing one.
 
 ## Context
 
@@ -375,6 +405,7 @@ of a form is exactly what ADR-011 exists to prevent.
 - [ADR-009: Name and validate configuration variables explicitly](ADR-009-configuration-naming-and-validation.md) — why the default timezone reaches the use case from the composition root
 - [ADR-011: Implement PostgreSQL persistence synchronously and migrate per milestone](ADR-011-sqlalchemy-persistence-implementation.md) — the `day_of_week` decision GOAL-005 waited on
 - [ADR-018: Store weekly availability as named days replaced a week at a time](ADR-018-weekly-availability-slots.md) — the record that takes that decision and discharges the GOAL-005 deferral this one kept
+- [ADR-019: Store planning preferences as typed columns replaced as a group](ADR-019-study-goal-planning-preferences.md) — the record that adds to GOAL-004 the planning preferences this one withheld, and the group-replace rule it needed
 - [ADR-013: Model an examination period as a published window of reference data](ADR-013-examination-schedule-and-study-goal.md) — the deferral this record discharges, and the window rule it implements
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the envelope and catalogue these contracts answer in
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the call topology the setup screen inherits

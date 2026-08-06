@@ -17,6 +17,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.application.dto.planning_preferences import PlanningPreferences
 from app.application.ports.examination_schedule_repository import (
     ExaminationPeriodRecord,
     ExaminationScheduleRecord,
@@ -148,11 +149,20 @@ class SqlAlchemyStudyGoalRepository:
                 examination_schedule_id=record.examination_schedule_id,
                 target_date=record.target_date,
                 status=record.status,
+                preferred_session_minutes=record.planning_preferences.preferred_session_minutes,
+                topic_sequencing=record.planning_preferences.topic_sequencing,
             )
         )
 
     def update_study_goal(self, record: StudyGoalRecord) -> None:
-        """Overwrite the stored goal identified by ``record.id``."""
+        """Overwrite the stored goal identified by ``record.id``.
+
+        Every writable column is written, the preference columns included. The
+        command using this port does not manage preferences and copies the stored
+        ones onto the record it writes, so writing them here changes nothing --
+        and it keeps this method from being one that silently ignores a field its
+        record carries.
+        """
         model = self._session.get(StudyGoal, record.id)
         if model is None:
             raise LookupError(f"Study goal {record.id} is not stored.")
@@ -160,6 +170,8 @@ class SqlAlchemyStudyGoalRepository:
         model.examination_schedule_id = record.examination_schedule_id
         model.target_date = record.target_date
         model.status = record.status
+        model.preferred_session_minutes = record.planning_preferences.preferred_session_minutes
+        model.topic_sequencing = record.planning_preferences.topic_sequencing
 
 
 def _goal_record(model: StudyGoal) -> StudyGoalRecord:
@@ -171,4 +183,8 @@ def _goal_record(model: StudyGoal) -> StudyGoalRecord:
         examination_schedule_id=model.examination_schedule_id,
         target_date=model.target_date,
         status=model.status,
+        planning_preferences=PlanningPreferences(
+            preferred_session_minutes=model.preferred_session_minutes,
+            topic_sequencing=model.topic_sequencing,
+        ),
     )

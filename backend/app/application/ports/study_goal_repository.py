@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
+from app.application.dto.planning_preferences import PlanningPreferences
 from app.application.ports.examination_schedule_repository import (
     ExaminationPeriodRecord,
     ExaminationScheduleRecord,
@@ -45,6 +46,13 @@ class StudyGoalRecord:
     database CHECK requires at least one of them: a goal aims at a published
     examination cycle, at a plain completion date, or at both -- never at
     nothing.
+
+    ``planning_preferences`` is always present and may be empty, never ``None``,
+    so no reader needs a branch for a goal stored before preferences existed. It
+    is part of the record rather than read separately because the columns live on
+    this row -- which also means a caller comparing a desired record with the
+    stored one detects a changed preference for free, and a caller that means to
+    leave preferences alone must copy them across deliberately.
     """
 
     id: uuid.UUID
@@ -54,6 +62,7 @@ class StudyGoalRecord:
     examination_schedule_id: uuid.UUID | None
     target_date: date | None
     status: str
+    planning_preferences: PlanningPreferences
 
 
 class StudyGoalRepository(Protocol):
@@ -111,5 +120,11 @@ class StudyGoalRepository(Protocol):
         ...
 
     def update_study_goal(self, record: StudyGoalRecord) -> None:
-        """Overwrite the stored goal identified by ``record.id``."""
+        """Overwrite the stored goal identified by ``record.id``.
+
+        Every writable column is written, including the planning preferences.
+        The command serving this port does not manage preferences, so it copies
+        the stored ones onto the record it writes; leaving them unwritten here
+        instead would make the record carry a field one writer silently ignores.
+        """
         ...

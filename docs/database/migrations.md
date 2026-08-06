@@ -14,6 +14,7 @@ related:
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
+  - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../deployment/environments.md
 ---
 
@@ -73,6 +74,7 @@ python -m alembic upgrade head          # apply every pending migration
 python -m alembic current               # show the applied revision
 python -m alembic downgrade -1          # revert the most recent migration
 python -m alembic upgrade head --sql    # print SQL without connecting
+python -m alembic downgrade head:base --sql  # the same for the downgrade path
 ```
 
 The target database comes from `DATABASE_URL` through the application's validated settings, so a
@@ -83,6 +85,21 @@ that variable and for `TEST_DATABASE_URL`.
 
 `--sql` needs no reachable database, which makes it the way to review generated DDL and to check a
 migration on a machine without PostgreSQL installed.
+
+**Render the downgrade as well as the upgrade.** A downgrade is the half a local run never exercises
+and the half the integration fixture runs on every test, so a fault in it surfaces as errors in the
+teardown of unrelated tests rather than as one clear failure.
+
+One trap makes that worth doing every time. The `ck` naming convention on `Base.metadata` is
+`ck_%(table_name)s_%(constraint_name)s`, and **Alembic interpolates the name an operation supplies
+through it — on drops as well as creates.** So `op.create_check_constraint` and `op.drop_constraint`
+both take the *distinguishing suffix* only: passing the full
+`ck_study_goals_topic_sequencing_is_known` renders
+`ck_study_goals_ck_study_goals_topic_sequencing_is_known` and fails against a constraint that does not
+exist. Dropping a column removes the checks that depend on it, so a downgrade that drops its columns
+need not name them at all. `tests/unit/test_migration_sql.py` renders both directions of the whole
+chain and asserts the properties this breaks; it was added after exactly this mistake reached CI in
+revision `20260806_02`.
 
 Nothing applies migrations automatically. Neither application startup nor a container entrypoint
 runs `alembic upgrade`; see [ADR-005](../adr/ADR-005-docker-compose-local-development.md).
@@ -119,6 +136,7 @@ The applied revisions are:
 | `20260801_01` | `create_examination_schedule_and_learner_goal_tables` — examination schedules and their dated periods, plus the first two learner-planning tables, `learners` and `study_goals`. Creates four empty tables; adds nothing to an existing one. |
 | `20260805_01` | `create_learner_topic_progress_table` — the first table of the progress area, holding one learning stage per learner and topic. Creates one empty table with five of its eight documented columns; adds nothing to an existing one. See [schema.md](schema.md#learner_topic_progress) for which three are deferred and why. |
 | `20260806_01` | `create_availability_slots_table` — the third learner-planning table, holding one day's available study time per study goal. Creates one empty table; adds nothing to an existing one. `day_of_week` holds a day *name* rather than the `smallint` [schema.md](schema.md#availability_slots) first documented, which retires the numbering convention rather than answering it. |
+| `20260806_02` | `add_study_goal_planning_preferences` — the learner's planning preferences, as `preferred_session_minutes` and `topic_sequencing` on `study_goals`, each guarded by a `CHECK`. Two nullable columns rather than the `planning_preferences jsonb` [schema.md](schema.md#study_goals) first documented, because no `CHECK` reaches a key inside JSON. Additive; safe on populated tables, and every goal already stored reads back with no preferences set. |
 
 ## What Requires a Migration
 
@@ -447,6 +465,7 @@ An AI assistant may propose or generate a migration, but it must not:
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the rationale for the examination schedule seed and the study goal it feeds
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why revision `20260805_01` creates five of its table's eight documented columns
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — why revision `20260806_01` stores a day name rather than an index
+- [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — why revision `20260806_02` adds two typed columns rather than a `jsonb` payload
 - [CI/CD strategy](../deployment/ci-cd.md) — the `database` job that runs these migrations on every pull request
 - [Environments and configuration](../deployment/environments.md) — the authoritative catalogue for `DATABASE_URL` and `TEST_DATABASE_URL`
 - [API endpoints](../api/endpoints.md) — the curriculum endpoints that read what the curriculum seed writes

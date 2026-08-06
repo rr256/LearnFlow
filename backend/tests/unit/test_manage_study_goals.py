@@ -2,8 +2,8 @@
 
 They run against fakes, so they exercise the rules ADR-013 fixed -- a goal aims
 at something, the examination is a window, a goal binds to the active curriculum
-version -- and the ones ADR-018 fixed for a week of availability, without a
-database.
+version -- the ones ADR-018 fixed for a week of availability, and the ones ADR-019
+fixed for a group of planning preferences, without a database.
 """
 
 import uuid
@@ -16,6 +16,7 @@ from app.application.dto.availability import (
     AvailabilitySlotEntry,
     WeeklyAvailabilityRequest,
 )
+from app.application.dto.planning_preferences import PlanningPreferences
 from app.application.dto.study_goal import NewStudyGoal, StudyGoalChanges
 from app.application.ports.curriculum_seed_repository import (
     CurriculumVersionRecord,
@@ -30,9 +31,11 @@ from app.application.use_cases.manage_study_goals import (
     LearnerNotSetUpError,
     ManageStudyGoals,
     MissingGoalTargetError,
+    SessionMinutesOutOfRangeError,
     StudyGoalNotFoundError,
     UnknownGoalStatusError,
     UnknownReferenceError,
+    UnknownTopicSequencingError,
     UnknownWeekdayError,
 )
 from tests.unit.fake_examination_schedule_repository import FakeExaminationScheduleRepository
@@ -601,3 +604,224 @@ def test_saving_a_week_totals_nothing(workspace, goal):
 
     assert not hasattr(saved, "total_minutes")
     assert [slot.available_minutes for slot in saved.slots] == [120, 60]
+
+
+# -- planning preferences (ADR-019) ----------------------------------------
+
+
+def preferences(**fields):
+    """A preference group, so a test states only the choices it cares about."""
+    return PlanningPreferences(**fields)
+
+
+def stored_preferences(workspace, goal_id):
+    """What the fake actually holds, rather than what the use case returned."""
+    stored = next(record for record in workspace.goals.goals if record.id == goal_id)
+    return stored.planning_preferences
+
+
+def test_a_new_goal_has_no_preferences(goal):
+    """An empty group rather than a null, so no caller needs a branch for a goal
+    stored before preferences existed."""
+    assert goal.planning_preferences.is_empty
+    assert goal.planning_preferences.preferred_session_minutes is None
+    assert goal.planning_preferences.topic_sequencing is None
+
+
+def test_creating_a_goal_stores_the_preferences_it_names(workspace, schedule):
+    goal = workspace.use_case.create(
+        NewStudyGoal(
+            learning_program_id=PROGRAM_ID,
+            examination_schedule_id=schedule.id,
+            planning_preferences=preferences(
+                preferred_session_minutes=90, topic_sequencing="prerequisites_first"
+            ),
+        )
+    )
+
+    assert stored_preferences(workspace, goal.id) == preferences(
+        preferred_session_minutes=90, topic_sequencing="prerequisites_first"
+    )
+
+
+def test_a_preference_left_out_is_unset_rather_than_defaulted(workspace, schedule):
+    """Nothing invents a preference on the learner's behalf. A planner meeting
+    None chooses its own default visibly rather than reading a value nobody
+    chose, which is the distinction ADR-017 and ADR-018 both drew."""
+    goal = workspace.use_case.create(
+        NewStudyGoal(
+            learning_program_id=PROGRAM_ID,
+            examination_schedule_id=schedule.id,
+            planning_preferences=preferences(topic_sequencing="syllabus_order"),
+        )
+    )
+
+    assert goal.planning_preferences.preferred_session_minutes is None
+    assert goal.planning_preferences.topic_sequencing == "syllabus_order"
+
+
+def test_creating_refuses_an_unknown_topic_sequencing(workspace, schedule):
+    with pytest.raises(UnknownTopicSequencingError):
+        workspace.use_case.create(
+            NewStudyGoal(
+                learning_program_id=PROGRAM_ID,
+                examination_schedule_id=schedule.id,
+                planning_preferences=preferences(topic_sequencing="alphabetical_order"),
+            )
+        )
+
+
+@pytest.mark.parametrize("minutes", [0, 14, 481, 1441])
+def test_creating_refuses_a_session_length_outside_the_bounds(workspace, schedule, minutes):
+    with pytest.raises(SessionMinutesOutOfRangeError):
+        workspace.use_case.create(
+            NewStudyGoal(
+                learning_program_id=PROGRAM_ID,
+                examination_schedule_id=schedule.id,
+                planning_preferences=preferences(preferred_session_minutes=minutes),
+            )
+        )
+
+
+@pytest.mark.parametrize("minutes", [15, 60, 480])
+def test_a_session_length_on_or_inside_the_bounds_is_accepted(workspace, schedule, minutes):
+    goal = workspace.use_case.create(
+        NewStudyGoal(
+            learning_program_id=PROGRAM_ID,
+            examination_schedule_id=schedule.id,
+            planning_preferences=preferences(preferred_session_minutes=minutes),
+        )
+    )
+
+    assert goal.planning_preferences.preferred_session_minutes == minutes
+
+
+def test_updating_preferences_replaces_the_whole_group(workspace, goal):
+    """A supplied group is the goal's preferences, not a patch over them: a form
+    shows every preference at once, so a member it left out was cleared."""
+    workspace.use_case.update(
+        goal.id,
+        StudyGoalChanges(
+            planning_preferences=preferences(
+                preferred_session_minutes=90, topic_sequencing="syllabus_order"
+            )
+        ),
+    )
+
+    updated = workspace.use_case.update(
+        goal.id,
+        StudyGoalChanges(planning_preferences=preferences(topic_sequencing="prerequisites_first")),
+    )
+
+    assert updated.planning_preferences == preferences(topic_sequencing="prerequisites_first")
+
+
+def test_an_update_naming_no_preferences_leaves_them_alone(workspace, goal):
+    workspace.use_case.update(
+        goal.id, StudyGoalChanges(planning_preferences=preferences(preferred_session_minutes=45))
+    )
+
+    updated = workspace.use_case.update(goal.id, StudyGoalChanges(status="paused"))
+
+    assert updated.planning_preferences.preferred_session_minutes == 45
+
+
+def test_an_empty_group_clears_every_preference(workspace, goal):
+    """Replacing with nothing is how a learner takes them all back, the same way
+    an empty week clears availability."""
+    workspace.use_case.update(
+        goal.id,
+        StudyGoalChanges(
+            planning_preferences=preferences(
+                preferred_session_minutes=45, topic_sequencing="syllabus_order"
+            )
+        ),
+    )
+
+    updated = workspace.use_case.update(
+        goal.id, StudyGoalChanges(planning_preferences=preferences())
+    )
+
+    assert updated.planning_preferences.is_empty
+    assert stored_preferences(workspace, goal.id).is_empty
+
+
+def test_naming_only_preferences_is_not_an_empty_update(workspace, goal):
+    """A group is a field to change like any other, so an update carrying nothing
+    else must not be refused as empty."""
+    updated = workspace.use_case.update(
+        goal.id, StudyGoalChanges(planning_preferences=preferences(preferred_session_minutes=30))
+    )
+
+    assert updated.planning_preferences.preferred_session_minutes == 30
+
+
+def test_saving_the_preferences_already_stored_writes_nothing(workspace, goal):
+    """The rule GOAL-005 and PRG-004 already follow: a repeated form submission
+    must not fail or churn a row on its second attempt."""
+    group = StudyGoalChanges(planning_preferences=preferences(preferred_session_minutes=60))
+    workspace.use_case.update(goal.id, group)
+    before = next(record for record in workspace.goals.goals if record.id == goal.id)
+
+    workspace.use_case.update(goal.id, group)
+
+    assert next(record for record in workspace.goals.goals if record.id == goal.id) is before
+
+
+def test_updating_refuses_an_unknown_topic_sequencing(workspace, goal):
+    with pytest.raises(UnknownTopicSequencingError):
+        workspace.use_case.update(
+            goal.id,
+            StudyGoalChanges(
+                planning_preferences=preferences(topic_sequencing="alphabetical_order")
+            ),
+        )
+
+
+def test_a_refused_preference_leaves_the_stored_group_alone(workspace, goal):
+    """The whole group is validated before anything is written, so a rejected
+    member cannot take a valid one down with it."""
+    workspace.use_case.update(
+        goal.id, StudyGoalChanges(planning_preferences=preferences(preferred_session_minutes=60))
+    )
+
+    with pytest.raises(SessionMinutesOutOfRangeError):
+        workspace.use_case.update(
+            goal.id,
+            StudyGoalChanges(
+                planning_preferences=preferences(
+                    preferred_session_minutes=9000, topic_sequencing="syllabus_order"
+                )
+            ),
+        )
+
+    assert stored_preferences(workspace, goal.id) == preferences(preferred_session_minutes=60)
+
+
+def test_a_refusal_names_the_choices_without_echoing_the_rejected_value(workspace, goal):
+    with pytest.raises(UnknownTopicSequencingError) as raised:
+        workspace.use_case.update(
+            goal.id,
+            StudyGoalChanges(
+                planning_preferences=preferences(topic_sequencing="alphabetical_order")
+            ),
+        )
+
+    assert "syllabus_order" in str(raised.value)
+    assert "alphabetical_order" not in str(raised.value)
+
+
+def test_nothing_ranks_or_scores_a_preference(workspace, goal):
+    """Preferences are planning inputs. Nothing here compares two of them, scores
+    one, or derives a plan from either; that arrives with Milestone 3."""
+    updated = workspace.use_case.update(
+        goal.id,
+        StudyGoalChanges(
+            planning_preferences=preferences(
+                preferred_session_minutes=60, topic_sequencing="syllabus_order"
+            )
+        ),
+    )
+
+    assert not hasattr(updated.planning_preferences, "score")
+    assert not hasattr(updated.planning_preferences, "weight")

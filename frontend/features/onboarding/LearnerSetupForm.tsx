@@ -9,6 +9,11 @@ import { INITIAL_SETUP_STATE, type SetupState } from "@/features/onboarding/subm
 import type { LearningProgram } from "@/types/curriculum";
 import type { LearnerProfile } from "@/types/learner";
 import {
+  MAXIMUM_SESSION_MINUTES,
+  MINIMUM_SESSION_MINUTES,
+  TOPIC_SEQUENCING_CHOICES,
+  TOPIC_SEQUENCING_DESCRIPTIONS,
+  TOPIC_SEQUENCING_LABELS,
   datesMayChange,
   type ExaminationSchedule,
   type StudyGoal,
@@ -55,6 +60,8 @@ export function LearnerSetupForm({ profile, programs, schedules, goal }: Learner
   const programId = useId();
   const scheduleId = useId();
   const dateId = useId();
+  const sessionId = useId();
+  const sequencingId = useId();
   const messageId = useId();
 
   if (programs.length === 0) {
@@ -225,6 +232,68 @@ export function LearnerSetupForm({ profile, programs, schedules, goal }: Learner
             </p>
           </div>
         )}
+      </fieldset>
+
+      {/*
+       * Preferences ride on the goal write above rather than on a form of their
+       * own, because GOAL-001 and GOAL-004 carry them. Both controls are shown
+       * together and submitted together, which is why the API replaces the group
+       * rather than merging into it: a box the learner cleared means "no
+       * preference", and that has to reach the API to take effect.
+       */}
+      <fieldset className={styles.group}>
+        <legend className={styles.legend}>How you want to study</legend>
+        <p className={styles.hint}>
+          What a study plan should take into account when one is built. Nothing is planned yet, and
+          leaving either of these empty is a fine answer &mdash; LearnFlow will choose for itself
+          rather than assume.
+        </p>
+
+        <div className={styles.field}>
+          <label htmlFor={sessionId}>Preferred session length</label>
+          <input
+            aria-describedby={
+              state.field === "preferred_session_minutes" ? describedBy : undefined
+            }
+            defaultValue={goal?.planning_preferences.preferred_session_minutes ?? ""}
+            id={sessionId}
+            max={MAXIMUM_SESSION_MINUTES}
+            min={MINIMUM_SESSION_MINUTES}
+            name="preferred_session_minutes"
+            step={5}
+            type="number"
+          />
+          <p className={styles.hint}>
+            How long one block of study should be, in minutes, between{" "}
+            {MINIMUM_SESSION_MINUTES} and {MAXIMUM_SESSION_MINUTES}. It says how long a block runs,
+            not when in the day it starts. Leave it empty for no preference.
+          </p>
+        </div>
+
+        <div className={styles.field}>
+          <label htmlFor={sequencingId}>Topic order</label>
+          <select
+            aria-describedby={state.field === "topic_sequencing" ? describedBy : undefined}
+            defaultValue={goal?.planning_preferences.topic_sequencing ?? ""}
+            id={sequencingId}
+            name="topic_sequencing"
+          >
+            <option value="">No preference</option>
+            {TOPIC_SEQUENCING_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {TOPIC_SEQUENCING_LABELS[choice]}
+              </option>
+            ))}
+          </select>
+          <ul className={styles.schedules}>
+            {TOPIC_SEQUENCING_CHOICES.map((choice) => (
+              <li key={choice}>
+                <strong>{TOPIC_SEQUENCING_LABELS[choice]}</strong>:{" "}
+                {TOPIC_SEQUENCING_DESCRIPTIONS[choice]}
+              </li>
+            ))}
+          </ul>
+        </div>
       </fieldset>
 
       {goal ? <input name="study_goal_id" type="hidden" value={goal.id} /> : null}

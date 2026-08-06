@@ -43,15 +43,23 @@ import {
   updateStudyGoal,
 } from "@/lib/api-client";
 
-/** Map an API `details` field path onto the form control that produced it. */
+/**
+ * Map an API `details` field path onto the form control that produced it.
+ *
+ * A preference is reported as `body.planning_preferences.<member>`, because the
+ * API addresses the group; the form shows each member as its own control, so the
+ * group prefix is stripped along with `body.`.
+ */
 function toSetupField(path: string): SetupField | null {
-  const name = path.replace(/^body\./, "");
+  const name = path.replace(/^body\./, "").replace(/^planning_preferences\./, "");
   const known: SetupField[] = [
     "display_name",
     "timezone",
     "learning_program_id",
     "examination_schedule_id",
     "target_date",
+    "preferred_session_minutes",
+    "topic_sequencing",
   ];
   return known.includes(name as SetupField) ? (name as SetupField) : null;
 }
