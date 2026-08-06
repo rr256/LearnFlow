@@ -61,3 +61,10 @@
   color: var(--colour-text-muted);
   font-size: 0.875rem;
 }
+
+/* The reason the plan gives for this item, styled as the roadmap styles its own. */
+.why {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}

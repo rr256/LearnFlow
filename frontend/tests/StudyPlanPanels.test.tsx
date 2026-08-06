@@ -145,6 +145,30 @@ describe("PlanWeek", () => {
     expect(screen.getAllByText("Study").length).toBe(2);
   });
 
+  it("shows each item's reason, which is what FR-003 asks a recommendation to carry", () => {
+    render(<PlanWeek plan={week} />);
+
+    expect(
+      screen.getAllByText(/Topic 1 of 60 in syllabus order, from Operating Systems\./).length,
+    ).toBe(2);
+  });
+
+  it("omits the reason paragraph when an item carries none", () => {
+    // The plan's own reason is cleared too, so the assertion can only be
+    // satisfied by the item's reason being absent rather than by the panel's.
+    render(
+      <PlanWeek
+        plan={plan({
+          plan_type: "weekly",
+          generation_reason: null,
+          items: [item({ scheduled_for: "2026-08-10", recommendation_reason: null })],
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/syllabus order/)).toBeNull();
+  });
+
   it("renders nothing when no week was generated", () => {
     const { container } = render(<PlanWeek plan={null} />);
 
@@ -155,5 +179,27 @@ describe("PlanWeek", () => {
     const { container } = render(<PlanWeek plan={plan({ items: [item()] })} />);
 
     expect(container.firstChild).toBeNull();
+  });
+});
+
+/**
+ * The gap this file previously had: `PlanWeek` rendered a dated item without the
+ * reason the plan gave for it, and no test noticed. Asserting the property over
+ * both panels at once means a third panel, or a rewrite of either, cannot drop a
+ * reason silently.
+ */
+describe("every panel that shows an item shows its reason", () => {
+  const reasoned = plan({
+    item_count: 1,
+    items: [item({ scheduled_for: "2026-08-10", recommendation_reason: "Because it is next." })],
+  });
+
+  it.each([
+    ["StudyRoadmap", StudyRoadmap],
+    ["PlanWeek", PlanWeek],
+  ])("%s renders the item's recommendation_reason", (_name, Panel) => {
+    render(<Panel plan={reasoned} />);
+
+    expect(screen.getByText("Because it is next.")).toBeDefined();
   });
 });

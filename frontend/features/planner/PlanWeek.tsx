@@ -15,6 +15,11 @@ interface PlanWeekProps {
  * shown empty — the learner either kept it free or has not set it, and neither is
  * a day this screen should fill.
  *
+ * Every item shows the reason the plan gives for it, as the roadmap does. FR-003
+ * asks a learner to be able to see why an item is recommended, and the week is
+ * the panel they act on daily — a dated item without its reason would be an
+ * instruction rather than a recommendation.
+ *
  * No day is totalled and no week is added up. Turning a plan into an hours figure
  * would be a second opinion about the learner's time, formed here rather than by
  * the planner that has the trade-offs in view.
@@ -52,6 +57,9 @@ export function PlanWeek({ plan }: PlanWeekProps) {
                     {item.topic ? `${item.topic.subject_name} · ` : ""}
                     {describeEstimate(item.estimated_minutes)}
                   </p>
+                  {item.recommendation_reason ? (
+                    <p className={styles.why}>{item.recommendation_reason}</p>
+                  ) : null}
                 </li>
               ))}
             </ul>
