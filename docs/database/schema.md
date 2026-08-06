@@ -15,6 +15,7 @@ related:
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
+  - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -38,7 +39,7 @@ tables arrive in more than one migration.
 | --- | --- |
 | Curriculum | Implemented — migrations `20260731_01_create_curriculum_tables` and `20260731_02_add_topic_code_unique_constraint`, populated by the idempotent seed described in [migrations](migrations.md#the-curriculum-seed). |
 | Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
-| Learner planning | Partly implemented — `learners` and `study_goals` arrive in migration `20260801_01` and `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots); `study_plans` and `plan_items` arrive with Milestone 3. |
+| Learner planning | Partly implemented — `learners` and `study_goals` arrive in migration `20260801_01`, `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots), and `study_goals`' planning preferences in `20260806_02`, as two typed columns rather than the `planning_preferences jsonb` documented [below](#study_goals); `study_plans` and `plan_items` arrive with Milestone 3. |
 | Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `study_activities` arrives with the code that records study work, and `revision_records` with Milestone 3. |
 | Resources and RAG metadata | Not implemented — arrives with Milestone 4. |
 | Assessment | Not implemented — arrives with Milestone 5. |
@@ -276,20 +277,49 @@ Stores a learner's goal and planning target.
 | `examination_schedule_id` | uuid FK nullable | References `examination_schedules.id`. A reference, not a copy of the dates. |
 | `target_date` | date nullable | Target completion date, for a learner following no published examination. |
 | `status` | varchar(32) | `active`, `paused`, `completed`, or `archived`. |
+| `preferred_session_minutes` | integer nullable | How long one study block should be, 15 to 480. A duration, not a time of day. NULL when the learner has set no preference. |
+| `topic_sequencing` | varchar(32) nullable | `syllabus_order` or `prerequisites_first`. NULL when the learner has set no preference. |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. |
 
 **Constraints:** at least one of `target_date` and `examination_schedule_id` is non-null, enforced by
 `ck_study_goals_aims_at_a_date_or_an_examination`; `status` is constrained to the four documented
-values.
+values; `preferred_session_minutes` is NULL or between 15 and 480; `topic_sequencing` is NULL or one of
+the two documented values.
 
 `target_date` was first documented here as a plain non-null date. It is nullable because a learner
 preparing for a published examination aims at a *window* whose specific paper day the examining body
 has not announced; storing one date would record a guess as the learner's deadline. Both columns are
 nullable so neither has to be invented, and the `CHECK` refuses a goal that aims at neither.
 
-`planning_preferences` (`jsonb nullable`) remains an approved target and is **not yet created**.
-Nothing reads it and its shape is undecided, so it arrives with the planning code that uses it, per
-[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md).
+The learner's **planning preferences** are the two typed columns above, not the single
+`planning_preferences` (`jsonb nullable`) this document first approved.
+[ADR-019](../adr/ADR-019-study-goal-planning-preferences.md) records why, and it is the same kind of
+departure from a documented target that [`availability_slots`](#availability_slots) made:
+
+- **`jsonb` cannot be constrained.** No `CHECK` reaches a key inside a JSON document, so
+  `topic_sequencing` — a controlled value — would be guarded by application code alone, and a
+  misspelled key would store successfully and read back as absent. That is the silent mis-mapping
+  ADR-018 removed from `day_of_week`. The [Conventions](#conventions) above also reserve `jsonb` for
+  flexible provider and resource payloads rather than core relational concepts, so following the
+  original target would have contradicted this document's own rules.
+- **Both columns are nullable with no database default**, which is what keeps a preference the learner
+  never set distinguishable from one the product guessed for them. It is the distinction
+  [`learner_topic_progress`](#learner_topic_progress) draws between an explicit `not_explored` and no
+  record, and [`availability_slots`](#availability_slots) draws between zero minutes and no row. A
+  planner meeting NULL chooses its own default visibly.
+- **A third preference is a migration**, deliberately, where a `jsonb` column would have taken it as
+  data. An additive nullable column is the change [migrations](migrations.md#additive-changes-first)
+  prefers, and a preference worth planning against is worth naming properly.
+
+`preferred_session_minutes` is a **duration**, the same kind of value as
+`availability_slots.available_minutes`. It does not reopen the decision recorded under
+[`availability_slots`](#availability_slots) not to store a clock time; nothing here records when in a
+day a session falls.
+
+Nothing reads either column yet — no plan is generated — which is the position availability and
+`learner_topic_progress.stage_source` already hold. They are created now because
+[FR-002](../requirements/functional.md#fr-002-initial-learner-setup) asks what a learner can *set*, and
+[endpoints](../api/endpoints.md#fr-002-acceptance-criteria) carries that criterion's status.
 
 ### `availability_slots`
 
@@ -887,7 +917,8 @@ What the review settled:
 | The `day_of_week` numbering convention | **Retired 2026-08-06** — `availability_slots` stores the day's name, so there is no numbering. See [its own review](#availability_slots-review-approved-2026-08-06) below. |
 
 One input remains pending, and it belongs to tables this review does not cover, so the area stays
-**partly reviewed** for `learners`, `study_goals`, and `availability_slots`, and unreviewed for
+**fully reviewed** for `learners`, `study_goals`, and `availability_slots` — `study_goals`' planning
+preferences are reviewed [below](#planning-preferences-review-2026-08-06) — and unreviewed for
 `study_plans` and `plan_items`, which do not exist yet.
 
 #### API-contract review outcome
@@ -910,6 +941,8 @@ The learner and study-goal endpoints, defined in
 - `study_goals.curriculum_version_id` records the version a goal was created against and is never
   rewritten by an update, so a retired version still reads back as the goal's own. GOAL-001 binds a
   new goal to the program's active version instead of accepting one from a client.
+  *(`planning_preferences` was withheld at the time of this review; see
+  [its own review](#planning-preferences-review-2026-08-06) below.)*
 - The "one active goal per program" rule GOAL-001 enforces is **not** a database constraint. A partial
   unique index on `(learner_id, learning_program_id) WHERE status = 'active'` would express it, and
   was deliberately not added: the rule belongs to the create path only, no other writer exists —
@@ -943,6 +976,43 @@ the table is otherwise created as approved. What the review settled:
   and starts another is describing a different week.
 - No column stores a clock time and none stores the week's order. Both were considered and left out;
   see ADR-018.
+
+#### Planning preferences review — 2026-08-06
+
+This review covers the two columns migration `20260806_02` adds to `study_goals`, read and written by
+GOAL-001 and GOAL-004, whose contract is fixed by
+[ADR-019](../adr/ADR-019-study-goal-planning-preferences.md). **One documented column was replaced by
+two of different types**, and the reasoning is recorded under [`study_goals`](#study_goals) above. What
+the review settled:
+
+- `planning_preferences jsonb` is **not created**. `preferred_session_minutes integer` and
+  `topic_sequencing varchar(32)` are created in its place, each guarded by a `CHECK`, because no `CHECK`
+  can reach a key inside `jsonb` and `topic_sequencing` is a controlled value. This follows the
+  validated-text convention ADR-011 chose, as `day_of_week` did.
+- Both are **nullable with no database default**, so a preference nobody set never reads as one somebody
+  chose. `NOT NULL` with defaults was considered and rejected: it would satisfy FR-002's "the learner
+  can set" with values the learner never set.
+- The bounds are `15` to `480` on a session length. Below a quarter of an hour a plan item is scheduling
+  overhead rather than study; eight hours is a full working day, and a day is already bounded by its
+  availability.
+- **No index was added.** Nothing filters or orders goals by a preference — a preference is read as part
+  of the goal that owns it, already addressed by its primary key — and
+  [Required Indexes](#required-indexes) lists none for this table.
+- **No separate table.** A fourth learner-planning table for two nullable scalars would add a join to
+  every goal read and a new "no row versus a row of nulls" distinction, where the columns already
+  express the only distinction that matters. `availability_slots` earns its table by holding up to seven
+  keyed rows; a preference group holds one of each.
+- The columns sit on `study_goals` rather than on `learners`, matching availability: a learner who
+  archives one goal and starts another may want to study differently.
+- A revision share, a practice share, a pre-examination revision buffer, and an evidence-ranked topic
+  order were all considered and left out; ADR-019 records each with the work it waits on.
+- The constraint-name length limit was checked, as the examination-schedule precedent requires: the
+  longest, `ck_study_goals_preferred_session_minutes_within_bounds`, is 54 characters, inside
+  PostgreSQL's 63-character limit. The unit test guarding that limit covers this table.
+
+**Review inputs:** the first API contracts — GOAL-001 and GOAL-004 — were reviewed here, and the
+revision-scheduling rules remain **pending** for `study_plans` and `plan_items`, as recorded above.
+`study_goals` itself is now **fully reviewed**.
 
 ### Progress and revision area — partial review approved 2026-08-05
 
@@ -1004,6 +1074,8 @@ yet.
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — why the examination is periods rather than a date, and why `study_goals.target_date` is nullable
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the endpoint contracts the two API reviews above were taken against
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why `learner_topic_progress` is created without three of its documented columns, and why `stage_source` is not one of them
+- [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — why `availability_slots.day_of_week` holds a day name rather than the documented `smallint`
+- [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — why `study_goals` holds two typed preference columns rather than the documented `planning_preferences jsonb`
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated

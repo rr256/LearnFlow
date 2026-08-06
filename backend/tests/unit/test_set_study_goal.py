@@ -6,10 +6,12 @@ goal always aims at something, and setting the same goal twice writes nothing.
 """
 
 import uuid
+from dataclasses import replace
 from datetime import date
 
 import pytest
 
+from app.application.dto.planning_preferences import PlanningPreferences
 from app.application.dto.study_goal import RecordChange, StudyGoalRequest
 from app.application.ports.examination_schedule_repository import (
     ExaminationPeriodRecord,
@@ -279,6 +281,50 @@ def test_more_than_one_stored_learner_is_refused(repository):
 
     with pytest.raises(AmbiguousLearnerError):
         set_goal(make_request())
+
+
+def test_the_command_creates_a_goal_with_no_planning_preferences(repository):
+    """There is no form here to have asked about them, so inventing defaults would
+    store choices the learner never made."""
+    set_goal = SetStudyGoal(repository)
+
+    summary = set_goal(make_request())
+
+    assert repository.goals[summary.study_goal_id].planning_preferences.is_empty
+
+
+def test_a_re_run_leaves_a_learners_planning_preferences_alone(repository):
+    """The command does not manage preferences. A re-run must neither discard one
+    the learner set through GOAL-004 nor rewrite the row with an empty group."""
+    set_goal = SetStudyGoal(repository)
+    first = set_goal(make_request())
+    chosen = PlanningPreferences(
+        preferred_session_minutes=90, topic_sequencing="prerequisites_first"
+    )
+    repository.goals[first.study_goal_id] = replace(
+        repository.goals[first.study_goal_id], planning_preferences=chosen
+    )
+
+    again = set_goal(make_request())
+
+    assert again.study_goal_change is RecordChange.unchanged
+    assert repository.goals[first.study_goal_id].planning_preferences == chosen
+
+
+def test_a_run_that_does_change_the_goal_still_keeps_its_preferences(repository):
+    """The goal's horizon moves, its preferences do not. They travel on the same
+    record, so carrying them across has to be deliberate."""
+    set_goal = SetStudyGoal(repository)
+    first = set_goal(make_request())
+    chosen = PlanningPreferences(preferred_session_minutes=45)
+    repository.goals[first.study_goal_id] = replace(
+        repository.goals[first.study_goal_id], planning_preferences=chosen
+    )
+
+    again = set_goal(make_request(examination_cycle_label=None, target_date=date(2027, 1, 31)))
+
+    assert again.study_goal_change is RecordChange.updated
+    assert repository.goals[first.study_goal_id].planning_preferences == chosen
 
 
 def test_a_schedule_with_no_examination_period_reports_no_window():

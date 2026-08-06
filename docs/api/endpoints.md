@@ -18,6 +18,7 @@ related:
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
+  - ../adr/ADR-019-study-goal-planning-preferences.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -142,7 +143,7 @@ Supports **FR-002 — Initial Learner Setup**.
 | GOAL-001 | `POST /api/v1/study-goals` | Create a study goal for a selected program, aiming at an examination cycle, a target date, or both. | Goal data, including the examination window when a cycle is named. | Implemented |
 | GOAL-002 | `GET /api/v1/study-goals` | List the learner's goals. | Goal collection. | Implemented |
 | GOAL-003 | `GET /api/v1/study-goals/{goal_id}` | Read one study goal. | Goal. | Implemented |
-| GOAL-004 | `PATCH /api/v1/study-goals/{goal_id}` | Update the examination cycle, target date, or status. | Updated goal. | Implemented |
+| GOAL-004 | `PATCH /api/v1/study-goals/{goal_id}` | Update the examination cycle, target date, status, or planning preferences. | Updated goal. | Implemented |
 | GOAL-005 | `PUT /api/v1/study-goals/{goal_id}/availability` | Replace recurring weekly available study time. | Saved availability slots. | Implemented |
 
 A goal aims at an examination cycle, a target date, or both, and never at neither — a rule the
@@ -158,7 +159,9 @@ The deferral [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) re
 **discharged in full**. LRN-001, LRN-002, and GOAL-001 to GOAL-004 are contracted by
 [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md); GOAL-005, which waited on a schema
 decision rather than on a caller, is contracted by
-[ADR-018](../adr/ADR-018-weekly-availability-slots.md).
+[ADR-018](../adr/ADR-018-weekly-availability-slots.md). The `planning_preferences` group GOAL-001 and
+GOAL-004 accept, and every goal response carries, is contracted by
+[ADR-019](../adr/ADR-019-study-goal-planning-preferences.md).
 
 ### LRN-001 — `GET /api/v1/learner/profile`
 
@@ -186,9 +189,9 @@ field to change, or an unknown field; `409` `conflict` when more than one learne
 
 ### GOAL-001 — `POST /api/v1/study-goals`
 
-Request body: `learning_program_id` (a UUID), `examination_schedule_id` (a UUID or `null`), and
-`target_date` (`YYYY-MM-DD` or `null`). An unknown field is rejected. Returns `201` with the goal
-under `data`.
+Request body: `learning_program_id` (a UUID), `examination_schedule_id` (a UUID or `null`),
+`target_date` (`YYYY-MM-DD` or `null`), and `planning_preferences` (an object or `null`). An unknown
+field is rejected. Returns `201` with the goal under `data`.
 
 There is no `curriculum_version_id`. A goal binds to the program's **active** curriculum version, so
 a client cannot attach a learner to a draft or retired syllabus by naming its identifier. Accepting
@@ -198,7 +201,7 @@ A goal response carries `id`, `learner_id`, `status`, `target_date`, `learning_p
 (`id`, `code`, `name`), `curriculum_version` (`id`, `version_label`, `status`), `examination` —
 `null` for a goal aiming at a target date alone, and otherwise the schedule's `id`, `cycle_label`,
 `name`, `organising_body`, `source_reference`, `source_checked_on`, `schedule_status`, and
-`examination_window` — and `availability`.
+`examination_window` — plus `availability` and `planning_preferences`.
 
 `availability` is `{slots: [...]}`, the week GOAL-005 writes, in week order with Monday first. Each
 slot is `day_of_week` and `available_minutes`, and nothing else: GOAL-005 addresses a week rather than
@@ -206,12 +209,39 @@ a row, so no slot identifier is reported. A goal whose availability has never be
 `{"slots": []}` rather than `null` or an absent key, so no client needs a branch for a goal created
 before a week was. There is deliberately **no weekly total**; see GOAL-005 below.
 
+`planning_preferences` is `{preferred_session_minutes, topic_sequencing}` — how the learner wants a
+plan built, contracted by [ADR-019](../adr/ADR-019-study-goal-planning-preferences.md). It is **always
+an object, never `null`**: a learner who has set no preference gets one whose members are both `null`,
+so no client needs a branch for a goal stored before preferences existed.
+
+- `preferred_session_minutes` is how long one study block should be, from 15 to 480. It is a
+  **duration, not a time of day** — nothing records when in a day a session falls, which is the
+  position [ADR-018](../adr/ADR-018-weekly-availability-slots.md) took for an availability slot.
+- `topic_sequencing` is which order a plan works through the curriculum: `syllabus_order`, following
+  the stored position of subjects and topics, or `prerequisites_first`, following the topics'
+  prerequisite links. There is deliberately no order that ranks topics by evidence, because no
+  evidence is stored to rank them by.
+
+**A `null` member is "the learner has not said", not a default.** Nothing invents a preference on a
+learner's behalf, so an unset one stays distinguishable from one set to the value the product would
+have guessed — the distinction PRG-002 draws between an explicit `not_explored` and a topic with no
+record, and GOAL-005 draws between zero minutes and a day with no entry. A planner meeting `null`
+chooses its own default rather than reading one nobody set.
+
+On this endpoint, omitting `planning_preferences` and sending `null` mean the same thing: a new goal
+has nothing stored to leave alone, so both create a goal with no preferences. They differ on GOAL-004.
+
+**No preference is totalled, ranked, or scored**, on this response or anywhere else. Preferences are
+planning inputs beside availability, and nothing consumes one yet.
+
 Errors: `422` `validation_error` when the request aims at neither a cycle nor a date, when the
-program or schedule is not stored, when the schedule belongs to another program, or when the program
-has no active curriculum version — `details` names the offending field in each case. `409` `conflict`
-when no learner exists yet, or when the learner already has an **active** goal for that program: the
-existing goal is what any plan was built from, so a repeated form submission must not replace it.
-Goals that are paused, completed, or archived are history and do not conflict.
+program or schedule is not stored, when the schedule belongs to another program, when the program
+has no active curriculum version, or when a preference falls outside the values above — `details`
+names the offending field in each case, as `body.planning_preferences.<member>` for a preference, and
+never echoes the rejected value. `409` `conflict` when no learner exists yet, or when the learner
+already has an **active** goal for that program: the existing goal is what any plan was built from, so
+a repeated form submission must not replace it. Goals that are paused, completed, or archived are
+history and do not conflict.
 
 ### GOAL-002 — `GET /api/v1/study-goals`
 
@@ -237,21 +267,35 @@ is not a UUID; `409` `conflict` when more than one learner is stored.
 ### GOAL-004 — `PATCH /api/v1/study-goals/{goal_id}`
 
 Request body: `examination_schedule_id` (a UUID or `null`), `target_date` (`YYYY-MM-DD` or `null`),
-and `status` (`active`, `paused`, `completed`, or `archived`). All optional; an unknown field is
-rejected. Returns `200` with the updated goal.
+`status` (`active`, `paused`, `completed`, or `archived`), and `planning_preferences` (an object or
+`null`). All optional; an unknown field is rejected. Returns `200` with the updated goal.
 
 A field the request omits is left alone; an explicit `null` clears it. `status: null` is rejected: a
 goal always has one. The result must still aim at an examination cycle, a target date, or both.
 
-**Planning preferences are not accepted**, unlike this catalogue's original intent line.
-`study_goals.planning_preferences` is not created — [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md)
-held it back because nothing reads it and its shape is undecided, and
-[schema.md](../database/schema.md#study_goals) records it as an approved target rather than an
-existing column — so the field would promise storage the database has not got.
+**Planning preferences are now accepted**, which is what this catalogue's original intent line
+promised and what [ADR-019](../adr/ADR-019-study-goal-planning-preferences.md) supplies. They were
+withheld while `study_goals.planning_preferences` did not exist; two typed columns now hold them, and
+[schema.md](../database/schema.md#study_goals) records the shape.
+
+**A supplied group replaces the whole group.** The preferences it names become the goal's preferences,
+so a member left out of a supplied group is **unset** rather than left at its stored value, and an
+empty object clears every preference — as an explicit `null` does. Omitting the field entirely leaves
+the stored preferences alone.
+
+That is GOAL-005's whole-week replace applied to a group of fields, and for the same reason: a form
+shows every preference at once, so a control the learner cleared has to reach the API as a clearance. A
+merge would let a cleared control keep its old value. It is also why no separate "clear" spelling is
+needed — an empty group and an absent field are already different requests.
+
+Saving the preferences already stored is accepted and writes nothing, as saving an unchanged week is
+under GOAL-005 and recording an unchanged stage is under PRG-004.
 
 Errors: `404` `not_found` as for GOAL-003; `422` `validation_error` when the update would leave the
-goal aiming at nothing, names an unknown status, names no field to change, or names a schedule that
-is not stored or belongs to another program; `409` `conflict` when more than one learner is stored.
+goal aiming at nothing, names an unknown status, names no field to change, names a schedule that
+is not stored or belongs to another program, or names a preference outside the values GOAL-001
+documents — `details` reports a preference as `body.planning_preferences.<member>` and never echoes the
+rejected value; `409` `conflict` when more than one learner is stored.
 
 ### GOAL-005 — `PUT /api/v1/study-goals/{goal_id}/availability`
 
@@ -308,19 +352,24 @@ upserts the learner's active goal rather than refusing a second one and does not
 
 ### FR-002 acceptance criteria
 
-**Three of [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s five acceptance
-criteria are met in full, a fourth in part, and one not at all.** This section is authoritative for
-the count; documents that cite it link here rather than repeating it.
+**Four of [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s five acceptance
+criteria are met in full, and one not at all.** This section is authoritative for the count; documents
+that cite it link here rather than repeating it.
 
-Met in full: setting a target examination schedule or completion date; confirming the active learning
-program; and reviewing the saved setup without re-entering it, which the home screen reads back over
-LRN-001, GOAL-002, and EXM-001.
+Met in full: setting a target examination schedule or completion date; setting available study time and
+basic planning preferences; confirming the active learning program; and reviewing the saved setup
+without re-entering it, which the home screen reads back over LRN-001, GOAL-002, and EXM-001.
 
-- *"The learner can set available study time and basic planning preferences"* — **partly met.**
-  GOAL-005 sets available study time. Planning preferences are not accepted anywhere:
-  `study_goals.planning_preferences` is not created, and
-  [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) holds its shape undecided, so the
-  field would promise storage the database has not got. See GOAL-004.
+- *"The learner can set available study time and basic planning preferences"* — **met in full**, having
+  been partly met since GOAL-005 arrived. Available study time is set through GOAL-005; planning
+  preferences are set through GOAL-001 and GOAL-004, contracted by
+  [ADR-019](../adr/ADR-019-study-goal-planning-preferences.md), which creates the two columns
+  [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) had held back. Both are read back on
+  the setup screen and on the home screen.
+
+  **Nothing consumes either yet.** No plan is generated, no week is totalled, and no preference is
+  ranked or scored. The criterion is about what a learner can *set*, which they now can; what reads it
+  arrives with [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision).
 - *"The learner can start with no previous progress and still receive an initial plan"* — **unmet.**
   No plan is generated at all. PLN-001 arrives with
   [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision).
@@ -361,7 +410,8 @@ Both are synchronous, and both read and write through the `ManageTopicProgress` 
 status or learning stage"; it accepts the stage alone, because
 `learner_topic_progress.material_status` is not created — see
 [schema.md](../database/schema.md#learner_topic_progress). The field would promise storage the
-database has not got, which is the same reason GOAL-004 does not accept planning preferences.
+database has not got, which is the reason GOAL-004 withheld planning preferences until
+[ADR-019](../adr/ADR-019-study-goal-planning-preferences.md) created the columns to hold them.
 
 ### PRG-002 — `GET /api/v1/progress/topics`
 
@@ -517,8 +567,10 @@ Implement in an order that enables one working learner flow:
 
 1. Operational health and curriculum reads. **Done** — OPS-001 and CUR-001 to CUR-003.
 2. Learner setup and study-goal creation. **Done** — EXM-001, LRN-001, LRN-002, and GOAL-001 to
-   GOAL-004, contracted by [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md), and
-   GOAL-005, contracted by [ADR-018](../adr/ADR-018-weekly-availability-slots.md).
+   GOAL-004, contracted by [ADR-016](../adr/ADR-016-learner-onboarding-api-contracts.md); GOAL-005,
+   contracted by [ADR-018](../adr/ADR-018-weekly-availability-slots.md); and the planning preferences
+   GOAL-001 and GOAL-004 accept, contracted by
+   [ADR-019](../adr/ADR-019-study-goal-planning-preferences.md).
 3. Progress reads/updates and basic study activities. **Partly done** — PRG-002 and PRG-004 record a
    learning stage and read it back, contracted by
    [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). PRG-001, PRG-003, ACT-001, and
@@ -539,6 +591,7 @@ Implement in an order that enables one working learner flow:
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the request and response fields of EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-004
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the request and response fields of PRG-002 and PRG-004, and why the other four progress endpoints stay uncontracted
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the request and response fields of GOAL-005, and the `availability` object every goal response carries
+- [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the `planning_preferences` group GOAL-001 and GOAL-004 accept, and the criterion it completes
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

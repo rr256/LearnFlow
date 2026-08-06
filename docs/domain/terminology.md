@@ -11,6 +11,7 @@ related:
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
+  - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../development/coding-standards.md
 ---
 
@@ -49,6 +50,9 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Weekly availability** | The whole set of a goal's availability slots. | Saved as a week at a time: the days named become the week, and a day left out is removed. |
 | **Day of the week** | One of `monday`, `tuesday`, `wednesday`, `thursday`, `friday`, `saturday`, or `sunday`. | Stored and sent as the `snake_case` name, never as a number. Python, JavaScript, and PostgreSQL disagree about which day is zero, so LearnFlow has no numbering to mis-map. See [ADR-018](../adr/ADR-018-weekly-availability-slots.md). |
 | **Kept free** | A day the learner deliberately recorded as having no study time. | Stored as an availability slot of zero minutes. Distinct from a day they have not set, which has no slot at all — the same distinction *Not explored* draws against a topic with no record. |
+| **Planning preference** | A choice the learner has made about *how* a study plan should be built, belonging to one study goal. | A planning input beside *weekly availability*, never a measure of anything. A preference the learner has not set is unset, not a default: nothing is invented on their behalf, so a planner meeting an unset preference chooses for itself. See [ADR-019](../adr/ADR-019-study-goal-planning-preferences.md). |
+| **Session length** | How long one block of study should be, in minutes. | The learner's preference, stored as `preferred_session_minutes`, from 15 to 480. A **duration**, not a time of day — nothing records when in a day a session falls, for the reason *availability slot* gives. Report it in minutes; a total or an hours figure is planning arithmetic. |
+| **Topic order** | Which order a study plan works through the curriculum in. | The learner's preference, stored as `topic_sequencing`: `syllabus_order` follows the syllabus's own order, `prerequisites_first` follows the prerequisite links between topics. Stored and sent as the `snake_case` value; the labels a learner reads are *Syllabus order* and *Prerequisites first*. |
 | **Study plan** | A roadmap, monthly plan, weekly plan, or daily plan of recommended work. | Generated against a study goal and current evidence. |
 | **Plan item** | One actionable recommendation in a study plan. | Examples: study, practise, revise, or review mistakes. |
 | **Study activity** | A record of actual study, practice, or revision work completed by the learner. | May record duration and related resources/topics. |
@@ -90,6 +94,8 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Onboarding | Learner setup | Use **learner setup** for the capability. **Onboarding** is permitted for one narrower thing only: the first-time UI flow a learner walks through before they have a profile or a goal. It never names the capability, its endpoints, or the ongoing ability to change a goal — a learner who edits an established goal is not being onboarded. |
 | Dashboard (for the home screen) | Home screen | **Dashboard** is reserved for the progress overview [FR-011](../requirements/functional.md#fr-011-progress-overview) describes and PRG-001 will serve: progress by subject and topic, upcoming work, revisions due, and priority focus areas. None of that is built. Calling the setup overview a dashboard would make one word mean two things, and would take the name before the screen that earns it exists. Use **home screen** for the landing screen; the word *dashboard* stays free for progress content. |
 | Weekly study hours; total available time | Weekly availability; the availability of one day | A total is planning arithmetic, and it invites a judgement about whether a week is *enough*. FR-003's planner is what should form that view, with the trade-offs visible; until it exists, report each day and add nothing up. |
+| Study pace; intensity; study style | Planning preference; session length; topic order | *Pace* and *intensity* sound like settings but define nothing a planner can act on, and they invite a judgement about how hard a learner is working. Name the specific choice being made. |
+| Default session length; recommended topic order | An unset planning preference | A preference the learner has not set has no value, and presenting one as a default would report a decision they did not make. Say it is unset, and let the planner choose visibly when it exists. |
 | Time slot; study session (for availability) | Availability slot | An availability slot is a quantity of minutes on a day, not a booking between two clock times. Nothing stores a time of day. |
 | Test integration | Manual external test result entry | The MVP does not connect to third-party test platforms. |
 | AI memory | Learner progress, resource retrieval, or conversation context | Store durable facts in the application/database, not in model memory. |
@@ -133,6 +139,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the capability *learner setup* names, and the endpoints that serve it
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why the stage labels above and their stored values are separate representations
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the availability vocabulary above, and why a day is named rather than numbered
+- [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the planning-preference vocabulary above, and why an unset preference is not a default
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)

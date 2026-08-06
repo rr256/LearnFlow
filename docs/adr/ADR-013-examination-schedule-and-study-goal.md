@@ -13,6 +13,7 @@ related:
   - ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ADR-016-learner-onboarding-api-contracts.md
   - ADR-018-weekly-availability-slots.md
+  - ADR-019-study-goal-planning-preferences.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../domain/domain-model.md
@@ -152,6 +153,28 @@ untouched.
 
 **Nothing else changed.** The window model, the provenance rules, and the goal `CHECK` are unaffected;
 ADR-018's migration creates one empty table and alters none of the four this record created.
+
+### Implementation status — 2026-08-06, later the same day
+
+**`study_goals.planning_preferences` now exists, so the last thing this record left open in the
+learner-planning area is taken.** [ADR-019](ADR-019-study-goal-planning-preferences.md) fixes the
+contract GOAL-001 and GOAL-004 accept it under, and migration `20260806_02` adds it — as **two typed
+columns rather than one `jsonb` payload**, because no `CHECK` can guard a key inside JSON and
+`topic_sequencing` is a controlled value.
+
+**One statement under *Neutral* is now overtaken**, and as with the earlier notes the accepted text is
+left as written: "`study_goals.planning_preferences` is not created, for the same reason: nothing reads
+it, and its shape is undecided." Nothing reads it still — no plan is generated — so the first half of
+that reason holds and ADR-019 records it as a deliberate departure from ADR-011's ordering rule rather
+than a refutation of it. The second half no longer applies: the shape is decided.
+
+**FR-002's second acceptance criterion is now met in full**, where the note above reported it as partly
+met. [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the count.
+
+**Nothing else changed.** The window model, the provenance rules, the goal `CHECK`, and the default
+learner timezone are unaffected, and the migration alters no column this record created. The two other
+things this record left open — how superseded examination periods are retired, and whether a learner may
+hold goals for more than one program at a time — are untouched.
 
 ## Context
 
@@ -387,6 +410,7 @@ curriculum area's first-API-contract review as pending for the same reason.
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the client whose existence reopens the deferral above
 - [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the record that discharges that deferral, and the endpoint schemas this one left open
 - [ADR-018: Store weekly availability as named days replaced a week at a time](ADR-018-weekly-availability-slots.md) — the record that creates the `availability_slots` table this one held back, and discharges the last of the deferral
+- [ADR-019: Store planning preferences as typed columns replaced as a group](ADR-019-study-goal-planning-preferences.md) — the record that creates the `planning_preferences` columns this one held back, and why they are typed rather than `jsonb`
 - [Database schema](../database/schema.md) — the tables and constraints this record decides
 - [Database migrations](../database/migrations.md) — the seed's commands and operational rules
 - [Domain model](../domain/domain-model.md) — the examination schedule concept

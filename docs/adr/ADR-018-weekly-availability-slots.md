@@ -11,6 +11,7 @@ related:
   - ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ADR-016-learner-onboarding-api-contracts.md
   - ADR-017-topic-progress-api-and-schema.md
+  - ADR-019-study-goal-planning-preferences.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -35,6 +36,36 @@ This record closes the last of the three open project-owner items
 [ADR-011](ADR-011-sqlalchemy-persistence-implementation.md) recorded, and discharges the deferral
 [ADR-016](ADR-016-learner-onboarding-api-contracts.md) left on GOAL-005. Both remain accepted and
 unchanged; each carries a dated implementation-status note pointing here.
+
+## Implementation status — 2026-08-06, later the same day
+
+*Note added 2026-08-06. The decision below is unchanged: GOAL-005's contract, the day-name column, and
+the whole-week replace are all untouched. As elsewhere in this repository, the accepted text is left as
+written.*
+
+**The other half of FR-002's criterion is now delivered.**
+[ADR-019](ADR-019-study-goal-planning-preferences.md) adds the learner's planning preferences to
+`study_goals` and to GOAL-001 and GOAL-004.
+
+**Two statements are overtaken:**
+
+- Under [Positive](#positive), "**FR-002's second acceptance criterion is now half met**… Basic planning
+  preferences remain unmet — `study_goals.planning_preferences` is not created, and ADR-013 holds its
+  shape undecided." The columns now exist and the criterion is **met in full**;
+  [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the count.
+- Under [Implementation notes](#implementation-notes), the open item "whether `planning_preferences`
+  arrives with the planner or before it" is settled: **before it**, deliberately, and ADR-019 records
+  that as a departure from ADR-011's ordering rule together with the risk it carries.
+
+**Three of this record's rules were reused rather than reinvented**, which is what it says a later
+change should do: the whole-group replace is this record's whole-week replace applied to a set of
+columns, an unset preference is its zero-versus-absent distinction applied to a value, and a session
+length is a duration for the same reason a slot holds minutes rather than clock times. ADR-019 also
+departs from a documented `schema.md` target the way this record did, and for a related reason — a
+`CHECK` cannot guard what is not a column.
+
+**Nothing else changed.** `availability_slots` is unaltered, nothing totals a week, and no plan is
+generated from either input.
 
 ## Context
 
@@ -321,6 +352,7 @@ form that opinion, with the trade-offs visible, and it does not exist.
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the call topology the availability form inherits
 - [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the GOAL-005 deferral this record discharges
 - [ADR-017: Record manual topic progress as a learner-owned stage](ADR-017-topic-progress-api-and-schema.md) — the stored-form rule and the absent-versus-explicit distinction this record reuses
+- [ADR-019: Store planning preferences as typed columns replaced as a group](ADR-019-study-goal-planning-preferences.md) — the other half of FR-002's criterion, which reuses this record's replace-as-a-group and unset-versus-set rules
 - [API conventions](../api/conventions.md) — the envelope, the error codes, and the `snake_case` rule
 - [API endpoint catalog](../api/endpoints.md) — the contract this record decides
 - [API versioning](../api/versioning.md) — what makes a change to it breaking

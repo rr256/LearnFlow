@@ -33,9 +33,11 @@ from app.application.use_cases.manage_study_goals import (
     LearnerNotSetUpError,
     ManageStudyGoals,
     MissingGoalTargetError,
+    SessionMinutesOutOfRangeError,
     StudyGoalNotFoundError,
     UnknownGoalStatusError,
     UnknownReferenceError,
+    UnknownTopicSequencingError,
     UnknownWeekdayError,
 )
 from app.presentation.api import API_V1_PREFIX
@@ -79,6 +81,9 @@ def create_study_goal(
     existing goal is what any plan was built from, so a repeated form submission
     must not replace it. Edit through GOAL-004 instead.
 
+    Planning preferences may be set here or left out. A goal created without them
+    holds none, rather than holding whichever defaults the product would guess.
+
     GOAL-001. Serves FR-002.
     """
     try:
@@ -87,6 +92,12 @@ def create_study_goal(
         raise _missing_target(error) from error
     except UnknownReferenceError as error:
         raise _unknown_reference(error) from error
+    except UnknownTopicSequencingError as error:
+        raise _rejected_preference(error, "topic_sequencing", "unknown_topic_sequencing") from error
+    except SessionMinutesOutOfRangeError as error:
+        raise _rejected_preference(
+            error, "preferred_session_minutes", "session_minutes_out_of_range"
+        ) from error
     except (LearnerNotSetUpError, ActiveGoalExistsError, AmbiguousLocalLearnerError) as error:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
     return StudyGoalResponse(data=StudyGoalSchema.of(goal))
@@ -156,13 +167,14 @@ def read_study_goal(study_goal_id: uuid.UUID, goals: StudyGoalManager) -> StudyG
 def update_study_goal(
     study_goal_id: uuid.UUID, request: UpdateStudyGoalRequest, goals: StudyGoalManager
 ) -> StudyGoalResponse:
-    """Change a goal's examination cycle, target date, or status.
+    """Change a goal's examination cycle, target date, status, or preferences.
 
     A field the request omits is left alone; an explicit null clears it. The
     result must still aim at an examination cycle, a target date, or both.
 
-    Planning preferences are not accepted: the column does not exist, so the
-    field would promise storage the database has not got.
+    Planning preferences replace as a group: a request naming them makes them the
+    goal's preferences, so a member left out of the group is unset and an empty
+    group clears them all. Omitting the field leaves the stored preferences alone.
 
     GOAL-004. Serves FR-002.
     """
@@ -174,6 +186,12 @@ def update_study_goal(
         raise _missing_target(error) from error
     except UnknownReferenceError as error:
         raise _unknown_reference(error) from error
+    except UnknownTopicSequencingError as error:
+        raise _rejected_preference(error, "topic_sequencing", "unknown_topic_sequencing") from error
+    except SessionMinutesOutOfRangeError as error:
+        raise _rejected_preference(
+            error, "preferred_session_minutes", "session_minutes_out_of_range"
+        ) from error
     except EmptyGoalUpdateError as error:
         raise RequestRejected(
             status_code=HTTP_422_UNPROCESSABLE_CONTENT,
@@ -251,6 +269,23 @@ def _unknown_reference(error: UnknownReferenceError) -> RequestRejected:
         detail=message,
         details=[
             ErrorDetail(field=f"body.{error.field}", message=message, type="unknown_reference")
+        ],
+    )
+
+
+def _rejected_preference(error: Exception, name: str, rule: str) -> RequestRejected:
+    """Report a preference the database would refuse, naming which one.
+
+    The field is the dotted path to the member at fault, so a client can mark the
+    control responsible rather than the whole group. The message names the choices
+    or the bounds available and never echoes the rejected value back.
+    """
+    message = str(error)
+    return RequestRejected(
+        status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=message,
+        details=[
+            ErrorDetail(field=f"body.planning_preferences.{name}", message=message, type=rule)
         ],
     )
 

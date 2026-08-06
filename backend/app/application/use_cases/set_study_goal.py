@@ -19,11 +19,18 @@ goal cannot exist without a horizon to plan against.
 Running this twice is safe. It matches the learner's active goal for the
 program, writes only what differs, and never touches a goal that is paused,
 completed, or archived -- that is history, not a draft.
+
+**It does not manage planning preferences.** Those are set through GOAL-001 and
+GOAL-004 by a learner looking at a form, and this command has no way to ask about
+them. It copies whatever is stored onto the record it writes, so a preference the
+learner set survives a re-run and a repeat run still reports `unchanged` rather
+than rewriting the row with an empty group.
 """
 
 import uuid
 from collections.abc import Sequence
 
+from app.application.dto.planning_preferences import NO_PLANNING_PREFERENCES
 from app.application.dto.study_goal import (
     ExaminationGoalSummary,
     RecordChange,
@@ -199,6 +206,10 @@ class SetStudyGoal:
                 examination_schedule_id=examination_schedule_id,
                 target_date=request.target_date,
                 status=ACTIVE_STATUS,
+                # A goal this command creates has no preferences. There is no
+                # form here to have asked about them, and inventing defaults
+                # would store choices the learner never made.
+                planning_preferences=NO_PLANNING_PREFERENCES,
             )
             self._repository.add_study_goal(record)
             return record, RecordChange.created
@@ -211,6 +222,10 @@ class SetStudyGoal:
             examination_schedule_id=examination_schedule_id,
             target_date=request.target_date,
             status=existing.status,
+            # Carried across unchanged. This command does not manage
+            # preferences, so a re-run must neither discard one the learner set
+            # nor report the goal as updated for having left them alone.
+            planning_preferences=existing.planning_preferences,
         )
         if desired == existing:
             return existing, RecordChange.unchanged

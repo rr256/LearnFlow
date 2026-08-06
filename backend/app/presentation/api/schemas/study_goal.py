@@ -14,8 +14,12 @@ mis-map a numbering convention (ADR-018). A slot identifier is deliberately not
 reported: GOAL-005 addresses a week, not a row, so an identifier no client can use
 would be a field the contract had to keep forever.
 
-`planning_preferences` is absent from the update request. The column does not
-exist, so accepting the field would promise storage the database does not have.
+A goal's planning preferences travel as one object, and a request that names it
+replaces the whole group rather than merging into it -- the same shape a week
+takes, and for the same reason: a form shows every preference at once, so a
+partial merge would let a control the learner cleared keep its old value
+(ADR-019). Both members are nullable, because a preference nobody set is not the
+same as one set to the value the product would have guessed.
 """
 
 import uuid
@@ -29,6 +33,12 @@ from app.application.dto.availability import (
     AvailabilitySlotEntry,
     WeeklyAvailability,
     WeeklyAvailabilityRequest,
+)
+from app.application.dto.planning_preferences import (
+    MAXIMUM_SESSION_MINUTES,
+    MINIMUM_SESSION_MINUTES,
+    TOPIC_SEQUENCING_CHOICES,
+    PlanningPreferences,
 )
 from app.application.dto.study_goal import (
     ExaminationGoalSummary,
@@ -147,6 +157,83 @@ class WeeklyAvailabilitySchema(BaseModel):
         return cls(slots=[AvailabilitySlotSchema.of(entry) for entry in availability.slots])
 
 
+class PlanningPreferencesSchema(BaseModel):
+    """How the learner wants a study plan built, for the choices they have made.
+
+    Every member is nullable and independently unset. A null is "the learner has
+    not said", not "the default": nothing here invents a preference, so a planner
+    meeting a null chooses its own default visibly rather than reading a value
+    nobody chose.
+    """
+
+    preferred_session_minutes: int | None = Field(
+        description=(
+            f"Length of one study block, from {MINIMUM_SESSION_MINUTES} to "
+            f"{MAXIMUM_SESSION_MINUTES} minutes. A duration, not a time of day -- "
+            "nothing records when in a day a session falls. Null when unset."
+        )
+    )
+    topic_sequencing: str | None = Field(
+        description=(
+            "Which order a plan works through the curriculum: "
+            f"{', '.join(TOPIC_SEQUENCING_CHOICES)}. Null when unset."
+        )
+    )
+
+    @classmethod
+    def of(cls, preferences: PlanningPreferences) -> PlanningPreferencesSchema:
+        """Build the schema from its application DTO."""
+        return cls(
+            preferred_session_minutes=preferences.preferred_session_minutes,
+            topic_sequencing=preferences.topic_sequencing,
+        )
+
+
+class PlanningPreferencesRequest(BaseModel):
+    """The planning preferences a request is saving against a goal.
+
+    Naming this object replaces the goal's preferences whole: a member left out
+    is unset, so an empty object clears them all and means exactly what an
+    explicit null does. Whether a member's value is one the database accepts is
+    checked by the use case, which is the layer that also mirrors the `CHECK`
+    constraints, so a rejection names the preference at fault.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    preferred_session_minutes: int | None = Field(
+        default=None,
+        description=(
+            f"Length of one study block, from {MINIMUM_SESSION_MINUTES} to "
+            f"{MAXIMUM_SESSION_MINUTES} minutes. Leave it out to let the planner choose."
+        ),
+    )
+    topic_sequencing: str | None = Field(
+        default=None,
+        description=f"One of: {', '.join(TOPIC_SEQUENCING_CHOICES)}.",
+    )
+
+    def to_planning_preferences(self) -> PlanningPreferences:
+        """Map the request onto the application's preference structure."""
+        return PlanningPreferences(
+            preferred_session_minutes=self.preferred_session_minutes,
+            topic_sequencing=self.topic_sequencing,
+        )
+
+
+def _replacement_preferences(
+    request: PlanningPreferencesRequest | None,
+) -> PlanningPreferences:
+    """The group a request asks a goal to hold.
+
+    An explicit null clears every preference, which is the same state an empty
+    object asks for. Both are deliberate acts by a learner who wants none, and
+    neither is a way of saying "leave them alone" -- that is expressed by omitting
+    the field entirely, which never reaches this function.
+    """
+    return PlanningPreferences() if request is None else request.to_planning_preferences()
+
+
 class StudyGoalSchema(BaseModel):
     """One study goal, with the reference data it points at resolved."""
 
@@ -164,6 +251,13 @@ class StudyGoalSchema(BaseModel):
     availability: WeeklyAvailabilitySchema = Field(
         description="The weekly availability saved against this goal, empty when none is."
     )
+    planning_preferences: PlanningPreferencesSchema = Field(
+        description=(
+            "How the learner wants a plan built. Always an object, never null: a "
+            "learner who has set no preference gets one whose members are null, so "
+            "no client needs a branch for a goal stored before preferences existed."
+        )
+    )
 
     @classmethod
     def of(cls, detail: StudyGoalDetail) -> StudyGoalSchema:
@@ -179,6 +273,7 @@ class StudyGoalSchema(BaseModel):
                 None if detail.examination is None else ExaminationGoalSchema.of(detail.examination)
             ),
             availability=WeeklyAvailabilitySchema.of(detail.availability),
+            planning_preferences=PlanningPreferencesSchema.of(detail.planning_preferences),
         )
 
 
@@ -224,13 +319,25 @@ class CreateStudyGoalRequest(BaseModel):
             "Do not use it to guess a paper date inside an examination window."
         ),
     )
+    planning_preferences: PlanningPreferencesRequest | None = Field(
+        default=None,
+        description=(
+            "How the learner wants a plan built. Omit it, or send null, for a goal "
+            "with no preferences set."
+        ),
+    )
 
     def to_new_study_goal(self) -> NewStudyGoal:
-        """Map the request onto the application's creation structure."""
+        """Map the request onto the application's creation structure.
+
+        A create has nothing stored to leave alone, so an absent group and an
+        explicit null both mean the same thing here: a goal with no preferences.
+        """
         return NewStudyGoal(
             learning_program_id=self.learning_program_id,
             examination_schedule_id=self.examination_schedule_id,
             target_date=self.target_date,
+            planning_preferences=_replacement_preferences(self.planning_preferences),
         )
 
 
@@ -240,6 +347,10 @@ class UpdateStudyGoalRequest(BaseModel):
     A field that is absent is left alone. An explicit null clears the stored
     value, which absence cannot express. The result must still aim at an
     examination cycle, a target date, or both.
+
+    `planning_preferences` follows the same absent-versus-null rule at the level
+    of the whole group: absent leaves the stored preferences alone, and a supplied
+    group replaces them entirely, so a member left out of one is unset.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -253,6 +364,14 @@ class UpdateStudyGoalRequest(BaseModel):
     status: str | None = Field(
         default=None,
         description=f"One of: {', '.join(STUDY_GOAL_STATUSES)}.",
+    )
+    planning_preferences: PlanningPreferencesRequest | None = Field(
+        default=None,
+        description=(
+            "The goal's preferences, replaced whole. A member left out is unset, so "
+            "an empty object clears them all -- as an explicit null does. Omit the "
+            "field to leave the stored preferences alone."
+        ),
     )
 
     @model_validator(mode="after")
@@ -279,6 +398,14 @@ class UpdateStudyGoalRequest(BaseModel):
             target_date=self.target_date if "target_date" in supplied else None,
             clear_target_date="target_date" in supplied and self.target_date is None,
             status=self.status if "status" in supplied else None,
+            # No `clear_` flag: an empty group is a value distinct from no group,
+            # so `None` can mean "absent" without making "clear them"
+            # inexpressible -- unlike a bare date, where the two collide.
+            planning_preferences=(
+                _replacement_preferences(self.planning_preferences)
+                if "planning_preferences" in supplied
+                else None
+            ),
         )
 
 

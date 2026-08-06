@@ -1,0 +1,46 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+/*
+ * Only the preferences the learner has set appear, so the grid is sized for as
+ * few as one rather than for a fixed number of rows.
+ */
+.preferences {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.preferences dt {
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.preferences dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+}
+
+/*
+ * Nothing consumes a preference yet, and saying so belongs beside the values
+ * rather than in a heading: a learner should not have to infer that a saved
+ * preference has not changed anything.
+ */
+.pending {
+  margin: var(--space-3) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}

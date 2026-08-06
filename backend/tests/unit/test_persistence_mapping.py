@@ -34,8 +34,11 @@ from app.infrastructure.persistence.examination_schedule import (
     ExaminationSchedule,
 )
 from app.infrastructure.persistence.learner_planning import (
+    MAXIMUM_SESSION_MINUTES,
+    MINIMUM_SESSION_MINUTES,
     MINUTES_IN_A_DAY,
     STUDY_GOAL_STATUSES,
+    TOPIC_SEQUENCING_CHOICES,
     WEEKDAYS,
     AvailabilitySlot,
     Learner,
@@ -360,6 +363,70 @@ def test_learner_owned_records_carry_a_learner_id():
     """Kept from the start so multiple accounts stay an authentication change."""
     assert "learner_id" in StudyGoal.__table__.columns
     assert "user_id" not in StudyGoal.__table__.columns
+
+
+# -- planning preferences ---------------------------------------------------
+
+
+def test_planning_preferences_are_typed_columns_rather_than_a_json_payload():
+    """ADR-019. docs/database/schema.md first described a single
+    `planning_preferences jsonb`, but that same document reserves `jsonb` for
+    flexible provider and resource payloads, and no CHECK can guard a key inside
+    one -- so a controlled value stored that way would carry exactly the silent
+    mis-mapping risk ADR-018 removed from `day_of_week`."""
+    columns = StudyGoal.__table__.columns
+
+    assert "planning_preferences" not in columns
+    assert isinstance(columns["preferred_session_minutes"].type, Integer)
+    assert isinstance(columns["topic_sequencing"].type, String)
+
+
+def test_an_unset_preference_is_null_rather_than_a_stored_default():
+    """What keeps a preference nobody set distinguishable from one the product
+    guessed -- the distinction ADR-017 drew between an explicit `not_explored` and
+    no record, and ADR-018 drew between zero minutes and no row."""
+    columns = StudyGoal.__table__.columns
+
+    for name in ("preferred_session_minutes", "topic_sequencing"):
+        assert columns[name].nullable is True
+        assert columns[name].server_default is None
+        assert columns[name].default is None
+
+
+def test_topic_sequencing_is_constrained_to_the_documented_values():
+    ddl = compiled("study_goals")
+
+    assert "ck_study_goals_topic_sequencing_is_known" in ddl
+    for choice in TOPIC_SEQUENCING_CHOICES:
+        assert f"'{choice}'" in ddl
+
+
+def test_the_stored_topic_orders_are_both_derivable_from_stored_data():
+    """`syllabus_order` follows the `position` columns the curriculum already has,
+    and `prerequisites_first` the `prerequisite` edges in `topic_relationships`.
+    No priority-focus order is offered, because the evidence that would rank
+    topics that way is not stored."""
+    assert TOPIC_SEQUENCING_CHOICES == ("syllabus_order", "prerequisites_first")
+
+
+def test_a_preferred_session_length_stays_inside_the_bounds_a_plan_can_honour():
+    ddl = compiled("study_goals")
+
+    assert "ck_study_goals_preferred_session_minutes_within_bounds" in ddl
+    # `IS NULL OR` is written out rather than left to three-valued CHECK
+    # semantics, so a reader need not recall that a CHECK passes on NULL.
+    assert "preferred_session_minutes IS NULL OR" in ddl
+    assert f"preferred_session_minutes >= {MINIMUM_SESSION_MINUTES}" in ddl
+    assert f"preferred_session_minutes <= {MAXIMUM_SESSION_MINUTES}" in ddl
+
+
+def test_a_preference_stores_no_clock_time():
+    """A preferred session length is a duration, the same kind of value as
+    `available_minutes`. ADR-018's refusal to store a time of day stands."""
+    columns = StudyGoal.__table__.columns
+
+    assert "preferred_session_starts_at" not in columns
+    assert "study_starts_at" not in columns
 
 
 # -- availability -----------------------------------------------------------

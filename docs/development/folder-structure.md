@@ -17,6 +17,7 @@ related:
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
+  - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../domain/terminology.md
 ---
 
@@ -231,8 +232,9 @@ app/
 │       └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
-                                            # writes LRN-002, GOAL-001/GOAL-004, and
-                                            # GOAL-005 via server actions
+                                            # writes LRN-002, GOAL-001/GOAL-004 — which
+                                            # carry the planning preferences — and
+                                            # GOAL-005, via server actions
 ```
 
 Every home, curriculum, and setup route sets `dynamic = "force-dynamic"`. The curriculum lives in the
@@ -294,11 +296,13 @@ onboarded — and it writes nothing.
 | `home/ExaminationDates.tsx` | The goal's examination: its window, every published period, the source, and the provisional status — gathered in one panel so that status is stated once beside every date it qualifies. |
 | `home/dates.ts` | Date and period-type presentation. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings; converting one to a `Date` would parse it as UTC midnight and could move a sitting day back by a day. |
 | `home/WeeklyAvailability.tsx` | The study week saved against the goal, read-only, with its CSS Module. It comes off the goal GOAL-002 already returned, so it costs the home screen no further request. |
-| `onboarding/LearnerSetupForm.tsx` | The setup form. A client component only so it can show the last submission's result beside the field responsible; it calls no API itself. |
+| `home/PlanningPreferences.tsx` | The planning preferences saved against the goal, read-only, with its CSS Module. Off the same goal response, so it costs no further request either. A preference the learner has not set is left out rather than shown as a default, and the panel says plainly that no plan acts on one yet. |
+| `onboarding/LearnerSetupForm.tsx` | The setup form, including the planning-preference controls, which ride on the same goal write rather than needing a form of their own. A client component only so it can show the last submission's result beside the field responsible; it calls no API itself. |
 | `onboarding/StudyGoalSummary.tsx` | The goal the learner has already set, with its examination window, source, and provisional status. |
 | `onboarding/AvailabilityForm.tsx` | The weekly availability form: one box per day, saved as a whole week. A separate form from the setup one above, because a week belongs to the goal that form creates. |
-| `onboarding/submission.ts` | Reads the setup form into the two requests it makes, and owns that form's state shape. Plain functions, so they are testable without a running server. |
+| `onboarding/submission.ts` | Reads the setup form into the two requests it makes — including the planning preferences that ride on the goal write — and owns that form's state shape. Plain functions, so they are testable without a running server. |
 | `onboarding/availability.ts` | Reads the availability form into the request it makes, owns that form's state shape, and writes a saved week the way a learner reads it. Plain functions, for the same reason. |
+| `onboarding/preferences.ts` | Writes a saved planning preference the way a learner reads it. Presentation only — the reading half lives in `submission.ts`, because preferences ride on the goal write that form already makes. Plain functions, for the same reason, and used by the home panel as well as the setup screen. |
 | `onboarding/actions.ts` | The `"use server"` module holding both write paths. |
 | `progress/TopicStageControl.tsx` | The learning-stage control beside one trackable topic, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. |
 | `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
@@ -309,8 +313,8 @@ A goal response carries the examination **window** but not the dated periods, pe
 [endpoints](../api/endpoints.md#learner-setup-and-goal-endpoints), so a screen wanting the
 registration and results dates reads EXM-001 and matches the goal's cycle by id. That is why the home
 screen makes a third call rather than a second, and why it skips it entirely for a goal aiming at a
-target date alone. It carries the saved **week**, however, so weekly availability needs no call of its
-own on either screen.
+target date alone. It carries the saved **week** and the saved **planning preferences**, however, so
+neither needs a call of its own on either screen.
 
 The home screen shows the learner's **active** goal, falling back to the most recent one when they
 have none active — a paused or archived goal is history, and is shown only when it is all they have.
@@ -354,8 +358,9 @@ TypeScript types based on public API contracts. Do not copy database/ORM types i
 
 Vitest specs for the API client, the configuration reader, the curriculum, learner-setup, home, and
 progress components, the setup, availability, and stage forms' submission parsing, the home screen's
-date presentation, the stage-to-topic join, and the `"use server"` export rule. They stub `fetch` and
-reach no live backend, so `npm test` needs nothing running.
+date presentation, the planning-preference presentation, the stage-to-topic join, and the
+`"use server"` export rule. They stub `fetch` and reach no live backend, so `npm test` needs nothing
+running.
 
 ## Docker and Scripts
 
@@ -456,6 +461,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-016: Fix the learner setup API contracts](../adr/ADR-016-learner-onboarding-api-contracts.md) — the server-action write path the `onboarding/` module implements
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the contracts the `progress/` module implements, and why its control sits inside the curriculum view
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the contract the availability form and panel implement, and why a week is saved all at once
+- [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the contract the preference controls and panel implement, and why they need no form or action of their own
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

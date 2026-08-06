@@ -31,9 +31,15 @@ is removed. One request and one transaction, so an edit spanning three days
 cannot leave one saved and two lost. A day is named by its `snake_case` name, so
 no numbering convention exists to get wrong (ADR-018).
 
-Nothing here totals a week, compares two weeks, or derives a plan from one.
-Availability is a planning input, and Milestone 3's planning code is what reads
-it.
+**Planning preferences replace as a group.** A goal update that names them makes
+them the goal's preferences, and one left out of a supplied group is unset -- the
+same shape as a week, for the same reason: a form shows every preference at once,
+so a partial merge would let a control the learner cleared keep its old value.
+An update that does not name the group leaves it entirely alone (ADR-019).
+
+Nothing here totals a week, compares two weeks, ranks two preferences, or derives
+a plan from either. Both are planning inputs, and Milestone 3's planning code is
+what reads them.
 """
 
 import uuid
@@ -45,6 +51,12 @@ from app.application.dto.availability import (
     AvailabilitySlotEntry,
     WeeklyAvailability,
     WeeklyAvailabilityRequest,
+)
+from app.application.dto.planning_preferences import (
+    MAXIMUM_SESSION_MINUTES,
+    MINIMUM_SESSION_MINUTES,
+    TOPIC_SEQUENCING_CHOICES,
+    PlanningPreferences,
 )
 from app.application.dto.study_goal import (
     ExaminationGoalSummary,
@@ -142,6 +154,14 @@ class AvailableMinutesOutOfRangeError(StudyGoalManagementError):
     """A day claims fewer than zero or more minutes than a day holds."""
 
 
+class UnknownTopicSequencingError(StudyGoalManagementError):
+    """The preferences name a topic order the database would refuse."""
+
+
+class SessionMinutesOutOfRangeError(StudyGoalManagementError):
+    """The preferred session length falls outside the bounds a plan can honour."""
+
+
 class ManageStudyGoals:
     """Serves the study-goal endpoints through the ports below."""
 
@@ -179,12 +199,17 @@ class ManageStudyGoals:
             MissingGoalTargetError: The request names nothing to aim at.
             ActiveGoalExistsError: The learner already has an active goal for
                 this program.
+            UnknownTopicSequencingError: The preferences name an unknown topic
+                order.
+            SessionMinutesOutOfRangeError: The preferred session length is
+                outside the bounds a plan can honour.
             AmbiguousLocalLearnerError: More than one learner is stored.
         """
         if request.examination_schedule_id is None and request.target_date is None:
             raise MissingGoalTargetError(
                 "A study goal must name an examination schedule, a target date, or both."
             )
+        preferences = _validated_preferences(request.planning_preferences)
 
         learner = resolve_local_learner(self._learners)
         if learner is None:
@@ -222,6 +247,7 @@ class ManageStudyGoals:
             examination_schedule_id=None if schedule is None else schedule.id,
             target_date=request.target_date,
             status=ACTIVE_STATUS,
+            planning_preferences=preferences,
         )
         self._goals.add_study_goal(record)
         return self._detail(
@@ -285,6 +311,10 @@ class ManageStudyGoals:
                 belongs to another program.
             UnknownGoalStatusError: The status is not one the database accepts.
             MissingGoalTargetError: The result would aim at nothing.
+            UnknownTopicSequencingError: The preferences name an unknown topic
+                order.
+            SessionMinutesOutOfRangeError: The preferred session length is
+                outside the bounds a plan can honour.
             AmbiguousLocalLearnerError: More than one learner is stored.
         """
         if changes.is_empty:
@@ -308,6 +338,14 @@ class ManageStudyGoals:
             )
 
         schedule = self._require_schedule(schedule_id, existing.learning_program_id)
+        # A group the update does not name is left exactly as it was; a group it
+        # does name replaces the stored one whole, so a preference the learner
+        # cleared in the form is cleared here rather than merged back in.
+        preferences = (
+            existing.planning_preferences
+            if changes.planning_preferences is None
+            else _validated_preferences(changes.planning_preferences)
+        )
         updated = StudyGoalRecord(
             id=existing.id,
             learner_id=existing.learner_id,
@@ -316,6 +354,7 @@ class ManageStudyGoals:
             examination_schedule_id=None if schedule is None else schedule.id,
             target_date=target_date,
             status=changes.status or existing.status,
+            planning_preferences=preferences,
         )
         if updated != existing:
             self._goals.update_study_goal(updated)
@@ -519,7 +558,40 @@ class ManageStudyGoals:
                 else _summarise(schedule, self._schedules.list_examination_periods([schedule.id]))
             ),
             availability=availability,
+            # Read off the goal row rather than fetched: the preference columns
+            # live on `study_goals`, so they arrive with every record already.
+            planning_preferences=record.planning_preferences,
         )
+
+
+def _validated_preferences(preferences: PlanningPreferences) -> PlanningPreferences:
+    """The preferences given, refusing what the database would.
+
+    Checked here rather than only at the API boundary, for the reason
+    `_validated_week` records: these are the rules the `CHECK` constraints
+    express, and failing them in the database would surface as an unexplained
+    `500` where refusing them here names the preference at fault.
+
+    An unset preference is returned untouched. There is nothing to validate about
+    a choice the learner has not made, and substituting a default here would
+    store a value nobody chose.
+
+    The rejected value is deliberately not repeated back. Naming the choices a
+    caller may use, or the bounds a length must fall inside, is what it needs.
+    """
+    minutes = preferences.preferred_session_minutes
+    if minutes is not None and not MINIMUM_SESSION_MINUTES <= minutes <= MAXIMUM_SESSION_MINUTES:
+        raise SessionMinutesOutOfRangeError(
+            f"A preferred session length must be between {MINIMUM_SESSION_MINUTES} and "
+            f"{MAXIMUM_SESSION_MINUTES} minutes. Leave it out to let the planner choose."
+        )
+    sequencing = preferences.topic_sequencing
+    if sequencing is not None and sequencing not in TOPIC_SEQUENCING_CHOICES:
+        raise UnknownTopicSequencingError(
+            "That is not a topic order LearnFlow can plan in. Use one of: "
+            f"{', '.join(TOPIC_SEQUENCING_CHOICES)}."
+        )
+    return preferences
 
 
 def _validated_week(request: WeeklyAvailabilityRequest) -> dict[str, int]:

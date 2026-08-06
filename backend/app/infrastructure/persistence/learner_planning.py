@@ -23,6 +23,15 @@ controlled value in this schema is validated text guarded by a CHECK (ADR-011),
 and a stored day *name* leaves no numbering convention for a reader or a client
 to get wrong. There is no ordering column: the week's order is a fixed list in
 the application, because Monday-first is presentation rather than data.
+
+`study_goals` carries the learner's planning preferences as two typed nullable
+columns rather than the `planning_preferences jsonb` docs/database/schema.md
+first described, and ADR-019 records why: `jsonb` is reserved there for flexible
+provider and resource payloads, and no CHECK can guard a key inside one, so a
+controlled value stored that way would have exactly the mis-mapping problem
+ADR-018 removed from `day_of_week`. Both are nullable with no database default,
+so a preference the learner has not set stays distinguishable from one the
+product guessed for them.
 """
 
 import uuid
@@ -47,6 +56,25 @@ from app.infrastructure.persistence.base import (
 )
 
 STUDY_GOAL_STATUSES = ("active", "paused", "completed", "archived")
+
+TOPIC_SEQUENCING_CHOICES = ("syllabus_order", "prerequisites_first")
+"""The orders `study_goals.topic_sequencing` accepts.
+
+Stored as the `snake_case` value, which is also what goes on the wire. Both are
+derivable from tables that exist: `syllabus_order` from the stored `position` of
+subjects and topics, `prerequisites_first` from the `prerequisite` edges in
+`topic_relationships`.
+"""
+
+MINIMUM_SESSION_MINUTES = 15
+MAXIMUM_SESSION_MINUTES = 480
+"""Bounds on `preferred_session_minutes`, mirroring the database CHECK.
+
+A quarter of an hour is the shortest block that holds study rather than overhead;
+eight hours is a full working day, and a day is already bounded by its
+availability. A duration, not a time of day -- nothing here stores when in a day
+a session falls.
+"""
 
 WEEKDAYS = (
     "monday",
@@ -107,6 +135,13 @@ class StudyGoal(UuidPrimaryKeyMixin, TimestampMixin, Base):
     )
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    # The learner's planning preferences. Nullable with no database default, so a
+    # preference nobody set never reads as one somebody chose: a planner meeting
+    # NULL picks its own default visibly. Typed columns rather than a
+    # `planning_preferences jsonb`, because a CHECK cannot guard a key inside
+    # JSON and a controlled value needs guarding (ADR-019).
+    preferred_session_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    topic_sequencing: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -120,6 +155,21 @@ class StudyGoal(UuidPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "target_date IS NOT NULL OR examination_schedule_id IS NOT NULL",
             name="aims_at_a_date_or_an_examination",
+        ),
+        # `IS NULL OR` is written out rather than left to three-valued CHECK
+        # semantics. A CHECK does pass on NULL of its own accord, but a reader
+        # should not have to remember that to see that an unset preference is
+        # allowed.
+        CheckConstraint(
+            "preferred_session_minutes IS NULL OR (preferred_session_minutes >= "
+            f"{MINIMUM_SESSION_MINUTES} AND preferred_session_minutes <= "
+            f"{MAXIMUM_SESSION_MINUTES})",
+            name="preferred_session_minutes_within_bounds",
+        ),
+        CheckConstraint(
+            "topic_sequencing IS NULL OR "
+            + in_clause("topic_sequencing", TOPIC_SEQUENCING_CHOICES),
+            name="topic_sequencing_is_known",
         ),
     )
 

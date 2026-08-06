@@ -10,6 +10,7 @@ related:
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
+  - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../requirements/functional.md
   - ../database/schema.md
 ---
@@ -94,7 +95,8 @@ The learner's target outcome and timeline, including what they are working towar
 
 A goal aims at a published examination cycle, at a target completion date, or at both — never at neither, because a plan needs a horizon. A goal that names an examination cycle *refers* to its schedule rather than copying its dates, so a correction the examining body publishes reaches the goal without rewriting it.
 
-The goal provides the constraint used to create and adapt study plans.
+The goal provides the constraint used to create and adapt study plans. It also owns the learner's
+planning preferences and their weekly availability, both described below.
 
 ### Availability Slot
 
@@ -105,6 +107,16 @@ A goal has at most seven — one per day — and the set of them is the learner'
 A day is identified by name rather than by an index, so no numbering convention exists to be read wrongly. A slot records a quantity of minutes, not a sitting between two clock times; nothing in the model has a time of day. Zero minutes is a day deliberately kept free, which is a different statement from a day with no slot at all.
 
 Availability is a planning input and nothing more. Nothing totals a week, ranks one day above another, or judges whether a week is enough — that reasoning belongs to a study plan, which is where the trade-offs can be shown.
+
+### Planning Preference
+
+A choice the learner has made about *how* a study plan should be built, for one study goal.
+
+Where availability says how much time a week holds, a planning preference says what a plan should do with it: how long one block of study should run, and which order the plan should work through the curriculum in.
+
+A preference the learner has not set is **unset**, not a default. Nothing invents one on their behalf, so a preference they chose stays distinguishable from one the product would have guessed — the same distinction an explicit *Not explored* draws against a topic with no record, and a day kept free draws against a day never set. A plan meeting an unset preference chooses for itself, visibly.
+
+Preferences belong to the goal rather than to the learner, as availability does: a learner who archives one goal and starts another may want to study differently. Like availability, a preference is a planning input and nothing more — nothing ranks two preferences, scores one, or judges a choice. See [ADR-019](../adr/ADR-019-study-goal-planning-preferences.md).
 
 ### Study Plan
 
@@ -245,6 +257,7 @@ This document intentionally does not define database fields, table names, API en
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination schedule concept and what a study goal aims at
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — which part of learner topic progress is persisted today, and how a learner-set stage is told from a derived one
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the availability slot concept, and why nothing totals a week
+- [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the planning preference concept, and why an unset preference is not a default
 - [Functional requirements](../requirements/functional.md)
 - [Domain entities](entities.md)
 - [Terminology](terminology.md)

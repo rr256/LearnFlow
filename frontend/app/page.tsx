@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import styles from "@/app/page.module.css";
 import { Notice } from "@/components/Notice";
+import { PlanningPreferences } from "@/features/home/PlanningPreferences";
 import { StudySetupOverview } from "@/features/home/StudySetupOverview";
 import { WeeklyAvailability } from "@/features/home/WeeklyAvailability";
 import {
@@ -101,17 +102,19 @@ async function StudySetupSection() {
     <>
       <StudySetupOverview goal={data.goal} profile={data.profile} schedule={data.schedule} />
       {/*
-       * The saved week comes off the goal GOAL-002 already returned, so showing
-       * it costs no further request.
+       * The saved week and the saved preferences both come off the goal GOAL-002
+       * already returned, so showing them costs no further request.
        */}
       <WeeklyAvailability goal={data.goal} />
+      <PlanningPreferences goal={data.goal} />
     </>
   );
 }
 
 /**
  * The home screen: LRN-001, GOAL-002, and EXM-001 -- the learner's saved setup,
- * including the weekly availability the goal response carries.
+ * including the weekly availability and the planning preferences the goal response
+ * carries.
  *
  * The actions sit outside the boundary above, so an unreachable backend still
  * leaves a learner a way forward rather than a dead first screen.

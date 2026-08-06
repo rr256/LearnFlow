@@ -12,8 +12,9 @@ and reports what a run changed. `NewStudyGoal`, `StudyGoalChanges`,
 records by identifier because a client holds identifiers rather than codes.
 
 The weekly availability a goal carries has its own structures, in
-`dto/availability.py`; a goal detail embeds the saved week rather than
-redescribing it.
+`dto/availability.py`, and its planning preferences theirs, in
+`dto/planning_preferences.py`; a goal detail embeds both rather than redescribing
+them.
 
 Neither carries a learner identifier inbound. The effective learner is resolved
 server-side and never chosen by a client (docs/api/conventions.md).
@@ -28,6 +29,10 @@ from datetime import date
 from enum import StrEnum
 
 from app.application.dto.availability import WeeklyAvailability
+from app.application.dto.planning_preferences import (
+    NO_PLANNING_PREFERENCES,
+    PlanningPreferences,
+)
 
 
 class RecordChange(StrEnum):
@@ -129,11 +134,15 @@ class NewStudyGoal:
         examination_schedule_id: The published cycle to aim at, if any.
         target_date: A plain completion date, if any. At least one of this and
             ``examination_schedule_id`` must be present.
+        planning_preferences: How the learner wants a plan built. Empty by
+            default, because a learner who names no preference has none rather
+            than having the ones the product would have picked.
     """
 
     learning_program_id: uuid.UUID
     examination_schedule_id: uuid.UUID | None = None
     target_date: date | None = None
+    planning_preferences: PlanningPreferences = NO_PLANNING_PREFERENCES
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,9 +154,13 @@ class StudyGoalChanges:
     whether ``None`` means "leave it" or "remove it", and guessing wrong silently
     discards the learner's horizon.
 
-    ``planning_preferences`` is absent. The column does not exist -- ADR-011
-    keeps it back until the planning code that reads it arrives -- so accepting
-    the field would promise storage the database does not have.
+    ``planning_preferences`` needs **no such flag**, and the asymmetry is
+    deliberate. It replaces the whole group rather than merging into it, the way
+    GOAL-005 replaces a whole week: the preferences named become the goal's
+    preferences, and one left out of a supplied group is unset. An empty group is
+    therefore a distinct value from no group at all, so ``None`` can mean "leave
+    them alone" without any other statement becoming inexpressible -- where a
+    bare ``target_date`` of ``None`` could not tell absence from a clear.
     """
 
     examination_schedule_id: uuid.UUID | None = None
@@ -155,6 +168,7 @@ class StudyGoalChanges:
     target_date: date | None = None
     clear_target_date: bool = False
     status: str | None = None
+    planning_preferences: PlanningPreferences | None = None
 
     @property
     def is_empty(self) -> bool:
@@ -165,6 +179,7 @@ class StudyGoalChanges:
             and self.target_date is None
             and not self.clear_target_date
             and self.status is None
+            and self.planning_preferences is None
         )
 
 
@@ -199,6 +214,11 @@ class StudyGoalDetail:
     intent line for GOAL-003 promised an availability summary, and a screen
     showing a goal wants the week beside it rather than after a second request.
     A goal whose availability has never been saved carries an empty week.
+
+    `planning_preferences` is embedded on the same grounds, and the catalogue's
+    original intent line for GOAL-004 promised them here too. A goal whose
+    learner has set none carries an empty set rather than a null, so no screen
+    needs a branch for a goal stored before preferences existed.
     """
 
     id: uuid.UUID
@@ -209,6 +229,7 @@ class StudyGoalDetail:
     curriculum_version: StudyGoalCurriculumVersion
     examination: ExaminationGoalSummary | None
     availability: WeeklyAvailability
+    planning_preferences: PlanningPreferences
 
 
 @dataclass(frozen=True, slots=True)

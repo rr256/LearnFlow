@@ -397,3 +397,126 @@ def test_a_week_the_database_would_refuse_is_refused_before_it_sees_it(client, s
     assert response.status_code == 422
     assert response.json()["error"]["details"][0]["field"] == "body.slots"
     assert session.scalar(select(func.count()).select_from(AvailabilitySlot)) == 0
+
+
+# -- planning preferences over a real database ------------------------------
+
+
+def stored_preferences(session: Session) -> tuple[int | None, str | None]:
+    session.expire_all()
+    stored = session.scalar(select(StudyGoal))
+    assert stored is not None
+    return stored.preferred_session_minutes, stored.topic_sequencing
+
+
+def test_creating_a_goal_writes_the_preference_columns(client, session, gate_cse, gate_2027):
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+
+    client.post(
+        GOALS,
+        json={
+            "learning_program_id": gate_cse["id"],
+            "examination_schedule_id": gate_2027["id"],
+            "planning_preferences": {
+                "preferred_session_minutes": 90,
+                "topic_sequencing": "prerequisites_first",
+            },
+        },
+    )
+
+    assert stored_preferences(session) == (90, "prerequisites_first")
+
+
+def test_a_goal_created_without_preferences_stores_nulls(client, session, goal):
+    """Not a stored default. A planner meeting NULL chooses its own default
+    visibly rather than reading a value nobody chose."""
+    assert goal["planning_preferences"] == {
+        "preferred_session_minutes": None,
+        "topic_sequencing": None,
+    }
+    assert stored_preferences(session) == (None, None)
+
+
+def test_saved_preferences_survive_a_round_trip_through_the_goal_endpoints(client, goal):
+    saved = client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={
+            "planning_preferences": {
+                "preferred_session_minutes": 45,
+                "topic_sequencing": "syllabus_order",
+            }
+        },
+    ).json()["data"]["planning_preferences"]
+
+    read_back = client.get(f"{GOALS}/{goal['id']}").json()["data"]
+    listed = client.get(GOALS).json()["data"]
+
+    assert read_back["planning_preferences"] == saved
+    assert listed[0]["planning_preferences"] == saved
+
+
+def test_replacing_the_group_clears_the_column_it_does_not_name(client, session, goal):
+    client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={
+            "planning_preferences": {
+                "preferred_session_minutes": 90,
+                "topic_sequencing": "syllabus_order",
+            }
+        },
+    )
+
+    client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"topic_sequencing": "prerequisites_first"}},
+    )
+
+    assert stored_preferences(session) == (None, "prerequisites_first")
+
+
+def test_an_update_naming_no_preferences_leaves_the_columns_alone(client, session, goal):
+    client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"preferred_session_minutes": 60}},
+    )
+
+    client.patch(f"{GOALS}/{goal['id']}", json={"status": "paused"})
+
+    assert stored_preferences(session) == (60, None)
+
+
+def test_a_rejected_preference_leaves_the_stored_columns_untouched(client, session, goal):
+    """The provider owns the transaction, so a refused request commits nothing."""
+    client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"preferred_session_minutes": 60}},
+    )
+
+    response = client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={
+            "planning_preferences": {
+                "preferred_session_minutes": 9000,
+                "topic_sequencing": "syllabus_order",
+            }
+        },
+    )
+
+    assert response.status_code == 422
+    assert stored_preferences(session) == (60, None)
+
+
+def test_a_preference_the_database_would_refuse_is_refused_before_it_sees_it(client, session, goal):
+    """The use case mirrors the `CHECK`, so the failure names the preference rather
+    than surfacing as an unexplained 500."""
+    response = client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"topic_sequencing": "alphabetical_order"}},
+    )
+
+    assert response.status_code == 422
+    assert (
+        response.json()["error"]["details"][0]["field"]
+        == "body.planning_preferences.topic_sequencing"
+    )
+    assert stored_preferences(session) == (None, None)

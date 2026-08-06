@@ -392,11 +392,18 @@ def test_a_goal_exposes_no_persistence_detail(onboarding_client, onboarding):
         "curriculum_version",
         "examination",
         "availability",
+        "planning_preferences",
     }
     # A brand-new goal has no availability, and the week says so by being empty
     # rather than by being absent -- so a client needs no branch for a goal
     # created before GOAL-005 was ever called.
     assert goal["availability"] == {"slots": []}
+    # The same for preferences: an object whose members are null, never a null
+    # group, so no client needs a branch for a goal stored before they existed.
+    assert goal["planning_preferences"] == {
+        "preferred_session_minutes": None,
+        "topic_sequencing": None,
+    }
 
 
 # -- GOAL-004: update a study goal -----------------------------------------
@@ -461,8 +468,209 @@ def test_updating_a_goal_rejects_an_empty_request(onboarding_client, onboarding)
     assert response.status_code == 422
 
 
-def test_updating_rejects_planning_preferences(onboarding_client, onboarding):
-    """The column does not exist, so the field would promise storage we have not got."""
+def test_updating_an_unknown_goal_returns_the_documented_not_found(onboarding_client):
+    create_profile(onboarding_client)
+
+    response = onboarding_client.patch(f"{GOALS}/{uuid.uuid4()}", json={"status": "paused"})
+
+    assert response.status_code == 404
+
+
+# -- planning preferences, on GOAL-001 and GOAL-004 ------------------------
+
+
+def preferences_of(client, goal_id):
+    """The preferences currently stored, read back through GOAL-003."""
+    return client.get(f"{GOALS}/{goal_id}").json()["data"]["planning_preferences"]
+
+
+def test_creating_a_goal_stores_the_preferences_it_names(onboarding_client, onboarding):
+    create_profile(onboarding_client)
+
+    body = onboarding_client.post(
+        GOALS,
+        json={
+            "learning_program_id": str(onboarding.schedule.learning_program_id),
+            "target_date": "2027-01-31",
+            "planning_preferences": {
+                "preferred_session_minutes": 90,
+                "topic_sequencing": "prerequisites_first",
+            },
+        },
+    ).json()
+
+    assert body["data"]["planning_preferences"] == {
+        "preferred_session_minutes": 90,
+        "topic_sequencing": "prerequisites_first",
+    }
+    assert preferences_of(onboarding_client, body["data"]["id"]) == {
+        "preferred_session_minutes": 90,
+        "topic_sequencing": "prerequisites_first",
+    }
+
+
+def test_a_preference_the_learner_left_out_is_unset_rather_than_defaulted(
+    onboarding_client, onboarding
+):
+    """Nothing invents a preference. A planner meeting null picks its own default
+    visibly, rather than reading a value nobody chose."""
+    create_profile(onboarding_client)
+
+    body = onboarding_client.post(
+        GOALS,
+        json={
+            "learning_program_id": str(onboarding.schedule.learning_program_id),
+            "target_date": "2027-01-31",
+            "planning_preferences": {"topic_sequencing": "syllabus_order"},
+        },
+    ).json()
+
+    assert body["data"]["planning_preferences"] == {
+        "preferred_session_minutes": None,
+        "topic_sequencing": "syllabus_order",
+    }
+
+
+def test_updating_preferences_replaces_the_whole_group(onboarding_client, onboarding):
+    """A supplied group is the goal's preferences, not a patch over them: a form
+    shows every preference at once, so a member it left out was cleared."""
+    goal = existing_goal(onboarding_client, onboarding)
+    onboarding_client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={
+            "planning_preferences": {
+                "preferred_session_minutes": 90,
+                "topic_sequencing": "syllabus_order",
+            }
+        },
+    )
+
+    body = onboarding_client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"topic_sequencing": "prerequisites_first"}},
+    ).json()
+
+    assert body["data"]["planning_preferences"] == {
+        "preferred_session_minutes": None,
+        "topic_sequencing": "prerequisites_first",
+    }
+
+
+def test_an_update_that_does_not_name_preferences_leaves_them_alone(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+    onboarding_client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"preferred_session_minutes": 45}},
+    )
+
+    body = onboarding_client.patch(f"{GOALS}/{goal['id']}", json={"status": "paused"}).json()
+
+    assert body["data"]["planning_preferences"]["preferred_session_minutes"] == 45
+
+
+def test_an_explicit_null_preference_group_clears_every_preference(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+    onboarding_client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={
+            "planning_preferences": {
+                "preferred_session_minutes": 45,
+                "topic_sequencing": "syllabus_order",
+            }
+        },
+    )
+
+    body = onboarding_client.patch(
+        f"{GOALS}/{goal['id']}", json={"planning_preferences": None}
+    ).json()
+
+    assert body["data"]["planning_preferences"] == {
+        "preferred_session_minutes": None,
+        "topic_sequencing": None,
+    }
+
+
+def test_an_empty_preference_group_clears_them_as_a_null_does(onboarding_client, onboarding):
+    """Replacing with nothing and clearing are the same request, so no client has
+    to know which spelling the API prefers."""
+    goal = existing_goal(onboarding_client, onboarding)
+    onboarding_client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"preferred_session_minutes": 45}},
+    )
+
+    response = onboarding_client.patch(f"{GOALS}/{goal['id']}", json={"planning_preferences": {}})
+
+    assert response.json()["data"]["planning_preferences"]["preferred_session_minutes"] is None
+
+
+def test_saving_the_preferences_already_stored_is_accepted(onboarding_client, onboarding):
+    """A repeated form submission must not fail on its second attempt, which is
+    the rule GOAL-005 and PRG-004 already follow."""
+    goal = existing_goal(onboarding_client, onboarding)
+    group = {"planning_preferences": {"preferred_session_minutes": 60}}
+    onboarding_client.patch(f"{GOALS}/{goal['id']}", json=group)
+
+    response = onboarding_client.patch(f"{GOALS}/{goal['id']}", json=group)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["planning_preferences"]["preferred_session_minutes"] == 60
+
+
+def test_updating_rejects_an_unknown_topic_sequencing(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = onboarding_client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"topic_sequencing": "alphabetical_order"}},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["error"]["details"][0]
+    assert detail["field"] == "body.planning_preferences.topic_sequencing"
+    assert detail["type"] == "unknown_topic_sequencing"
+    # The rejected value is never echoed back; the choices available are enough.
+    assert "alphabetical_order" not in detail["message"]
+
+
+def test_updating_rejects_a_session_length_outside_the_bounds(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = onboarding_client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"preferred_session_minutes": 1200}},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["error"]["details"][0]
+    assert detail["field"] == "body.planning_preferences.preferred_session_minutes"
+    assert detail["type"] == "session_minutes_out_of_range"
+
+
+def test_creating_rejects_a_session_length_below_the_lower_bound(onboarding_client, onboarding):
+    """Refused on the create path too, not only on the update: both accept the
+    group, so both mirror the same CHECK."""
+    create_profile(onboarding_client)
+
+    response = onboarding_client.post(
+        GOALS,
+        json={
+            "learning_program_id": str(onboarding.schedule.learning_program_id),
+            "target_date": "2027-01-31",
+            "planning_preferences": {"preferred_session_minutes": 5},
+        },
+    )
+
+    assert response.status_code == 422
+    assert (
+        response.json()["error"]["details"][0]["field"]
+        == "body.planning_preferences.preferred_session_minutes"
+    )
+
+
+def test_an_unknown_preference_field_is_rejected(onboarding_client, onboarding):
+    """A preference this build does not know is a mistake, not something to store
+    and ignore."""
     goal = existing_goal(onboarding_client, onboarding)
 
     response = onboarding_client.patch(
@@ -470,14 +678,20 @@ def test_updating_rejects_planning_preferences(onboarding_client, onboarding):
     )
 
     assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
 
 
-def test_updating_an_unknown_goal_returns_the_documented_not_found(onboarding_client):
-    create_profile(onboarding_client)
+def test_preferences_travel_on_every_goal_in_a_page(onboarding_client, onboarding):
+    """GOAL-002 carries them too, so the home screen needs no further request."""
+    goal = existing_goal(onboarding_client, onboarding)
+    onboarding_client.patch(
+        f"{GOALS}/{goal['id']}",
+        json={"planning_preferences": {"topic_sequencing": "syllabus_order"}},
+    )
 
-    response = onboarding_client.patch(f"{GOALS}/{uuid.uuid4()}", json={"status": "paused"})
+    page = onboarding_client.get(GOALS).json()
 
-    assert response.status_code == 404
+    assert page["data"][0]["planning_preferences"]["topic_sequencing"] == "syllabus_order"
 
 
 # -- GOAL-005: replace weekly availability ---------------------------------
