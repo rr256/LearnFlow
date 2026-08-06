@@ -74,6 +74,7 @@ python -m alembic upgrade head          # apply every pending migration
 python -m alembic current               # show the applied revision
 python -m alembic downgrade -1          # revert the most recent migration
 python -m alembic upgrade head --sql    # print SQL without connecting
+python -m alembic downgrade head:base --sql  # the same for the downgrade path
 ```
 
 The target database comes from `DATABASE_URL` through the application's validated settings, so a
@@ -84,6 +85,21 @@ that variable and for `TEST_DATABASE_URL`.
 
 `--sql` needs no reachable database, which makes it the way to review generated DDL and to check a
 migration on a machine without PostgreSQL installed.
+
+**Render the downgrade as well as the upgrade.** A downgrade is the half a local run never exercises
+and the half the integration fixture runs on every test, so a fault in it surfaces as errors in the
+teardown of unrelated tests rather than as one clear failure.
+
+One trap makes that worth doing every time. The `ck` naming convention on `Base.metadata` is
+`ck_%(table_name)s_%(constraint_name)s`, and **Alembic interpolates the name an operation supplies
+through it — on drops as well as creates.** So `op.create_check_constraint` and `op.drop_constraint`
+both take the *distinguishing suffix* only: passing the full
+`ck_study_goals_topic_sequencing_is_known` renders
+`ck_study_goals_ck_study_goals_topic_sequencing_is_known` and fails against a constraint that does not
+exist. Dropping a column removes the checks that depend on it, so a downgrade that drops its columns
+need not name them at all. `tests/unit/test_migration_sql.py` renders both directions of the whole
+chain and asserts the properties this breaks; it was added after exactly this mistake reached CI in
+revision `20260806_02`.
 
 Nothing applies migrations automatically. Neither application startup nor a container entrypoint
 runs `alembic upgrade`; see [ADR-005](../adr/ADR-005-docker-compose-local-development.md).

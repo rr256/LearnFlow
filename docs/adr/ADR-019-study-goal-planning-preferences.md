@@ -360,11 +360,20 @@ how they want to study at all until something stores it.
   `submission.ts`, presentation in `features/onboarding/preferences.ts`, and a read-only
   `features/home/PlanningPreferences.tsx`. No new server action: `saveLearnerSetup` already writes the
   goal, and the preferences ride on that request.
-- **The PostgreSQL integration tests have not been run locally.** They are written —
-  `tests/integration/test_planning_preferences_migration.py` and the preference cases in
-  `test_learner_onboarding_api.py` — and CI runs them; they skip on a workstation with no
-  `TEST_DATABASE_URL`, and that workstation has neither PostgreSQL nor Docker installed. The stub run
-  below proves the call topology and the contract, not the SQL.
+- **The PostgreSQL integration tests cannot be run on the authoring workstation**, which has neither
+  PostgreSQL nor Docker, so they skip there with no `TEST_DATABASE_URL`. CI ran them, and **they found a
+  defect this record's first push contained**: the downgrade named its two `CHECK` constraints in full,
+  and Alembic interpolates a supplied name through the `ck` convention on drops as well as creates, so
+  it rendered `ck_study_goals_ck_study_goals_topic_sequencing_is_known` and failed. Because the
+  integration fixture downgrades in teardown, one broken statement surfaced as errors across the whole
+  database job rather than as a single failure.
+
+  The fix drops the two columns and names neither constraint: PostgreSQL removes a check that depends on
+  a dropped column, which also keeps the downgrade clear of the convention entirely.
+  `tests/unit/test_migration_sql.py` now renders both directions of the chain offline and asserts that
+  no constraint name repeats its convention prefix and none overruns PostgreSQL's identifier limit —
+  a guard that needs no database and fails on the original mistake.
+  [migrations.md](../database/migrations.md#commands) records the trap and the habit that avoids it.
 - **Verified against the production standalone server with a contract-shaped stub API**, as ADR-015
   through ADR-018 were. Twenty-seven checks passed: a no-JavaScript multipart submission of the setup
   form created a goal carrying `{"preferred_session_minutes": 90, "topic_sequencing":

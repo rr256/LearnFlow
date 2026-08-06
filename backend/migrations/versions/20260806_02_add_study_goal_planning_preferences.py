@@ -79,12 +79,19 @@ def upgrade() -> None:
 def downgrade() -> None:
     # These columns hold learner-owned data. Dropping them is safe only while
     # they are new and unset in every environment that has them; once a learner
-    # has recorded a preference, reverting this migration destroys it. Constraints
-    # are dropped before the columns they guard, because dropping a column would
-    # otherwise leave the check referring to a column that is gone.
-    op.drop_constraint("ck_study_goals_topic_sequencing_is_known", "study_goals", type_="check")
-    op.drop_constraint(
-        "ck_study_goals_preferred_session_minutes_within_bounds", "study_goals", type_="check"
-    )
+    # has recorded a preference, reverting this migration destroys it.
+    #
+    # The two CHECK constraints are not dropped by name. PostgreSQL removes a
+    # constraint that depends on a dropped column along with the column, so
+    # dropping these two takes both checks with them.
+    #
+    # Naming them here would also reintroduce the trap the docstring above
+    # describes, in the one direction it is easy to miss: `op.drop_constraint`
+    # interpolates the supplied name through the same `ck` convention as
+    # `op.create_check_constraint`, so passing the full
+    # `ck_study_goals_topic_sequencing_is_known` renders
+    # `ck_study_goals_ck_study_goals_topic_sequencing_is_known` and fails on a
+    # constraint that does not exist. Only a live database catches that, which is
+    # what the `database` CI job is for.
     op.drop_column("study_goals", "topic_sequencing")
     op.drop_column("study_goals", "preferred_session_minutes")
