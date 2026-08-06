@@ -1,8 +1,8 @@
-"""Study goal endpoints (GOAL-001 to GOAL-004).
+"""Study goal endpoints (GOAL-001 to GOAL-005).
 
 They serve the second half of FR-002: the learner confirms the learning program
-they are studying and what they are working toward -- a published examination
-cycle, a target completion date, or both.
+they are studying, what they are working toward -- a published examination cycle,
+a target completion date, or both -- and when in the week they can study.
 
 Every route here is thin: validate, call the use case, map the result or its
 error to a documented response. No route touches a session, a model, or a query
@@ -11,11 +11,6 @@ error to a documented response. No route touches a session, a model, or a query
 No route accepts a learner identifier. The effective learner is resolved
 server-side, so a request cannot read or write another learner's goals
 (docs/api/conventions.md).
-
-GOAL-005 is not implemented. Replacing weekly availability needs
-`availability_slots`, which does not exist: creating it would fix the
-`day_of_week` numbering convention that ADR-011 keeps open until a requirement
-constrains it.
 """
 
 import uuid
@@ -32,6 +27,8 @@ from starlette.status import (
 from app.application.use_cases.local_learner import AmbiguousLocalLearnerError
 from app.application.use_cases.manage_study_goals import (
     ActiveGoalExistsError,
+    AvailableMinutesOutOfRangeError,
+    DuplicateWeekdayError,
     EmptyGoalUpdateError,
     LearnerNotSetUpError,
     ManageStudyGoals,
@@ -39,6 +36,7 @@ from app.application.use_cases.manage_study_goals import (
     StudyGoalNotFoundError,
     UnknownGoalStatusError,
     UnknownReferenceError,
+    UnknownWeekdayError,
 )
 from app.presentation.api import API_V1_PREFIX
 from app.presentation.api.dependencies import provide_study_goals
@@ -46,10 +44,13 @@ from app.presentation.api.errors import ErrorDetail, ErrorResponse, RequestRejec
 from app.presentation.api.schemas.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from app.presentation.api.schemas.study_goal import (
     CreateStudyGoalRequest,
+    ReplaceAvailabilityRequest,
     StudyGoalCollectionResponse,
     StudyGoalResponse,
     StudyGoalSchema,
     UpdateStudyGoalRequest,
+    WeeklyAvailabilityResponse,
+    WeeklyAvailabilitySchema,
 )
 
 router = APIRouter(prefix=f"{API_V1_PREFIX}/study-goals", tags=["study-goals"])
@@ -132,7 +133,8 @@ def read_study_goal(study_goal_id: uuid.UUID, goals: StudyGoalManager) -> StudyG
     forbidden: `docs/api/conventions.md` treats "not visible to the caller" as a
     `404`, and saying otherwise would confirm a record the caller may not read.
 
-    No availability summary is returned; `availability_slots` does not exist yet.
+    The response carries the goal's saved weekly availability, empty when the
+    learner has set none.
 
     GOAL-003. Serves FR-002.
     """
@@ -189,6 +191,45 @@ def update_study_goal(
     return StudyGoalResponse(data=StudyGoalSchema.of(goal))
 
 
+@router.put(
+    "/{study_goal_id}/availability",
+    summary="Replace a study goal's weekly availability",
+    response_model=WeeklyAvailabilityResponse,
+    responses=_WRITE_RESPONSES,
+)
+def replace_availability(
+    study_goal_id: uuid.UUID, request: ReplaceAvailabilityRequest, goals: StudyGoalManager
+) -> WeeklyAvailabilityResponse:
+    """Replace the days of the week the learner can study toward this goal.
+
+    A replacement, not a merge: the days named become the week, and a day the
+    request does not name is removed. An empty list is how a learner clears their
+    availability altogether. One request writes the whole week, so an edit
+    spanning several days cannot leave some saved and others lost.
+
+    Saving the week that is already stored is accepted and writes nothing, as
+    recording an unchanged stage is under PRG-004.
+
+    Nothing here totals a week or plans against it. Availability is a planning
+    input, and no plan is generated yet.
+
+    GOAL-005. Serves FR-002.
+    """
+    try:
+        availability = goals.replace_availability(study_goal_id, request.to_weekly_availability())
+    except StudyGoalNotFoundError as error:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except UnknownWeekdayError as error:
+        raise _rejected_week(error, "unknown_weekday") from error
+    except DuplicateWeekdayError as error:
+        raise _rejected_week(error, "duplicate_weekday") from error
+    except AvailableMinutesOutOfRangeError as error:
+        raise _rejected_week(error, "available_minutes_out_of_range") from error
+    except AmbiguousLocalLearnerError as error:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
+    return WeeklyAvailabilityResponse(data=WeeklyAvailabilitySchema.of(availability))
+
+
 def _missing_target(error: MissingGoalTargetError) -> RequestRejected:
     """Report the two fields either of which would give the goal a horizon."""
     message = str(error)
@@ -211,4 +252,19 @@ def _unknown_reference(error: UnknownReferenceError) -> RequestRejected:
         details=[
             ErrorDetail(field=f"body.{error.field}", message=message, type="unknown_reference")
         ],
+    )
+
+
+def _rejected_week(error: Exception, rule: str) -> RequestRejected:
+    """Report a week the database would refuse, naming the rule broken.
+
+    The field is `body.slots` rather than a particular index. The message already
+    names the day at fault, and an index would point a client at a position in a
+    list it may have built in any order.
+    """
+    message = str(error)
+    return RequestRejected(
+        status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=message,
+        details=[ErrorDetail(field="body.slots", message=message, type=rule)],
     )

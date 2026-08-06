@@ -1,10 +1,11 @@
-"""The learner onboarding endpoints against a real PostgreSQL database.
+"""The learner setup endpoints against a real PostgreSQL database.
 
 The API tests prove the contract against fakes. These prove the part a fake
-cannot: that the SQL the repositories emit writes and reads the learner and the
-goal the seeds actually created, that the database `CHECK` constraints agree with
-the rules the use cases enforce, and that a request reporting a failure commits
-nothing -- all through the same composition root the running backend uses.
+cannot: that the SQL the repositories emit writes and reads the learner, the
+goal, and the week of availability the seeds actually created, that the database
+`CHECK` constraints agree with the rules the use cases enforce, and that a request
+reporting a failure commits nothing -- all through the same composition root the
+running backend uses.
 
 Skipped unless ``TEST_DATABASE_URL`` names a disposable database; see
 tests/integration/conftest.py.
@@ -29,7 +30,7 @@ from app.infrastructure.persistence.curriculum_seed_repository import (
 from app.infrastructure.persistence.examination_schedule_seed_repository import (
     SqlAlchemyExaminationScheduleSeedRepository,
 )
-from app.infrastructure.persistence.learner_planning import Learner, StudyGoal
+from app.infrastructure.persistence.learner_planning import AvailabilitySlot, Learner, StudyGoal
 from scripts.curriculum_seed_file import GATE_CSE_CURRICULUM_FILE, load_curriculum_seed
 from scripts.examination_schedule_file import (
     GATE_CSE_EXAMINATION_SCHEDULE_FILE,
@@ -255,3 +256,144 @@ def test_a_goal_referencing_an_unknown_schedule_is_refused_before_the_database_s
     assert response.status_code == 422
     assert response.json()["error"]["details"][0]["field"] == "body.examination_schedule_id"
     assert session.scalar(select(func.count()).select_from(StudyGoal)) == 0
+
+
+# -- GOAL-005 over a real database -----------------------------------------
+
+
+@pytest.fixture
+def goal(client: TestClient, gate_cse: dict, gate_2027: dict) -> dict:
+    """A learner with a goal, which is what a week of availability hangs off."""
+    client.patch(f"{LEARNER}/profile", json={"display_name": "Asha"})
+    return client.post(
+        GOALS,
+        json={
+            "learning_program_id": gate_cse["id"],
+            "examination_schedule_id": gate_2027["id"],
+        },
+    ).json()["data"]
+
+
+def stored_week(session: Session) -> dict[str, int]:
+    session.expire_all()
+    return {
+        slot.day_of_week: slot.available_minutes
+        for slot in session.scalars(select(AvailabilitySlot))
+    }
+
+
+def test_saving_a_week_writes_the_availability_rows(client, session, goal):
+    client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={
+            "slots": [
+                {"day_of_week": "monday", "available_minutes": 120},
+                {"day_of_week": "saturday", "available_minutes": 240},
+            ]
+        },
+    )
+
+    assert stored_week(session) == {"monday": 120, "saturday": 240}
+
+
+def test_a_saved_week_survives_a_round_trip_through_the_goal_endpoints(client, goal):
+    saved = client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={"slots": [{"day_of_week": "monday", "available_minutes": 120}]},
+    ).json()["data"]
+
+    read_back = client.get(f"{GOALS}/{goal['id']}").json()["data"]
+    listed = client.get(GOALS).json()["data"]
+
+    assert read_back["availability"] == saved
+    assert listed[0]["availability"] == saved
+
+
+def test_saving_a_week_deletes_the_days_it_does_not_name(client, session, goal):
+    client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={
+            "slots": [
+                {"day_of_week": "monday", "available_minutes": 120},
+                {"day_of_week": "tuesday", "available_minutes": 60},
+            ]
+        },
+    )
+
+    client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={"slots": [{"day_of_week": "monday", "available_minutes": 120}]},
+    )
+
+    assert stored_week(session) == {"monday": 120}
+
+
+def test_an_unchanged_day_keeps_its_row_and_creation_timestamp(client, session, goal):
+    """A day whose minutes have not moved is left alone, so its identifier and
+    `created_at` survive -- which a delete-and-reinsert would discard."""
+    client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={"slots": [{"day_of_week": "monday", "available_minutes": 120}]},
+    )
+    session.expire_all()
+    before = session.scalar(select(AvailabilitySlot))
+    assert before is not None
+    identifier, created_at = before.id, before.created_at
+
+    client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={
+            "slots": [
+                {"day_of_week": "monday", "available_minutes": 120},
+                {"day_of_week": "tuesday", "available_minutes": 60},
+            ]
+        },
+    )
+
+    session.expire_all()
+    monday = session.scalar(
+        select(AvailabilitySlot).where(AvailabilitySlot.day_of_week == "monday")
+    )
+    assert monday is not None
+    assert (monday.id, monday.created_at) == (identifier, created_at)
+
+
+def test_an_empty_week_deletes_every_row(client, session, goal):
+    client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={"slots": [{"day_of_week": "monday", "available_minutes": 120}]},
+    )
+
+    client.put(f"{GOALS}/{goal['id']}/availability", json={"slots": []})
+
+    assert session.scalar(select(func.count()).select_from(AvailabilitySlot)) == 0
+
+
+def test_a_rejected_week_leaves_no_row_behind(client, session, goal):
+    """A request that reported a failure must commit nothing, even the days it
+    named before the one that was wrong."""
+    response = client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={
+            "slots": [
+                {"day_of_week": "monday", "available_minutes": 120},
+                {"day_of_week": "moonday", "available_minutes": 60},
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+    assert session.scalar(select(func.count()).select_from(AvailabilitySlot)) == 0
+
+
+def test_a_week_the_database_would_refuse_is_refused_before_it_sees_it(client, session, goal):
+    """The use case mirrors the `CHECK`, so the failure names the day rather than
+    surfacing as an unexplained 500."""
+    response = client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={"slots": [{"day_of_week": "monday", "available_minutes": 1441}]},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "body.slots"
+    assert session.scalar(select(func.count()).select_from(AvailabilitySlot)) == 0

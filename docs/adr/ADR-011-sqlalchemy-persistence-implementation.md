@@ -2,7 +2,7 @@
 title: "ADR-011: Implement PostgreSQL Persistence Synchronously and Migrate Per Milestone"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-01
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
@@ -11,6 +11,7 @@ related:
   - ADR-012-curriculum-seed-and-reconciliation.md
   - ADR-013-examination-schedule-and-study-goal.md
   - ADR-014-api-response-contract.md
+  - ADR-018-weekly-availability-slots.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../api/endpoints.md
@@ -108,6 +109,34 @@ do not exist yet.
 
 The response contract those endpoints answer in is recorded in
 [ADR-014](ADR-014-api-response-contract.md).
+
+*Note added 2026-08-06. The decision below is unchanged; this closes the second of the three open
+items it left.*
+
+**The `day_of_week` numbering convention is retired, not chosen.** `availability_slots` now exists,
+created by migration `20260806_01`, and its `day_of_week` is `varchar(16)` holding `monday` to
+`sunday` rather than the `smallint` `database/schema.md` described. There is therefore no numbering
+convention to document: the open item is closed by removing the question rather than by answering it.
+The rationale is in [ADR-018](ADR-018-weekly-availability-slots.md), and
+[schema.md](../database/schema.md#availability_slots) records the changed column type against the
+table.
+
+Three points of fact, none altering the decision:
+
+- **This is the validated-text rule below, applied again.** *Controlled values are validated text, not
+  PostgreSQL enums* covers `day_of_week` exactly as it covers `curriculum_versions.status`. A
+  `smallint` would have made it the only numeric enumerated value in the schema.
+- **The per-milestone ordering worked as this record intended.** `availability_slots` was held back
+  through three migrations precisely because creating it would have fixed a convention no requirement
+  constrained — the case *Create the entire documented schema in one migration* names by name — and it
+  was created in the change whose requirement finally arrived.
+- The learner-planning area is one migration from complete. `study_plans` and `plan_items` remain, and
+  both arrive with Milestone 3's planning code.
+
+**One open item is left**: numeric precision for score columns, which belongs to tables that do not
+exist. This supersedes, in part, the *Remaining open items* bullet under
+[Implementation notes](#implementation-notes) and the same statement in the two notes above. As
+elsewhere in this repository, the accepted text is left as written.
 
 ## Context
 

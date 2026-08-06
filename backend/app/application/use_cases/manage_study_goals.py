@@ -1,4 +1,4 @@
-"""Create, read, and update a learner's study goals (GOAL-001 to GOAL-004).
+"""Create, read, and update a learner's study goals (GOAL-001 to GOAL-005).
 
 The rules here are the ones ADR-013 fixed, expressed once so the endpoints and
 the `scripts.set_study_goal` command cannot disagree about them.
@@ -24,11 +24,28 @@ the learner actually planned against.
 rather than silently replacing the first: the existing goal is what any plan was
 built from, and overwriting it on a repeated form submission would discard it.
 Editing goes through GOAL-004.
+
+**Availability is a whole week, replaced at once.** GOAL-005 takes the days the
+learner can study and makes them the goal's week: a day the request does not name
+is removed. One request and one transaction, so an edit spanning three days
+cannot leave one saved and two lost. A day is named by its `snake_case` name, so
+no numbering convention exists to get wrong (ADR-018).
+
+Nothing here totals a week, compares two weeks, or derives a plan from one.
+Availability is a planning input, and Milestone 3's planning code is what reads
+it.
 """
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
+from app.application.dto.availability import (
+    MINUTES_IN_A_DAY,
+    WEEKDAYS,
+    AvailabilitySlotEntry,
+    WeeklyAvailability,
+    WeeklyAvailabilityRequest,
+)
 from app.application.dto.study_goal import (
     ExaminationGoalSummary,
     NewStudyGoal,
@@ -49,6 +66,7 @@ from app.application.ports.examination_schedule_repository import (
 )
 from app.application.ports.learner_repository import LearnerRepository
 from app.application.ports.study_goal_management_repository import (
+    AvailabilitySlotRecord,
     StudyGoalManagementRepository,
 )
 from app.application.ports.study_goal_repository import StudyGoalRecord
@@ -110,6 +128,18 @@ class UnknownGoalStatusError(StudyGoalManagementError):
 
 class ActiveGoalExistsError(StudyGoalManagementError):
     """The learner already has an active goal for this learning program."""
+
+
+class UnknownWeekdayError(StudyGoalManagementError):
+    """The week names a day the database would refuse."""
+
+
+class DuplicateWeekdayError(StudyGoalManagementError):
+    """The week names the same day twice, so what it asks for is undefined."""
+
+
+class AvailableMinutesOutOfRangeError(StudyGoalManagementError):
+    """A day claims fewer than zero or more minutes than a day holds."""
 
 
 class ManageStudyGoals:
@@ -194,7 +224,16 @@ class ManageStudyGoals:
             status=ACTIVE_STATUS,
         )
         self._goals.add_study_goal(record)
-        return self._detail(record, program=program, version=version, schedule=schedule)
+        return self._detail(
+            record,
+            program=program,
+            version=version,
+            schedule=schedule,
+            # A goal that did not exist a moment ago has no availability, so
+            # this is the one path that states the empty week rather than
+            # reading it back.
+            availability=WeeklyAvailability(study_goal_id=record.id, slots=()),
+        )
 
     def list_study_goals(self, *, limit: int, offset: int) -> StudyGoalPage:
         """One page of the local learner's goals.
@@ -211,8 +250,12 @@ class ManageStudyGoals:
             return StudyGoalPage(goals=(), total=0, limit=limit, offset=offset)
 
         records = self._goals.list_study_goals(learner_id=learner.id, limit=limit, offset=offset)
+        # One query for the whole page's availability. A goal's examination
+        # periods are still read per goal -- ADR-016 recorded that cost -- but
+        # there is no reason to add a second N+1 beside it.
+        weeks = self._weeks_for(record.id for record in records)
         return StudyGoalPage(
-            goals=tuple(self._resolve(record) for record in records),
+            goals=tuple(self._resolve(record, availability=weeks[record.id]) for record in records),
             total=self._goals.count_study_goals(learner.id),
             limit=limit,
             offset=offset,
@@ -278,6 +321,70 @@ class ManageStudyGoals:
             self._goals.update_study_goal(updated)
         return self._resolve(updated)
 
+    def replace_availability(
+        self, study_goal_id: uuid.UUID, request: WeeklyAvailabilityRequest
+    ) -> WeeklyAvailability:
+        """Make `request` the goal's whole weekly availability (GOAL-005).
+
+        A replacement, not a merge: the days named become the week, and a day the
+        request does not name is removed. An empty request therefore clears the
+        goal's availability, which is how a learner takes it all back.
+
+        A day whose minutes have not changed is left alone entirely, so saving
+        the same week twice writes nothing -- the rule PRG-004 applies to a stage
+        a topic already holds, for the same reason: a repeated form submission
+        must not fail or churn rows on its second attempt.
+
+        The caller owns the transaction: this method writes through the
+        repository but never commits.
+
+        Raises:
+            UnknownWeekdayError: A day is not one of the seven.
+            DuplicateWeekdayError: A day is named more than once.
+            AvailableMinutesOutOfRangeError: A day's minutes fall outside 0 to
+                1440.
+            StudyGoalNotFoundError: No such goal is stored, or it belongs to
+                another learner.
+            AmbiguousLocalLearnerError: More than one learner is stored.
+        """
+        requested = _validated_week(request)
+        goal = self._require_own_goal(study_goal_id)
+
+        stored = {
+            record.day_of_week: record for record in self._goals.list_availability_slots([goal.id])
+        }
+        for day, minutes in requested.items():
+            existing = stored.get(day)
+            if existing is None:
+                self._goals.add_availability_slot(
+                    AvailabilitySlotRecord(
+                        id=uuid.uuid4(),
+                        study_goal_id=goal.id,
+                        day_of_week=day,
+                        available_minutes=minutes,
+                    )
+                )
+            elif existing.available_minutes != minutes:
+                self._goals.update_availability_slot(
+                    AvailabilitySlotRecord(
+                        id=existing.id,
+                        study_goal_id=existing.study_goal_id,
+                        day_of_week=day,
+                        available_minutes=minutes,
+                    )
+                )
+        for day, existing in stored.items():
+            if day not in requested:
+                self._goals.delete_availability_slot(existing.id)
+
+        return WeeklyAvailability(
+            study_goal_id=goal.id,
+            slots=_week_order(
+                AvailabilitySlotEntry(day_of_week=day, available_minutes=minutes)
+                for day, minutes in requested.items()
+            ),
+        )
+
     def _require_own_goal(self, study_goal_id: uuid.UUID) -> StudyGoalRecord:
         """The goal, if it exists and belongs to the local learner.
 
@@ -329,8 +436,38 @@ class ManageStudyGoals:
             )
         return schedule
 
-    def _resolve(self, record: StudyGoalRecord) -> StudyGoalDetail:
-        """Fill in the reference data a stored goal points at."""
+    def _weeks_for(
+        self, study_goal_ids: Iterable[uuid.UUID]
+    ) -> dict[uuid.UUID, WeeklyAvailability]:
+        """The saved week of every goal named, keyed by goal identifier.
+
+        A goal with nothing stored gets an empty week rather than being absent,
+        so a caller never has to distinguish "no availability" from "goal not
+        asked about".
+        """
+        identifiers = tuple(study_goal_ids)
+        days: dict[uuid.UUID, list[AvailabilitySlotEntry]] = {
+            identifier: [] for identifier in identifiers
+        }
+        for slot in self._goals.list_availability_slots(identifiers):
+            days.setdefault(slot.study_goal_id, []).append(
+                AvailabilitySlotEntry(
+                    day_of_week=slot.day_of_week, available_minutes=slot.available_minutes
+                )
+            )
+        return {
+            identifier: WeeklyAvailability(study_goal_id=identifier, slots=_week_order(entries))
+            for identifier, entries in days.items()
+        }
+
+    def _resolve(
+        self, record: StudyGoalRecord, *, availability: WeeklyAvailability | None = None
+    ) -> StudyGoalDetail:
+        """Fill in the reference data a stored goal points at.
+
+        `availability` is supplied by a caller that has already read a page of
+        weeks in one query; a caller resolving one goal lets this read it.
+        """
         program = self._goals.find_learning_program(record.learning_program_id)
         if program is None:
             raise StudyGoalIntegrityError(
@@ -348,7 +485,15 @@ class ManageStudyGoals:
             if record.examination_schedule_id is None
             else self._schedules.find_examination_schedule(record.examination_schedule_id)
         )
-        return self._detail(record, program=program, version=version, schedule=schedule)
+        return self._detail(
+            record,
+            program=program,
+            version=version,
+            schedule=schedule,
+            availability=(
+                self._weeks_for([record.id])[record.id] if availability is None else availability
+            ),
+        )
 
     def _detail(
         self,
@@ -357,6 +502,7 @@ class ManageStudyGoals:
         program: LearningProgramRecord,
         version: CurriculumVersionRecord,
         schedule: ExaminationScheduleRecord | None,
+        availability: WeeklyAvailability,
     ) -> StudyGoalDetail:
         return StudyGoalDetail(
             id=record.id,
@@ -372,7 +518,51 @@ class ManageStudyGoals:
                 if schedule is None
                 else _summarise(schedule, self._schedules.list_examination_periods([schedule.id]))
             ),
+            availability=availability,
         )
+
+
+def _validated_week(request: WeeklyAvailabilityRequest) -> dict[str, int]:
+    """The requested week as day-to-minutes, refusing what the database would.
+
+    Checked here rather than only at the API boundary, because these are the
+    rules the `CHECK` constraints express: failing them in the database would
+    surface as an unexplained `500`, where refusing them here names the day at
+    fault. A duplicate day has no database equivalent -- the unique key would see
+    one row, not two -- so it can only be caught here.
+
+    The rejected value is deliberately not repeated back. Naming the seven days a
+    caller may use is what it actually needs.
+    """
+    week: dict[str, int] = {}
+    for slot in request.slots:
+        if slot.day_of_week not in WEEKDAYS:
+            raise UnknownWeekdayError(
+                f"That is not a day of the week. Use one of: {', '.join(WEEKDAYS)}."
+            )
+        if slot.day_of_week in week:
+            raise DuplicateWeekdayError(
+                f"{slot.day_of_week!r} is named more than once. Give each day at most "
+                "one entry, holding all the time available on it."
+            )
+        if not 0 <= slot.available_minutes <= MINUTES_IN_A_DAY:
+            raise AvailableMinutesOutOfRangeError(
+                f"Available minutes for {slot.day_of_week!r} must be between 0 and "
+                f"{MINUTES_IN_A_DAY}, the number of minutes in a day."
+            )
+        week[slot.day_of_week] = slot.available_minutes
+    return week
+
+
+def _week_order(entries: Iterable[AvailabilitySlotEntry]) -> tuple[AvailabilitySlotEntry, ...]:
+    """The days given, in week order, Monday first.
+
+    Sorted in the application rather than by the query, because Monday-first is
+    presentation: nothing is stored that ranks one day above another, so a
+    database `ORDER BY` would need a numbering the schema deliberately has not
+    got (ADR-018).
+    """
+    return tuple(sorted(entries, key=lambda entry: WEEKDAYS.index(entry.day_of_week)))
 
 
 def _new_examination_schedule_id(

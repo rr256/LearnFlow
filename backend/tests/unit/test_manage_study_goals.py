@@ -1,8 +1,9 @@
-"""Unit tests for the study-goal use case (GOAL-001 to GOAL-004).
+"""Unit tests for the study-goal use case (GOAL-001 to GOAL-005).
 
 They run against fakes, so they exercise the rules ADR-013 fixed -- a goal aims
 at something, the examination is a window, a goal binds to the active curriculum
-version -- without a database.
+version -- and the ones ADR-018 fixed for a week of availability, without a
+database.
 """
 
 import uuid
@@ -11,6 +12,10 @@ from datetime import UTC, date, datetime
 
 import pytest
 
+from app.application.dto.availability import (
+    AvailabilitySlotEntry,
+    WeeklyAvailabilityRequest,
+)
 from app.application.dto.study_goal import NewStudyGoal, StudyGoalChanges
 from app.application.ports.curriculum_seed_repository import (
     CurriculumVersionRecord,
@@ -19,6 +24,8 @@ from app.application.ports.curriculum_seed_repository import (
 from app.application.use_cases.local_learner import AmbiguousLocalLearnerError
 from app.application.use_cases.manage_study_goals import (
     ActiveGoalExistsError,
+    AvailableMinutesOutOfRangeError,
+    DuplicateWeekdayError,
     EmptyGoalUpdateError,
     LearnerNotSetUpError,
     ManageStudyGoals,
@@ -26,6 +33,7 @@ from app.application.use_cases.manage_study_goals import (
     StudyGoalNotFoundError,
     UnknownGoalStatusError,
     UnknownReferenceError,
+    UnknownWeekdayError,
 )
 from tests.unit.fake_examination_schedule_repository import FakeExaminationScheduleRepository
 from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
@@ -365,3 +373,231 @@ def test_updating_refuses_when_more_than_one_learner_is_stored(workspace, schedu
 
     with pytest.raises(AmbiguousLocalLearnerError):
         workspace.use_case.update(created.id, StudyGoalChanges(status="paused"))
+
+
+# -- GOAL-005: replace weekly availability ---------------------------------
+
+
+def week(**days: int) -> WeeklyAvailabilityRequest:
+    """A replacement week, written as `week(monday=120, tuesday=60)`."""
+    return WeeklyAvailabilityRequest(
+        slots=tuple(
+            AvailabilitySlotEntry(day_of_week=day, available_minutes=minutes)
+            for day, minutes in days.items()
+        )
+    )
+
+
+def stored_week(workspace, goal_id):
+    """The days stored against a goal, as day-to-minutes, whatever their order."""
+    return {
+        slot.day_of_week: slot.available_minutes
+        for slot in workspace.goals.list_availability_slots([goal_id])
+    }
+
+
+@pytest.fixture
+def goal(workspace, schedule):
+    return workspace.use_case.create(
+        NewStudyGoal(learning_program_id=PROGRAM_ID, examination_schedule_id=schedule.id)
+    )
+
+
+def test_a_new_goal_has_an_empty_week(goal):
+    """No availability is a real state, reported as an empty week rather than as
+    an absent one, so no caller needs a branch for a goal that predates GOAL-005."""
+    assert goal.availability.is_empty
+    assert goal.availability.slots == ()
+
+
+def test_saving_a_week_stores_the_days_it_names(workspace, goal):
+    workspace.use_case.replace_availability(goal.id, week(monday=120, thursday=90))
+
+    assert stored_week(workspace, goal.id) == {"monday": 120, "thursday": 90}
+
+
+def test_a_saved_week_is_returned_in_week_order(workspace, goal):
+    """Monday first, whatever order the request named the days in, and whatever
+    order the repository returns them in."""
+    saved = workspace.use_case.replace_availability(
+        goal.id, week(sunday=30, tuesday=60, saturday=240)
+    )
+
+    assert [slot.day_of_week for slot in saved.slots] == ["tuesday", "saturday", "sunday"]
+
+
+def test_saving_a_week_removes_a_day_it_does_not_name(workspace, goal):
+    """A replacement, not a merge."""
+    workspace.use_case.replace_availability(goal.id, week(monday=120, tuesday=60))
+
+    workspace.use_case.replace_availability(goal.id, week(monday=120))
+
+    assert stored_week(workspace, goal.id) == {"monday": 120}
+
+
+def test_an_empty_week_clears_every_stored_day(workspace, goal):
+    workspace.use_case.replace_availability(goal.id, week(monday=120, tuesday=60))
+
+    saved = workspace.use_case.replace_availability(goal.id, WeeklyAvailabilityRequest(slots=()))
+
+    assert saved.is_empty
+    assert stored_week(workspace, goal.id) == {}
+
+
+def test_saving_a_week_rewrites_a_day_whose_minutes_changed(workspace, goal):
+    workspace.use_case.replace_availability(goal.id, week(monday=120))
+
+    workspace.use_case.replace_availability(goal.id, week(monday=150))
+
+    assert stored_week(workspace, goal.id) == {"monday": 150}
+
+
+def test_an_unchanged_day_keeps_its_row(workspace, goal):
+    """A day whose minutes have not moved is left alone entirely, so saving the
+    same week twice writes nothing -- the rule PRG-004 applies to an unchanged
+    stage. A delete-and-reinsert would churn the identifier and `created_at`."""
+    workspace.use_case.replace_availability(goal.id, week(monday=120, tuesday=60))
+    before = {slot.day_of_week: slot.id for slot in workspace.goals.availability}
+
+    workspace.use_case.replace_availability(goal.id, week(monday=120, tuesday=90))
+
+    after = {slot.day_of_week: slot.id for slot in workspace.goals.availability}
+    assert after["monday"] == before["monday"]
+    assert after["tuesday"] == before["tuesday"]
+
+
+def test_a_day_with_no_available_time_is_stored(workspace, goal):
+    """Zero records a day the learner deliberately keeps free, which stays
+    distinguishable from a day they never set."""
+    workspace.use_case.replace_availability(goal.id, week(sunday=0))
+
+    assert stored_week(workspace, goal.id) == {"sunday": 0}
+
+
+def test_a_full_day_of_availability_is_accepted(workspace, goal):
+    workspace.use_case.replace_availability(goal.id, week(saturday=1440))
+
+    assert stored_week(workspace, goal.id) == {"saturday": 1440}
+
+
+def test_a_saved_week_is_read_back_on_the_goal(workspace, goal):
+    workspace.use_case.replace_availability(goal.id, week(friday=45))
+
+    read = workspace.use_case.read(goal.id)
+
+    assert read.availability.slots == (
+        AvailabilitySlotEntry(day_of_week="friday", available_minutes=45),
+    )
+
+
+def test_a_saved_week_is_read_back_in_the_goal_page(workspace, goal):
+    workspace.use_case.replace_availability(goal.id, week(friday=45))
+
+    page = workspace.use_case.list_study_goals(limit=25, offset=0)
+
+    assert page.goals[0].availability.slots == (
+        AvailabilitySlotEntry(day_of_week="friday", available_minutes=45),
+    )
+
+
+def test_a_goal_without_availability_reports_an_empty_week_in_a_page(workspace, goal):
+    """Every goal in a page gets a week, so a caller never has to tell "no
+    availability" from "not asked about"."""
+    page = workspace.use_case.list_study_goals(limit=25, offset=0)
+
+    assert page.goals[0].availability.is_empty
+
+
+def test_one_goals_week_does_not_reach_another(workspace, goal, schedule):
+    """Availability belongs to the goal, so two goals hold two weeks."""
+    workspace.use_case.update(goal.id, StudyGoalChanges(status="archived"))
+    second = workspace.use_case.create(
+        NewStudyGoal(learning_program_id=PROGRAM_ID, examination_schedule_id=schedule.id)
+    )
+    workspace.use_case.replace_availability(goal.id, week(monday=120))
+
+    assert workspace.use_case.read(second.id).availability.is_empty
+    assert not workspace.use_case.read(goal.id).availability.is_empty
+
+
+def test_saving_refuses_a_day_that_is_not_one_of_the_seven(workspace, goal):
+    with pytest.raises(UnknownWeekdayError):
+        workspace.use_case.replace_availability(goal.id, week(moonday=60))
+
+
+def test_saving_refuses_a_numeric_day(workspace, goal):
+    """There is no numbering convention to accept. A client sending an index is
+    refused rather than silently misfiling a week (ADR-018)."""
+    with pytest.raises(UnknownWeekdayError):
+        workspace.use_case.replace_availability(
+            goal.id,
+            WeeklyAvailabilityRequest(
+                slots=(AvailabilitySlotEntry(day_of_week="0", available_minutes=60),)
+            ),
+        )
+
+
+def test_saving_refuses_the_same_day_twice(workspace, goal):
+    """The unique key would see one row, not two, so this can only be caught here."""
+    with pytest.raises(DuplicateWeekdayError):
+        workspace.use_case.replace_availability(
+            goal.id,
+            WeeklyAvailabilityRequest(
+                slots=(
+                    AvailabilitySlotEntry(day_of_week="monday", available_minutes=60),
+                    AvailabilitySlotEntry(day_of_week="monday", available_minutes=90),
+                )
+            ),
+        )
+
+
+@pytest.mark.parametrize("minutes", [-1, 1441])
+def test_saving_refuses_minutes_outside_a_day(workspace, goal, minutes):
+    """The database enforces the same bounds; failing them there would be a 500."""
+    with pytest.raises(AvailableMinutesOutOfRangeError):
+        workspace.use_case.replace_availability(goal.id, week(monday=minutes))
+
+
+def test_a_refused_week_writes_nothing(workspace, goal):
+    """Validation happens before the first write, so a week refused for its last
+    day does not leave its first days stored."""
+    workspace.use_case.replace_availability(goal.id, week(monday=120))
+
+    with pytest.raises(UnknownWeekdayError):
+        workspace.use_case.replace_availability(goal.id, week(tuesday=60, moonday=60))
+
+    assert stored_week(workspace, goal.id) == {"monday": 120}
+
+
+def test_saving_a_week_against_an_unknown_goal_reports_it_missing(workspace):
+    with pytest.raises(StudyGoalNotFoundError):
+        workspace.use_case.replace_availability(uuid.uuid4(), week(monday=120))
+
+
+def test_saving_a_week_against_another_learners_goal_reports_it_missing(workspace, goal):
+    """A goal owned by somebody else is missing rather than forbidden, the rule
+    GOAL-003 already follows: saying "that exists but is not yours" would confirm
+    a record the caller may not read."""
+    somebody_else = uuid.uuid4()
+    workspace.goals.goals = [
+        replace(stored, learner_id=somebody_else) for stored in workspace.goals.goals
+    ]
+
+    with pytest.raises(StudyGoalNotFoundError):
+        workspace.use_case.replace_availability(goal.id, week(monday=120))
+
+
+def test_saving_a_week_refuses_when_more_than_one_learner_is_stored(workspace, goal):
+    workspace.learners.add_learner(learner())
+
+    with pytest.raises(AmbiguousLocalLearnerError):
+        workspace.use_case.replace_availability(goal.id, week(monday=120))
+
+
+def test_saving_a_week_totals_nothing(workspace, goal):
+    """Availability is a planning input. Nothing here sums a week, compares two,
+    or derives a plan from one; that arrives with Milestone 3."""
+    saved = workspace.use_case.replace_availability(goal.id, week(monday=120, tuesday=60))
+
+    assert not hasattr(saved, "total_minutes")
+    assert [slot.available_minutes for slot in saved.slots] == [120, 60]

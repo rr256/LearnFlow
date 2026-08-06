@@ -2,13 +2,14 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-05
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - domain-model.md
   - terminology.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
+  - ../adr/ADR-018-weekly-availability-slots.md
   - ../database/schema.md
 ---
 
@@ -102,9 +103,25 @@ Represents a learning target and planning constraints.
 
 **Responsible for:** recording what the learner is working toward — a published examination cycle, a target completion date, or both — together with the active learning program and curriculum version, availability, and planning preferences.
 
-**Key relationships:** belongs to a learner; may reference an examination schedule; drives study-plan generation.
+**Key relationships:** belongs to a learner; may reference an examination schedule; owns availability slots; drives study-plan generation.
 
 A goal referencing an examination schedule holds a reference, not a copy of its dates, so a schedule the examining body revises reaches every goal at once. A goal aiming at neither an examination nor a target date is invalid.
+
+### Availability Slot
+
+Represents the study time available on one day of the week.
+
+**Responsible for:** recording how many minutes the learner can give to study on that day.
+
+**Key relationships:** belongs to exactly one study goal. A goal holds at most seven — one per day.
+
+Availability belongs to the goal rather than to the learner: a learner who archives one goal and starts another is describing a different week. A slot is a quantity of time, not a sitting between two clock times, so nothing here records a time of day.
+
+A day is identified by its name, never by an index, so no numbering convention exists to be read wrongly. Week order is presentation and is not stored.
+
+A slot of zero minutes is a day the learner deliberately keeps free. A day with no slot is one they have not set — the same distinction learner topic progress draws between an explicit *Not explored* and a topic with no record.
+
+Availability is a planning input. Nothing totals it, compares one week with another, or judges whether a week is enough; a study plan is where that reasoning belongs.
 
 ### Study Plan
 
@@ -247,6 +264,7 @@ Topic ── Learning Resource
 - [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — quiz-topic cardinality, mistake sources, and evidence boundaries
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination schedule and period entities
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — which part of the learner topic progress entity is persisted today
+- [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the availability slot entity, and why it holds minutes rather than clock times
 - [Domain model](domain-model.md)
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)

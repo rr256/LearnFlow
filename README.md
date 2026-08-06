@@ -133,22 +133,25 @@ complete setup, read it back, and browse the curriculum.
   and [ADR-014](docs/adr/ADR-014-api-response-contract.md).
 - The examination-schedule and learner setup endpoints: EXM-001, which publishes each cycle's
   examination window, provenance, and dated periods as reference data; LRN-001 and LRN-002 for the
-  local learner's profile; and GOAL-001 to GOAL-004 for their study goals. No request accepts a
-  `learner_id` — the effective learner is resolved server-side. GOAL-005, weekly availability, stays
-  deferred on the `day_of_week` numbering decision. See
-  [API endpoints](docs/api/endpoints.md#learner-setup-and-goal-endpoints) and
-  [ADR-016](docs/adr/ADR-016-learner-onboarding-api-contracts.md).
-- A Next.js + TypeScript frontend serving three screens: a home screen reading back the saved profile
-  and study goal, with the published dates of the examination it aims at; a `/setup` screen that
-  writes the profile and the goal; and a read-only curriculum view — the learning-program list, and
-  one program's subjects, topics, subtopics, and topic relationships. Pages render on the Next.js
-  server and the setup form posts to a server action, so the browser never calls the API and no API
-  address enters a client bundle. Loading, empty, error, and not-found states are all handled.
+  local learner's profile; GOAL-001 to GOAL-004 for their study goals; and GOAL-005, which replaces a
+  goal's weekly availability a week at a time. No request accepts a `learner_id` — the effective
+  learner is resolved server-side. A day of the week is named, never numbered. See
+  [API endpoints](docs/api/endpoints.md#learner-setup-and-goal-endpoints),
+  [ADR-016](docs/adr/ADR-016-learner-onboarding-api-contracts.md), and
+  [ADR-018](docs/adr/ADR-018-weekly-availability-slots.md).
+- A Next.js + TypeScript frontend serving three screens: a home screen reading back the saved profile,
+  study goal, and study week, with the published dates of the examination the goal aims at; a `/setup`
+  screen that writes the profile, the goal, and the week; and a read-only curriculum view — the
+  learning-program list, and one program's subjects, topics, subtopics, and topic relationships. Pages
+  render on the Next.js server and every form posts to a server action, so the browser never calls the
+  API and no API address enters a client bundle. Loading, empty, error, and not-found states are all
+  handled.
 - Backend and frontend container images, and Docker Compose `frontend`, `backend`, and `postgres`
   services. See [Docker strategy](docs/deployment/docker.md).
 - SQLAlchemy models and Alembic migrations for the curriculum tables — learning programs, curriculum
   versions, subjects, topics, and topic relationships — the examination schedule tables, and
-  `learners` and `study_goals`. See [database schema](docs/database/schema.md).
+  `learners`, `study_goals`, and `availability_slots`. See
+  [database schema](docs/database/schema.md).
 - An idempotent seed, `python -m scripts.seed_curriculum`, loading the curated GATE CSE curriculum —
   11 subjects, 65 topics and subtopics, transcribed from the official syllabus. It matches records on
   a natural key, writes only what differs, and never deletes, so repeat runs are safe. See
@@ -167,10 +170,11 @@ complete setup, read it back, and browse the curriculum.
 
 AI and RAG, external integrations, authentication, and every learner feature beyond completing setup,
 reading it back, and browsing the curriculum. There is no planning, progress, resource, mentor, or
-assessment screen, and no plan is generated at all. Weekly availability cannot be set: GOAL-005 waits
-on the `day_of_week` numbering convention that
-[ADR-011](docs/adr/ADR-011-sqlalchemy-persistence-implementation.md) keeps open, so one acceptance
-criterion of FR-002 is still unmet. Switching learning programs has no screen, though the API
-supports it. The progress, resource, and assessment tables arrive with the milestones that use them.
-Compose has no ChromaDB service. Nothing beyond the implemented items above should be inferred from
-the current repository contents.
+assessment screen, and no plan is generated at all. Weekly availability can be recorded but nothing
+consumes it: no plan is built from it, and no total or judgement is drawn from a week. Basic planning
+preferences still cannot be set — `study_goals.planning_preferences` is not created — so one
+acceptance criterion of FR-002 is partly met and one is unmet;
+[API endpoints](docs/api/endpoints.md#fr-002-acceptance-criteria) carries the count. Switching
+learning programs has no screen, though the API supports it. The resource and assessment tables
+arrive with the milestones that use them. Compose has no ChromaDB service. Nothing beyond the
+implemented items above should be inferred from the current repository contents.

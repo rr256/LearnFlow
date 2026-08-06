@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-05
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - overview.md
@@ -14,6 +14,7 @@ related:
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-016-learner-onboarding-api-contracts.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
+  - ../adr/ADR-018-weekly-availability-slots.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -37,19 +38,24 @@ tables arrive in more than one migration.
 | --- | --- |
 | Curriculum | Implemented — migrations `20260731_01_create_curriculum_tables` and `20260731_02_add_topic_code_unique_constraint`, populated by the idempotent seed described in [migrations](migrations.md#the-curriculum-seed). |
 | Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
-| Learner planning | Partly implemented — `learners` and `study_goals` arrive in the same migration `20260801_01`; `availability_slots` arrives with Milestone 2 and `study_plans` and `plan_items` with Milestone 3. |
+| Learner planning | Partly implemented — `learners` and `study_goals` arrive in migration `20260801_01` and `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots); `study_plans` and `plan_items` arrive with Milestone 3. |
 | Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `study_activities` arrives with the code that records study work, and `revision_records` with Milestone 3. |
 | Resources and RAG metadata | Not implemented — arrives with Milestone 4. |
 | Assessment | Not implemented — arrives with Milestone 5. |
 | External evidence | Not implemented — arrives with Milestone 5. |
 
-A pending area's columns are an approved target, not a committed shape. Two of the three details this
-document recorded as undecided remain so — the `day_of_week` numbering convention and numeric
-precision for score and marks columns — and are decided in the change that creates their table, not
-before. The third, the default learner timezone, was decided when `learners` was created: it comes
-from `APP_DEFAULT_TIMEZONE`, which defaults to `Asia/Kolkata`. See
-[ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) and the
-[configuration catalogue](../deployment/environments.md#application).
+A pending area's columns are an approved target, not a committed shape. One of the three details this
+document recorded as undecided remains so — numeric precision for score and marks columns — and is
+decided in the change that creates its table, not before. The other two are settled:
+
+- The **default learner timezone** was decided when `learners` was created: it comes from
+  `APP_DEFAULT_TIMEZONE`, which defaults to `Asia/Kolkata`. See
+  [ADR-013](../adr/ADR-013-examination-schedule-and-study-goal.md) and the
+  [configuration catalogue](../deployment/environments.md#application).
+- The **`day_of_week` numbering convention** was **retired rather than chosen** when
+  `availability_slots` was created. The column holds a `snake_case` day *name*, so no numbering exists
+  to document or to mis-map. See [ADR-018](../adr/ADR-018-weekly-availability-slots.md) and
+  [`availability_slots`](#availability_slots) below.
 
 SQLAlchemy models for implemented tables live in `backend/app/infrastructure/persistence/`.
 
@@ -293,11 +299,35 @@ Stores recurring available study time for a study goal.
 | --- | --- | --- |
 | `id` | uuid PK | Slot identifier. |
 | `study_goal_id` | uuid FK | References `study_goals.id`. |
-| `day_of_week` | smallint | 0–6 according to documented convention. |
-| `available_minutes` | integer | Non-negative study time. |
+| `day_of_week` | varchar(16) | `monday` to `sunday`. |
+| `available_minutes` | integer | Study time that day, 0 to 1440. |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. |
 
-**Constraints:** unique `(study_goal_id, day_of_week)`; `available_minutes >= 0`.
+**Constraints:** unique `(study_goal_id, day_of_week)`; `day_of_week` is constrained to the seven day
+names; `available_minutes >= 0 AND available_minutes <= 1440`.
+
+`day_of_week` was first documented here as a `smallint` holding "0–6 according to documented
+convention", with the convention itself recorded as an open project-owner decision. It is
+`varchar(16)` holding the day's name because that **retires the decision rather than answering it**:
+Python's `date.weekday()` makes Monday zero while JavaScript's `Date.getDay()` and PostgreSQL's
+`EXTRACT(DOW)` make Sunday zero, and a client that assumes the wrong one misfiles a whole week with no
+error anywhere. A stored name has nothing to mis-map, and it matches every other controlled value in
+this schema, which are validated text guarded by a `CHECK` rather than numbers or PostgreSQL enums.
+See [ADR-018](../adr/ADR-018-weekly-availability-slots.md).
+
+Nothing stores the week's order. Monday-first is presentation, so the application sorts against a
+fixed list rather than an `ORDER BY`.
+
+`available_minutes` gains an upper bound this document did not originally specify: a day holds 1440
+minutes, so a larger value is always a mistake. **Zero is accepted and meaningful** — it records a day
+the learner deliberately keeps free, which stays distinguishable from a day they have not set, whose
+row does not exist. That distinction is why the lower bound is `>= 0` rather than `> 0`, and it is the
+same one [`learner_topic_progress`](#learner_topic_progress) draws between an explicit `not_explored`
+and no record at all.
+
+A slot holds no clock time. `starts_at`/`ends_at` columns would fix which timezone a wall-clock time is
+read in before any planner exists to have an opinion, and nothing consumes a time of day; adding them
+later is an additive migration.
 
 ### `study_plans`
 
@@ -832,7 +862,9 @@ these tables. **No schema change resulted.** What the review settled:
 ### Learner planning area — partial review approved 2026-07-31
 
 This review covers only `learners` and `study_goals`, the two tables migration `20260801_01` creates.
-`availability_slots`, `study_plans`, and `plan_items` are unreviewed and unimplemented.
+`availability_slots` has since been created and reviewed
+[separately below](#availability_slots-review-approved-2026-08-06); `study_plans` and `plan_items`
+are unreviewed and unimplemented.
 
 What the review settled:
 
@@ -852,11 +884,11 @@ What the review settled:
 | --- | --- |
 | The first API contracts | **Reviewed 2026-08-05** — LRN-001, LRN-002, and GOAL-001 to GOAL-004 are implemented and their schemas need no change to `learners` or `study_goals`. See below. |
 | The actual revision-scheduling rules | **Pending** — they constrain `study_plans` and `plan_items`, which arrive in Milestone 3. |
-| The `day_of_week` numbering convention | **Open** — needed by `availability_slots`, not created here. |
+| The `day_of_week` numbering convention | **Retired 2026-08-06** — `availability_slots` stores the day's name, so there is no numbering. See [its own review](#availability_slots-review-approved-2026-08-06) below. |
 
-Two inputs remain pending, and both belong to tables this review does not cover, so the area stays
-**partly reviewed** for `learners` and `study_goals` and unreviewed for the three tables that do not
-exist yet.
+One input remains pending, and it belongs to tables this review does not cover, so the area stays
+**partly reviewed** for `learners`, `study_goals`, and `availability_slots`, and unreviewed for
+`study_plans` and `plan_items`, which do not exist yet.
 
 #### API-contract review outcome
 
@@ -888,6 +920,29 @@ The learner and study-goal endpoints, defined in
 - No index beyond the keys was needed, as recorded above. A single-learner installation holds one
   learner and a handful of goals, so every access is a sequential scan of a few rows.
 - `planning_preferences` stays uncreated, and GOAL-004 accordingly does not accept it.
+
+#### `availability_slots` review — approved 2026-08-06
+
+This review covers the third learner-planning table, created by migration `20260806_01` and read and
+written by GOAL-005, whose contract is fixed by
+[ADR-018](../adr/ADR-018-weekly-availability-slots.md). **One documented column type changed**, and
+the table is otherwise created as approved. What the review settled:
+
+- `day_of_week` is `varchar(16)` holding a day name, not the documented `smallint`. This retires the
+  open numbering convention rather than answering it; the rationale is under
+  [`availability_slots`](#availability_slots) above.
+- `available_minutes` gains an upper bound of 1440 beside the approved `>= 0`. Zero is accepted
+  deliberately and means a day the learner keeps free.
+- The unique `(study_goal_id, day_of_week)` key is created as approved. It is what makes saving a week
+  rewrite the days it names rather than appending beside them, and it is what lets GOAL-005 address a
+  day rather than a row.
+- **No further index was needed.** The unique constraint creates one whose leading column serves the
+  only read there is — every slot belonging to one goal — and
+  [Required Indexes](#required-indexes) lists none for this table.
+- The row hangs off `study_goals` rather than `learners`, as approved: a learner who archives one goal
+  and starts another is describing a different week.
+- No column stores a clock time and none stores the week's order. Both were considered and left out;
+  see ADR-018.
 
 ### Progress and revision area — partial review approved 2026-08-05
 

@@ -51,6 +51,7 @@ const goal: StudyGoal = {
     schedule_status: "provisional",
     examination_window: { starts_on: "2027-02-06", ends_on: "2027-02-21" },
   },
+  availability: { slots: [] },
 };
 
 function renderForm(overrides: Partial<Parameters<typeof LearnerSetupForm>[0]> = {}) {

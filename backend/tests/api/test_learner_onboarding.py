@@ -1,4 +1,4 @@
-"""API tests for the learner onboarding endpoints (LRN-001, LRN-002, EXM-001, GOAL-001 to GOAL-004).
+"""API tests for the learner setup endpoints (LRN-001, LRN-002, EXM-001, GOAL-001 to GOAL-005).
 
 They check the public contract: the `data` envelope, `snake_case` fields, UUID
 string identifiers, the pagination block, the documented error codes, and the
@@ -391,7 +391,12 @@ def test_a_goal_exposes_no_persistence_detail(onboarding_client, onboarding):
         "learning_program",
         "curriculum_version",
         "examination",
+        "availability",
     }
+    # A brand-new goal has no availability, and the week says so by being empty
+    # rather than by being absent -- so a client needs no branch for a goal
+    # created before GOAL-005 was ever called.
+    assert goal["availability"] == {"slots": []}
 
 
 # -- GOAL-004: update a study goal -----------------------------------------
@@ -475,14 +480,330 @@ def test_updating_an_unknown_goal_returns_the_documented_not_found(onboarding_cl
     assert response.status_code == 404
 
 
-# -- GOAL-005 is not implemented -------------------------------------------
+# -- GOAL-005: replace weekly availability ---------------------------------
 
 
-def test_replacing_availability_is_not_served(onboarding_client, onboarding):
-    """`availability_slots` does not exist; GOAL-005 waits on the day_of_week decision."""
+def availability_of(client, goal_id):
+    """The week currently stored, read back through GOAL-003."""
+    return client.get(f"{GOALS}/{goal_id}").json()["data"]["availability"]
+
+
+def replace_availability(client, goal_id, slots):
+    return client.put(f"{GOALS}/{goal_id}/availability", json={"slots": slots})
+
+
+def test_saving_a_week_returns_it_under_the_data_envelope(onboarding_client, onboarding):
     goal = existing_goal(onboarding_client, onboarding)
 
-    response = onboarding_client.put(f"{GOALS}/{goal['id']}/availability", json={"slots": []})
+    response = replace_availability(
+        onboarding_client,
+        goal["id"],
+        [
+            {"day_of_week": "wednesday", "available_minutes": 90},
+            {"day_of_week": "monday", "available_minutes": 120},
+        ],
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": {
+            "slots": [
+                {"day_of_week": "monday", "available_minutes": 120},
+                {"day_of_week": "wednesday", "available_minutes": 90},
+            ]
+        }
+    }
+
+
+def test_a_saved_week_is_returned_in_week_order(onboarding_client, onboarding):
+    """Monday first, whatever order the request named the days in."""
+    goal = existing_goal(onboarding_client, onboarding)
+
+    body = replace_availability(
+        onboarding_client,
+        goal["id"],
+        [
+            {"day_of_week": "sunday", "available_minutes": 30},
+            {"day_of_week": "tuesday", "available_minutes": 60},
+            {"day_of_week": "saturday", "available_minutes": 240},
+        ],
+    ).json()
+
+    assert [slot["day_of_week"] for slot in body["data"]["slots"]] == [
+        "tuesday",
+        "saturday",
+        "sunday",
+    ]
+
+
+def test_a_saved_week_is_read_back_on_the_goal(onboarding_client, onboarding):
+    """The week travels with the goal, so a screen showing one needs no second call."""
+    goal = existing_goal(onboarding_client, onboarding)
+    replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "friday", "available_minutes": 45}]
+    )
+
+    assert availability_of(onboarding_client, goal["id"]) == {
+        "slots": [{"day_of_week": "friday", "available_minutes": 45}]
+    }
+
+
+def test_a_saved_week_is_read_back_in_the_goal_collection(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+    replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "friday", "available_minutes": 45}]
+    )
+
+    goals = onboarding_client.get(GOALS).json()["data"]
+
+    assert goals[0]["availability"]["slots"] == [{"day_of_week": "friday", "available_minutes": 45}]
+
+
+def test_saving_a_week_replaces_the_days_it_does_not_name(onboarding_client, onboarding):
+    """A replacement, not a merge: Tuesday is gone because the second save omits it."""
+    goal = existing_goal(onboarding_client, onboarding)
+    replace_availability(
+        onboarding_client,
+        goal["id"],
+        [
+            {"day_of_week": "monday", "available_minutes": 120},
+            {"day_of_week": "tuesday", "available_minutes": 60},
+        ],
+    )
+
+    body = replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "monday", "available_minutes": 150}]
+    ).json()
+
+    assert body["data"]["slots"] == [{"day_of_week": "monday", "available_minutes": 150}]
+
+
+def test_an_empty_week_clears_the_stored_availability(onboarding_client, onboarding):
+    """How a learner takes it all back. `PUT` replace makes it unambiguous."""
+    goal = existing_goal(onboarding_client, onboarding)
+    replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "monday", "available_minutes": 120}]
+    )
+
+    body = replace_availability(onboarding_client, goal["id"], []).json()
+
+    assert body["data"]["slots"] == []
+    assert availability_of(onboarding_client, goal["id"]) == {"slots": []}
+
+
+def test_a_day_with_no_available_time_is_stored_rather_than_dropped(onboarding_client, onboarding):
+    """Zero is a day the learner deliberately keeps free, which is not the same as
+    a day they never set -- an unset day is absent from the week entirely."""
+    goal = existing_goal(onboarding_client, onboarding)
+
+    body = replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "sunday", "available_minutes": 0}]
+    ).json()
+
+    assert body["data"]["slots"] == [{"day_of_week": "sunday", "available_minutes": 0}]
+
+
+def test_saving_the_same_week_twice_is_accepted(onboarding_client, onboarding):
+    """A repeated form submission must not fail on its second attempt."""
+    goal = existing_goal(onboarding_client, onboarding)
+    week = [{"day_of_week": "monday", "available_minutes": 120}]
+    replace_availability(onboarding_client, goal["id"], week)
+
+    response = replace_availability(onboarding_client, goal["id"], week)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["slots"] == week
+
+
+def test_saving_a_week_reports_no_total(onboarding_client, onboarding):
+    """Availability is a planning input. Turning a week into hours is planning
+    work, and no plan is generated yet."""
+    goal = existing_goal(onboarding_client, onboarding)
+
+    body = replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "monday", "available_minutes": 120}]
+    ).json()
+
+    assert set(body["data"]) == {"slots"}
+    assert set(body) == {"data"}
+
+
+def test_a_slot_exposes_no_persistence_detail(onboarding_client, onboarding):
+    """No slot identifier: GOAL-005 addresses a week, not a row, so an identifier
+    no client can use would be a field the contract had to keep forever."""
+    goal = existing_goal(onboarding_client, onboarding)
+
+    body = replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "monday", "available_minutes": 120}]
+    ).json()
+
+    assert set(body["data"]["slots"][0]) == {"day_of_week", "available_minutes"}
+
+
+def test_an_unknown_day_is_a_validation_error(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "moonday", "available_minutes": 60}]
+    )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "validation_error"
+    assert error["details"][0]["field"] == "body.slots"
+    assert error["details"][0]["type"] == "unknown_weekday"
+
+
+def test_a_numeric_day_is_a_validation_error(onboarding_client, onboarding):
+    """There is no numbering convention to accept. A client sending `0` gets a
+    refusal naming the seven days rather than a silently misfiled week."""
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "0", "available_minutes": 60}]
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_naming_one_day_twice_is_a_validation_error(onboarding_client, onboarding):
+    """No database key can see two of the same day in one request, so this is the
+    only place it can be caught."""
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = replace_availability(
+        onboarding_client,
+        goal["id"],
+        [
+            {"day_of_week": "monday", "available_minutes": 60},
+            {"day_of_week": "monday", "available_minutes": 90},
+        ],
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["type"] == "duplicate_weekday"
+
+
+def test_more_minutes_than_a_day_holds_is_a_validation_error(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "monday", "available_minutes": 1441}]
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["type"] == "available_minutes_out_of_range"
+
+
+def test_negative_minutes_is_a_validation_error(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "monday", "available_minutes": -1}]
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["type"] == "available_minutes_out_of_range"
+
+
+def test_a_week_naming_more_days_than_a_week_has_is_a_validation_error(
+    onboarding_client, onboarding
+):
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = replace_availability(
+        onboarding_client,
+        goal["id"],
+        [{"day_of_week": "monday", "available_minutes": 60} for _ in range(8)],
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_a_body_omitting_the_week_is_a_validation_error(onboarding_client, onboarding):
+    """`slots` is required, so a body that forgot it cannot silently clear a
+    learner's availability. An explicit empty list is how they clear it."""
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = onboarding_client.put(f"{GOALS}/{goal['id']}/availability", json={})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_an_unknown_field_in_a_slot_is_rejected(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = replace_availability(
+        onboarding_client,
+        goal["id"],
+        [{"day_of_week": "monday", "available_minutes": 60, "starts_at": "06:00"}],
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_saving_a_week_against_an_unknown_goal_returns_the_documented_not_found(
+    onboarding_client,
+):
+    create_profile(onboarding_client)
+
+    response = replace_availability(onboarding_client, uuid.uuid4(), [])
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
+
+
+def test_saving_a_week_before_setup_returns_the_documented_not_found(onboarding_client):
+    """No learner means no goal of theirs to own a week."""
+    response = replace_availability(onboarding_client, uuid.uuid4(), [])
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_a_refused_week_leaves_the_stored_week_alone(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+    replace_availability(
+        onboarding_client, goal["id"], [{"day_of_week": "monday", "available_minutes": 120}]
+    )
+
+    replace_availability(
+        onboarding_client,
+        goal["id"],
+        [
+            {"day_of_week": "tuesday", "available_minutes": 60},
+            {"day_of_week": "moonday", "available_minutes": 60},
+        ],
+    )
+
+    assert availability_of(onboarding_client, goal["id"]) == {
+        "slots": [{"day_of_week": "monday", "available_minutes": 120}]
+    }
+
+
+def test_saving_a_week_accepts_no_learner_identifier(onboarding_client, onboarding):
+    """The effective learner is resolved server-side, so a client cannot address
+    another learner's goal."""
+    goal = existing_goal(onboarding_client, onboarding)
+
+    response = onboarding_client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={"slots": [], "learner_id": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_more_than_one_stored_learner_refuses_a_week(onboarding_client, onboarding):
+    goal = existing_goal(onboarding_client, onboarding)
+    onboarding.learners.add_learner(onboarding.learners.learners[0])
+
+    response = replace_availability(onboarding_client, goal["id"], [])
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"

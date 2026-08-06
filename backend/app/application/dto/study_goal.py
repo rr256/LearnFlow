@@ -8,8 +8,12 @@ date for a learner following no examination.
 Two workflows share these structures. `StudyGoalRequest` and `StudyGoalSummary`
 serve the `scripts.set_study_goal` command, which resolves a program by its code
 and reports what a run changed. `NewStudyGoal`, `StudyGoalChanges`,
-`StudyGoalDetail`, and `StudyGoalPage` serve GOAL-001 to GOAL-004, which address
+`StudyGoalDetail`, and `StudyGoalPage` serve GOAL-001 to GOAL-005, which address
 records by identifier because a client holds identifiers rather than codes.
+
+The weekly availability a goal carries has its own structures, in
+`dto/availability.py`; a goal detail embeds the saved week rather than
+redescribing it.
 
 Neither carries a learner identifier inbound. The effective learner is resolved
 server-side and never chosen by a client (docs/api/conventions.md).
@@ -22,6 +26,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
+
+from app.application.dto.availability import WeeklyAvailability
 
 
 class RecordChange(StrEnum):
@@ -188,9 +194,11 @@ class StudyGoalDetail:
     identifiers, because a client showing a goal would otherwise need two further
     requests to name what the learner is studying.
 
-    No availability summary is reported. `availability_slots` does not exist yet,
-    and GOAL-005 -- which would fill it -- needs the `day_of_week` numbering
-    convention that remains an open decision (ADR-011).
+    `availability` is the week the learner has saved against this goal, which
+    GOAL-005 writes. It is embedded for the same reason: the catalogue's original
+    intent line for GOAL-003 promised an availability summary, and a screen
+    showing a goal wants the week beside it rather than after a second request.
+    A goal whose availability has never been saved carries an empty week.
     """
 
     id: uuid.UUID
@@ -200,6 +208,7 @@ class StudyGoalDetail:
     learning_program: StudyGoalProgram
     curriculum_version: StudyGoalCurriculumVersion
     examination: ExaminationGoalSummary | None
+    availability: WeeklyAvailability
 
 
 @dataclass(frozen=True, slots=True)

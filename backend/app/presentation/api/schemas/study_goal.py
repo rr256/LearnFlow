@@ -1,4 +1,4 @@
-"""Request and response schemas for the study-goal endpoints (GOAL-001 to GOAL-004).
+"""Request and response schemas for the study-goal endpoints (GOAL-001 to GOAL-005).
 
 No request accepts a `learner_id`: the effective learner is resolved server-side
 (docs/api/conventions.md). No request accepts a `curriculum_version_id` either --
@@ -7,6 +7,12 @@ attach a learner to a draft or retired syllabus.
 
 A goal's examination is reported as a **window** with the schedule's provenance
 beside it, never as a single date the examining body has not published (ADR-013).
+
+A goal's weekly availability is reported as the days the learner has set, each
+named by its `snake_case` day name rather than by an index, so a client cannot
+mis-map a numbering convention (ADR-018). A slot identifier is deliberately not
+reported: GOAL-005 addresses a week, not a row, so an identifier no client can use
+would be a field the contract had to keep forever.
 
 `planning_preferences` is absent from the update request. The column does not
 exist, so accepting the field would promise storage the database does not have.
@@ -17,6 +23,13 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.application.dto.availability import (
+    MINUTES_IN_A_DAY,
+    WEEKDAYS,
+    AvailabilitySlotEntry,
+    WeeklyAvailability,
+    WeeklyAvailabilityRequest,
+)
 from app.application.dto.study_goal import (
     ExaminationGoalSummary,
     NewStudyGoal,
@@ -98,13 +111,44 @@ class ExaminationGoalSchema(BaseModel):
         )
 
 
-class StudyGoalSchema(BaseModel):
-    """One study goal, with the reference data it points at resolved.
+class AvailabilitySlotSchema(BaseModel):
+    """The study time available on one day of the week."""
 
-    No availability summary is reported: `availability_slots` does not exist yet,
-    and GOAL-005 -- which would fill it -- needs the `day_of_week` numbering
-    convention that remains an open decision (ADR-011).
+    day_of_week: str = Field(description=f"One of: {', '.join(WEEKDAYS)}.")
+    available_minutes: int = Field(
+        description=(
+            "Minutes available on that day, from 0 to 1440. Zero records a day the "
+            "learner deliberately keeps free, which is not the same as a day they "
+            "have not set: an unset day is absent from the week entirely."
+        )
+    )
+
+    @classmethod
+    def of(cls, entry: AvailabilitySlotEntry) -> AvailabilitySlotSchema:
+        """Build the schema from its application DTO."""
+        return cls(day_of_week=entry.day_of_week, available_minutes=entry.available_minutes)
+
+
+class WeeklyAvailabilitySchema(BaseModel):
+    """The week a learner has saved against one study goal.
+
+    `slots` is in week order, Monday first, and holds only the days the learner
+    has set. It is empty for a goal whose availability has never been saved.
+
+    No total is reported. Availability is a planning input; turning a week into
+    an hours figure is planning work, which arrives with the planner.
     """
+
+    slots: list[AvailabilitySlotSchema]
+
+    @classmethod
+    def of(cls, availability: WeeklyAvailability) -> WeeklyAvailabilitySchema:
+        """Build the schema from its application DTO."""
+        return cls(slots=[AvailabilitySlotSchema.of(entry) for entry in availability.slots])
+
+
+class StudyGoalSchema(BaseModel):
+    """One study goal, with the reference data it points at resolved."""
 
     id: uuid.UUID
     learner_id: uuid.UUID
@@ -116,6 +160,9 @@ class StudyGoalSchema(BaseModel):
     curriculum_version: StudyGoalCurriculumVersionSchema
     examination: ExaminationGoalSchema | None = Field(
         description="Null for a goal aiming at a target date alone."
+    )
+    availability: WeeklyAvailabilitySchema = Field(
+        description="The weekly availability saved against this goal, empty when none is."
     )
 
     @classmethod
@@ -131,6 +178,7 @@ class StudyGoalSchema(BaseModel):
             examination=(
                 None if detail.examination is None else ExaminationGoalSchema.of(detail.examination)
             ),
+            availability=WeeklyAvailabilitySchema.of(detail.availability),
         )
 
 
@@ -232,3 +280,68 @@ class UpdateStudyGoalRequest(BaseModel):
             clear_target_date="target_date" in supplied and self.target_date is None,
             status=self.status if "status" in supplied else None,
         )
+
+
+class AvailabilitySlotRequest(BaseModel):
+    """One day of the week a learner can study, and for how long.
+
+    Whether the day is one of the seven, and whether the minutes fall inside a
+    day, are checked by the use case rather than by an enum and a bound here, so
+    each rejection message names the day at fault in the layer that also mirrors
+    the database `CHECK`.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    day_of_week: str = Field(min_length=1, description=f"One of: {', '.join(WEEKDAYS)}.")
+    available_minutes: int = Field(
+        description=(
+            f"Minutes available on that day, from 0 to {MINUTES_IN_A_DAY}. Zero records a "
+            "day deliberately kept free; omit the day entirely to leave it unset."
+        )
+    )
+
+
+class ReplaceAvailabilityRequest(BaseModel):
+    """The whole week a learner is saving against one goal.
+
+    This replaces rather than merges: the days named become the week, and a day
+    the request does not name is removed. `slots` is therefore required, so a
+    body that forgot it cannot silently clear a learner's availability -- an
+    explicit empty list is how a learner clears it on purpose.
+
+    A week cannot name more days than a week has, which is a shape constraint. A
+    day named twice is refused by the use case, because no database key can see
+    two of the same day in one request.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    slots: list[AvailabilitySlotRequest] = Field(
+        max_length=len(WEEKDAYS),
+        description=(
+            "Every day the learner can study. An empty list clears the goal's availability."
+        ),
+    )
+
+    def to_weekly_availability(self) -> WeeklyAvailabilityRequest:
+        """Map the request onto the application's replacement structure."""
+        return WeeklyAvailabilityRequest(
+            slots=tuple(
+                AvailabilitySlotEntry(
+                    day_of_week=slot.day_of_week, available_minutes=slot.available_minutes
+                )
+                for slot in self.slots
+            )
+        )
+
+
+class WeeklyAvailabilityResponse(BaseModel):
+    """One goal's saved week, under the documented `data` envelope.
+
+    An object rather than a bare array, per ADR-014. It is not a paginated
+    collection either: a week holds at most seven days belonging to one goal, so
+    a `pagination` block would describe a window nothing can page through.
+    """
+
+    data: WeeklyAvailabilitySchema

@@ -2,7 +2,7 @@
 title: "ADR-013: Model an Examination Period as a Published Window of Reference Data"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-05
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
@@ -12,6 +12,7 @@ related:
   - ADR-014-api-response-contract.md
   - ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ADR-016-learner-onboarding-api-contracts.md
+  - ADR-018-weekly-availability-slots.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../domain/domain-model.md
@@ -125,6 +126,32 @@ at something, and the default learner timezone are all implemented as decided he
 required **no migration** — the tables this record created hold everything the new contracts return.
 The learner-planning and examination-schedule first-API-contract reviews in
 [database/schema.md](../database/schema.md) are accordingly discharged.
+
+### Implementation status — 2026-08-06
+
+**GOAL-005 is implemented, and the deferral this record began is discharged in full.**
+`availability_slots` now exists, created by migration `20260806_01`, and
+[ADR-018](ADR-018-weekly-availability-slots.md) fixes the contract that replaces a goal's weekly
+availability. The `day_of_week` convention that held it back was **retired rather than chosen**: the
+column stores the day's `snake_case` name, so no numbering exists for a reader or a client to get
+wrong.
+
+**One statement under *Neutral* is now overtaken**, and as with the earlier notes the accepted text is
+left as written: "`availability_slots` stays behind, because it would force the `day_of_week`
+convention that no requirement yet constrains." It no longer stays behind, and the convention it would
+have forced no longer exists. The bullet's reasoning was correct while it applied — the table was
+created in the change whose requirement finally constrained its shape, which is exactly what holding
+it back was for.
+
+**Two things this record left open remain open.** `study_goals.planning_preferences` is still not
+created, for the reason given in the same *Neutral* bullet: nothing reads it and its shape is
+undecided. GOAL-004 accordingly still does not accept it, so FR-002's "available study time and basic
+planning preferences" criterion is now **partly** met rather than unmet. How superseded examination
+periods are retired, and whether a learner may hold goals for more than one program at a time, are
+untouched.
+
+**Nothing else changed.** The window model, the provenance rules, and the goal `CHECK` are unaffected;
+ADR-018's migration creates one empty table and alters none of the four this record created.
 
 ## Context
 
@@ -359,6 +386,7 @@ curriculum area's first-API-contract review as pending for the same reason.
 - [ADR-014: Fix the public HTTP API response contract](ADR-014-api-response-contract.md) — the envelope and error contract the deferred goal endpoints will answer in
 - [ADR-015: Build the frontend on Next.js and reach the API from the server](ADR-015-frontend-foundation-and-server-rendered-api-access.md) — the client whose existence reopens the deferral above
 - [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the record that discharges that deferral, and the endpoint schemas this one left open
+- [ADR-018: Store weekly availability as named days replaced a week at a time](ADR-018-weekly-availability-slots.md) — the record that creates the `availability_slots` table this one held back, and discharges the last of the deferral
 - [Database schema](../database/schema.md) — the tables and constraints this record decides
 - [Database migrations](../database/migrations.md) — the seed's commands and operational rules
 - [Domain model](../domain/domain-model.md) — the examination schedule concept

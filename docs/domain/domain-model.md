@@ -2,13 +2,14 @@
 title: LearnFlow Domain Model
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-05
+last_updated: 2026-08-06
 related:
   - ../00-project-context.md
   - entities.md
   - terminology.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
+  - ../adr/ADR-018-weekly-availability-slots.md
   - ../requirements/functional.md
   - ../database/schema.md
 ---
@@ -94,6 +95,16 @@ The learner's target outcome and timeline, including what they are working towar
 A goal aims at a published examination cycle, at a target completion date, or at both — never at neither, because a plan needs a horizon. A goal that names an examination cycle *refers* to its schedule rather than copying its dates, so a correction the examining body publishes reaches the goal without rewriting it.
 
 The goal provides the constraint used to create and adapt study plans.
+
+### Availability Slot
+
+How much study time one day of the week holds, for one study goal.
+
+A goal has at most seven — one per day — and the set of them is the learner's **weekly availability**. It is saved a week at a time: the days named become the week, and a day left out is removed.
+
+A day is identified by name rather than by an index, so no numbering convention exists to be read wrongly. A slot records a quantity of minutes, not a sitting between two clock times; nothing in the model has a time of day. Zero minutes is a day deliberately kept free, which is a different statement from a day with no slot at all.
+
+Availability is a planning input and nothing more. Nothing totals a week, ranks one day above another, or judges whether a week is enough — that reasoning belongs to a study plan, which is where the trade-offs can be shown.
 
 ### Study Plan
 
@@ -233,6 +244,7 @@ This document intentionally does not define database fields, table names, API en
 - [ADR-008: Model assessment topics and mistake evidence sources explicitly](../adr/ADR-008-assessment-and-mistake-evidence-model.md) — quiz-topic cardinality, mistake sources, and evidence boundaries
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — the examination schedule concept and what a study goal aims at
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — which part of learner topic progress is persisted today, and how a learner-set stage is told from a derived one
+- [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the availability slot concept, and why nothing totals a week
 - [Functional requirements](../requirements/functional.md)
 - [Domain entities](entities.md)
 - [Terminology](terminology.md)

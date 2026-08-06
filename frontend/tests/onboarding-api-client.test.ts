@@ -6,6 +6,7 @@ import {
   listExaminationSchedules,
   listStudyGoals,
   readLearnerProfile,
+  replaceAvailability,
   updateLearnerProfile,
   updateStudyGoal,
 } from "@/lib/api-client";
@@ -60,6 +61,7 @@ const goal = {
     schedule_status: "provisional",
     examination_window: { starts_on: "2027-02-06", ends_on: "2027-02-21" },
   },
+  availability: { slots: [{ day_of_week: "monday", available_minutes: 120 }] },
 };
 
 afterEach(() => {
@@ -230,6 +232,107 @@ describe("updateStudyGoal", () => {
     );
 
     const error = (await updateStudyGoal(goal.id, { status: "paused" }).catch(
+      (caught: unknown) => caught,
+    )) as ApiError;
+
+    expect(error.isNotFound).toBe(true);
+  });
+
+  it("reads the saved week off the goal, needing no further request", async () => {
+    respondWith({ data: [goal], pagination: { limit: 25, offset: 0, total: 1 } });
+
+    const goals = await listStudyGoals();
+
+    expect(goals[0]?.availability.slots).toEqual([
+      { day_of_week: "monday", available_minutes: 120 },
+    ]);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("replaceAvailability", () => {
+  it("sends a PUT to the goal's availability, carrying the whole week", async () => {
+    respondWith({ data: { slots: [{ day_of_week: "monday", available_minutes: 120 }] } });
+
+    await replaceAvailability(goal.id, [{ day_of_week: "monday", available_minutes: 120 }]);
+
+    expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toContain(
+      `/study-goals/${goal.id}/availability`,
+    );
+    const request = lastRequest();
+    expect(request.method).toBe("PUT");
+    expect(JSON.parse(String(request.body))).toEqual({
+      slots: [{ day_of_week: "monday", available_minutes: 120 }],
+    });
+  });
+
+  it("names each day rather than numbering it, so no convention is assumed", async () => {
+    respondWith({ data: { slots: [] } });
+
+    await replaceAvailability(goal.id, [{ day_of_week: "sunday", available_minutes: 30 }]);
+
+    expect(String(lastRequest().body)).toContain('"day_of_week":"sunday"');
+  });
+
+  it("sends an explicit empty list, which clears the goal's availability", async () => {
+    respondWith({ data: { slots: [] } });
+
+    const saved = await replaceAvailability(goal.id, []);
+
+    expect(JSON.parse(String(lastRequest().body))).toEqual({ slots: [] });
+    expect(saved.slots).toEqual([]);
+  });
+
+  it("returns the saved week", async () => {
+    respondWith({
+      data: {
+        slots: [
+          { day_of_week: "monday", available_minutes: 120 },
+          { day_of_week: "saturday", available_minutes: 240 },
+        ],
+      },
+    });
+
+    const saved = await replaceAvailability(goal.id, []);
+
+    expect(saved.slots).toHaveLength(2);
+  });
+
+  it("rejects a response with no slots list rather than rendering undefined", async () => {
+    respondWith({ data: {} });
+
+    await expect(replaceAvailability(goal.id, [])).rejects.toThrow(ApiError);
+  });
+
+  it("carries the field-level details of a refused week", async () => {
+    respondWith(
+      {
+        error: {
+          code: "validation_error",
+          message: "That is not a day of the week.",
+          details: [
+            { field: "body.slots", message: "not a day", type: "unknown_weekday" },
+          ],
+        },
+      },
+      422,
+    );
+
+    const error = (await replaceAvailability(goal.id, [
+      { day_of_week: "moonday", available_minutes: 60 },
+    ]).catch((caught: unknown) => caught)) as ApiError;
+
+    expect(error.code).toBe("validation_error");
+    expect(error.details[0]?.type).toBe("unknown_weekday");
+  });
+
+  it("reports a goal that is not the learner's as not found", async () => {
+    respondWith(
+      { error: { code: "not_found", message: "No study goal is stored.", details: [] } },
+      404,
+    );
+
+    const error = (await replaceAvailability(goal.id, []).catch(
       (caught: unknown) => caught,
     )) as ApiError;
 

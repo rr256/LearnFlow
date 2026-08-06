@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { Notice } from "@/components/Notice";
+import { AvailabilityForm } from "@/features/onboarding/AvailabilityForm";
 import { LearnerSetupForm } from "@/features/onboarding/LearnerSetupForm";
 import { StudyGoalSummary } from "@/features/onboarding/StudyGoalSummary";
 import {
@@ -105,18 +106,25 @@ async function SetupSection() {
         programs={data.programs}
         schedules={data.schedules}
       />
+      {/*
+       * Availability is its own form and its own request, because it belongs to
+       * the goal above: a learner with no goal has nothing to hang a week off,
+       * and GOAL-005 addresses the goal by identifier.
+       */}
+      <h2>Your study week</h2>
+      <AvailabilityForm goal={data.goal} />
     </>
   );
 }
 
-/** LRN-001, LRN-002, EXM-001, and GOAL-001 to GOAL-004 -- the learner's setup. */
+/** LRN-001, LRN-002, EXM-001, and GOAL-001 to GOAL-005 -- the learner's setup. */
 export default function SetupPage() {
   return (
     <>
       <h1>Setup</h1>
       <p>
-        Tell LearnFlow who you are, which learning program you are studying, and what you are
-        working toward. Everything here can be changed later.
+        Tell LearnFlow who you are, which learning program you are studying, what you are working
+        toward, and when in the week you can study. Everything here can be changed later.
       </p>
       <Suspense fallback={<p role="status">Loading your setup…</p>}>
         <SetupSection />
