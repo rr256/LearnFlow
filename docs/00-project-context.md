@@ -2,7 +2,7 @@
 title: LearnFlow Project Context
 status: approved
 owner: project-governance
-last_updated: 2026-08-06
+last_updated: 2026-08-07
 audience: all-contributors-and-ai-assistants
 read_before: any-design-or-implementation-task
 related:
@@ -87,9 +87,6 @@ Accepted ADRs:
 - [ADR-017 — Record manual topic progress as a learner-owned stage](adr/ADR-017-topic-progress-api-and-schema.md)
 - [ADR-018 — Store weekly availability as named days replaced a week at a time](adr/ADR-018-weekly-availability-slots.md)
 - [ADR-019 — Store planning preferences as typed columns replaced as a group](adr/ADR-019-study-goal-planning-preferences.md)
-
-Proposed ADRs, recording an approved decision and awaiting acceptance:
-
 - [ADR-020 — Generate the initial study plan deterministically as a roadmap and a week](adr/ADR-020-initial-study-plan-generation.md)
 
 ### Design and implementation

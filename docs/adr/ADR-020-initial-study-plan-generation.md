@@ -1,8 +1,8 @@
 ---
 title: "ADR-020: Generate the Initial Study Plan Deterministically as a Roadmap and a Week"
-status: proposed
+status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-06
+last_updated: 2026-08-07
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -32,13 +32,49 @@ related:
 
 ## Status
 
-Proposed — 2026-08-06
+Accepted — 2026-08-07. Proposed 2026-08-06.
+
+Accepted once the decision below was verified rather than merely argued. Both gaps this record
+listed under [Implementation notes](#implementation-notes) as unverified are now closed, and one of
+them found a defect; see the note immediately below.
 
 This record completes the last of
 [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s five acceptance criteria: a
 learner who starts with no previous progress still receives an initial plan. It is also the first
 delivery against [FR-003](../requirements/functional.md#fr-003-study-timeline-and-plan), which
 Milestone 3 continues.
+
+## Implementation status — 2026-08-07
+
+*Note added 2026-08-07 on acceptance. The decision above is unchanged; this records the verification
+that was outstanding when it was proposed, and the one defect that verification found.*
+
+**Two statements under [Implementation notes](#implementation-notes) are overtaken**, both of which
+that section flagged as unverified:
+
+- "The PostgreSQL integration tests have not been run locally … CI is the first run of the SQL and
+  the migration." CI has now run them. The first run **failed**: seven integration tests raised
+  `ForeignKeyViolation` on `fk_plan_items_study_plan_id_study_plans`, because a plan and its items
+  were written in one flush and SQLAlchemy — having no `relationship` between `StudyPlan` and
+  `PlanItem` to order them by — inserted the items first. The use case now flushes each plan before
+  its items, through a `flush()` primitive on the port and adapter matching
+  `CurriculumSeedRepository`. **No migration, and the foreign key is unchanged**: the constraint was
+  right and the write ordering was wrong. The run is now green, `207 passed`.
+- "This change has not been exercised against the production standalone frontend with a
+  contract-shaped stub API." It has since been, as ADR-015 through ADR-019 each were. **Thirty checks
+  passed**, and the run found a second defect, since fixed: `PlanWeek` rendered a dated item without
+  the `recommendation_reason` the API returns with it, so only the roadmap answered FR-003's fourth
+  criterion. Verified: `/plan` renders an existing plan; a no-JavaScript multipart submission created
+  one, reaching PLN-001 exactly once with `{"study_goal_id": …}` and no `learner_id`; generating again
+  superseded the previous plans while keeping them, and only the new active pair rendered; every
+  roadmap and weekly item showed its own reason; no total appeared; and neither the API address nor
+  `API_BASE_URL` appeared in the HTML of `/plan`, `/`, `/setup`, or `/curriculum`, nor in any of the
+  eleven client scripts they load.
+
+**Nothing in the decision changed.** Both defects were in code this record describes, not in what it
+decided: the plan shape, the ordering rules, the supersede lifecycle, the contracts, and the table
+shapes are all as accepted. Two test gaps were closed with them — the study-plan fake now mirrors the
+foreign key, and the panel suite asserts an item's reason on both panels at once.
 
 ## Context
 
