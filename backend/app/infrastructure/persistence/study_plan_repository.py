@@ -130,6 +130,21 @@ class SqlAlchemyStudyPlanRepository:
             )
         )
 
+    def flush(self) -> None:
+        """Send pending writes to the database without ending the transaction.
+
+        Without this, a plan and its items are written in one flush at commit,
+        and SQLAlchemy has no dependency to order them by: nothing declares a
+        `relationship` between `StudyPlan` and `PlanItem`, so it falls back to
+        mapper sort order, which puts `plan_items` before `study_plans` and
+        violates `fk_plan_items_study_plan_id_study_plans`.
+
+        Flushing the plan first is the explicit fix, and it is the one
+        `SqlAlchemyCurriculumSeedRepository` already uses where statement order
+        matters. It is not a commit: the caller still owns the transaction.
+        """
+        self._session.flush()
+
     def list_subjects(self, curriculum_version_id: uuid.UUID) -> tuple[SubjectRecord, ...]:
         """Every subject of this version."""
         models = self._session.scalars(

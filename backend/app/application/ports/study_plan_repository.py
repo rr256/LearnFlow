@@ -132,7 +132,24 @@ class StudyPlanRepository(Protocol):
         ...
 
     def add_plan_item(self, record: PlanItemRecord) -> None:
-        """Store a new plan item."""
+        """Store a new plan item.
+
+        The item's plan must already have been sent to the store — see
+        `flush` — because an item references its plan by foreign key.
+        """
+        ...
+
+    def flush(self) -> None:
+        """Send pending writes to the store without ending the transaction.
+
+        The use case calls this where one statement must land before the next,
+        which the store cannot infer: a plan item references its plan, so the
+        plan's INSERT has to reach the database first. `CurriculumSeedRepository`
+        offers the same primitive for the same reason.
+
+        It is **not** a commit. The caller still owns the transaction, so a
+        generation that flushes a plan and then fails writes nothing at all.
+        """
         ...
 
     def list_subjects(self, curriculum_version_id: uuid.UUID) -> tuple[SubjectRecord, ...]:

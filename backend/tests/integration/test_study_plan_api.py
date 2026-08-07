@@ -239,3 +239,49 @@ def test_a_plan_belonging_to_no_learner_yet_cannot_be_generated(
 
     assert response.status_code in (404, 409)
     assert session.scalar(select(func.count()).select_from(StudyPlan)) == 0
+
+
+def test_both_plans_persist_their_items(client: TestClient, goal: dict, session: Session):
+    """Regression: every generated plan's items reach the database.
+
+    Generation writes a plan and then the items that reference it. Nothing
+    declares a `relationship` between `StudyPlan` and `PlanItem`, so SQLAlchemy
+    has no dependency to order the two INSERTs by and falls back to mapper sort
+    order -- which puts `plan_items` first and violates
+    `fk_plan_items_study_plan_id_study_plans`. The use case flushes each plan
+    before its items to fix that.
+
+    This asserts it for **both** plans a generation writes, because flushing only
+    the first would leave the second broken and every other test in this file
+    would still pass.
+    """
+    created = generate(client, goal).json()["data"]
+    written = {plan["plan_type"]: plan for plan in created["plans"]}
+    assert set(written) == {"roadmap", "weekly"}, written.keys()
+
+    for plan_type, plan in written.items():
+        stored = session.scalars(
+            select(PlanItem).where(PlanItem.study_plan_id == uuid.UUID(plan["id"]))
+        ).all()
+        assert len(stored) == plan["item_count"] > 0, (
+            f"the {plan_type} plan reported {plan['item_count']} items but stored {len(stored)}"
+        )
+        assert all(item.study_plan_id == uuid.UUID(plan["id"]) for item in stored)
+
+
+def test_a_failed_generation_writes_nothing(client: TestClient, goal: dict, session: Session):
+    """Flushing a plan before its items must not make a partial plan durable.
+
+    A flush is not a commit. Asking for a plan against a goal that is not the
+    learner's fails after the first read and before any write, so the request
+    that follows it must still find an empty database -- and the successful
+    generation after that must be the only thing stored.
+    """
+    refused = client.post(PLANS + "/generate", json={"study_goal_id": str(uuid.uuid4())})
+    assert refused.status_code == 404
+
+    assert session.scalar(select(func.count()).select_from(StudyPlan)) == 0
+    assert session.scalar(select(func.count()).select_from(PlanItem)) == 0
+
+    assert generate(client, goal).status_code == 201
+    assert session.scalar(select(func.count()).select_from(StudyPlan)) == 2

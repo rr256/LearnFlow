@@ -513,6 +513,12 @@ class ManageStudyPlans:
         The reference data is passed in rather than read back: the caller has just
         walked the whole curriculum to build these items, so re-reading it to name
         them would be a second pass over rows already in hand.
+
+        **The plan is flushed before its items.** An item references its plan by
+        foreign key, and nothing tells the store that the two writes are ordered:
+        left to one flush at commit, the items can be inserted first and the
+        database refuses them. Flushing is not committing, so a generation that
+        fails after this point still writes nothing.
         """
         record = StudyPlanRecord(
             id=uuid.uuid4(),
@@ -525,6 +531,7 @@ class ManageStudyPlans:
             generation_reason=plan.generation_reason,
         )
         self._plans.add_study_plan(record)
+        self._plans.flush()
 
         stored: list[PlanItemRecord] = []
         for item in items:

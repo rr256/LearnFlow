@@ -42,6 +42,10 @@ class FakeStudyPlanRepository:
         self.topics = list(topics)
         self.plans: list[StudyPlanRecord] = list(plans)
         self.items: list[PlanItemRecord] = list(items)
+        # Plans the store has actually been told about. A plan added but not
+        # flushed is pending, and an item referencing it would be refused by
+        # `fk_plan_items_study_plan_id_study_plans`.
+        self._flushed: set[uuid.UUID] = {record.id for record in self.plans}
 
     def count_study_plans(self, *, learner_id: uuid.UUID, filters: StudyPlanFilters) -> int:
         return len(self._matching(learner_id, filters))
@@ -91,7 +95,18 @@ class FakeStudyPlanRepository:
         assert record.estimated_minutes is None or record.estimated_minutes > 0, (
             "an item cannot be estimated at zero minutes or fewer"
         )
+        # Mirrors `fk_plan_items_study_plan_id_study_plans`. Without this the
+        # fake accepted an item whose plan had not reached the store, which is
+        # how a foreign-key violation reached CI having passed every unit test.
+        assert record.study_plan_id in self._flushed, (
+            f"plan {record.study_plan_id} has not been flushed, so the database "
+            "would refuse this item"
+        )
         self.items.append(record)
+
+    def flush(self) -> None:
+        """Make every plan added so far visible to the items that reference it."""
+        self._flushed.update(record.id for record in self.plans)
 
     def list_subjects(self, curriculum_version_id: uuid.UUID) -> tuple[SubjectRecord, ...]:
         return tuple(
