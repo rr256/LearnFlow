@@ -21,11 +21,14 @@ from contextlib import AbstractContextManager, contextmanager
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.ports.clock import Clock
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
+from app.application.use_cases.manage_study_plans import ManageStudyPlans
 from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.application.use_cases.read_examination_schedules import ReadExaminationSchedules
+from app.infrastructure.clock import SystemClock
 from app.infrastructure.persistence.curriculum_repository import SqlAlchemyCurriculumRepository
 from app.infrastructure.persistence.examination_schedule_repository import (
     SqlAlchemyExaminationScheduleRepository,
@@ -34,6 +37,7 @@ from app.infrastructure.persistence.learner_repository import SqlAlchemyLearnerR
 from app.infrastructure.persistence.study_goal_management_repository import (
     SqlAlchemyStudyGoalManagementRepository,
 )
+from app.infrastructure.persistence.study_plan_repository import SqlAlchemyStudyPlanRepository
 from app.infrastructure.persistence.topic_progress_repository import (
     SqlAlchemyTopicProgressRepository,
 )
@@ -42,6 +46,7 @@ ReadCurriculumProvider = Callable[[], AbstractContextManager[ReadCurriculum]]
 ReadExaminationSchedulesProvider = Callable[[], AbstractContextManager[ReadExaminationSchedules]]
 LearnerProfileProvider = Callable[[], AbstractContextManager[ManageLearnerProfile]]
 StudyGoalsProvider = Callable[[], AbstractContextManager[ManageStudyGoals]]
+StudyPlansProvider = Callable[[], AbstractContextManager[ManageStudyPlans]]
 TopicProgressProvider = Callable[[], AbstractContextManager[ManageTopicProgress]]
 
 
@@ -117,6 +122,45 @@ def build_study_goals_provider(
                     learners=SqlAlchemyLearnerRepository(session),
                     goals=SqlAlchemyStudyGoalManagementRepository(session),
                     schedules=SqlAlchemyExaminationScheduleRepository(session),
+                )
+            except BaseException:
+                session.rollback()
+                raise
+            session.commit()
+
+    return provide
+
+
+def build_study_plans_provider(
+    session_factory: sessionmaker[Session], *, clock: Clock | None = None
+) -> StudyPlansProvider:
+    """Build the provider that hands the study-plan use case to one request.
+
+    The planner reads through five repositories and writes through one, all bound
+    to the same session, so a generation that supersedes an old plan and writes a
+    new one is a single unit of work: a learner cannot end up with two active
+    plans, or with none.
+
+    Args:
+        session_factory: The application's shared session factory.
+        clock: Where "today" comes from. Defaults to the system clock; a caller
+            supplies one to fix the date, which is what makes a generated plan's
+            dates assertable.
+    """
+    reads_the_clock = clock or SystemClock()
+
+    @contextmanager
+    def provide() -> Iterator[ManageStudyPlans]:
+        with session_factory() as session:
+            try:
+                yield ManageStudyPlans(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    goals=SqlAlchemyStudyGoalManagementRepository(session),
+                    schedules=SqlAlchemyExaminationScheduleRepository(session),
+                    curriculum=SqlAlchemyCurriculumRepository(session),
+                    progress=SqlAlchemyTopicProgressRepository(session),
+                    plans=SqlAlchemyStudyPlanRepository(session),
+                    clock=reads_the_clock,
                 )
             except BaseException:
                 session.rollback()

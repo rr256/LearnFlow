@@ -1,14 +1,16 @@
-"""Persistence models for the learner, their goal, and when they can study.
+"""Persistence models for the learner, their goal, when they can study, and the plan.
 
-Implements the first three tables of the *Learner planning* schema area of
-docs/database/schema.md:
+Implements the whole *Learner planning* schema area of docs/database/schema.md:
 
     learners -> study_goals -> availability_slots
+                            -> study_plans -> plan_items
                             -> curriculum_versions / examination_schedules
 
-`study_plans` and `plan_items` are deliberately absent. Each arrives with the
-planning code that reads it, per ADR-011, so no column fixes a shape before a
-requirement constrains it.
+`study_plans` and `plan_items` arrive with the planning code that reads them, per
+ADR-011 — which is this change. `plan_type`, `status`, and `action_type` are
+`varchar(32)` guarded by a CHECK rather than the bare `text` that document's table
+describes, following its own *Conventions*, ADR-011's validated-text rule, and the
+precedent `day_of_week` and `topic_sequencing` set; ADR-020 records the departure.
 
 `study_goals.target_date` is nullable here, where docs/database/schema.md first
 described it as a plain date. A learner preparing for a published examination
@@ -35,12 +37,14 @@ product guessed for them.
 """
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import (
     CheckConstraint,
     Date,
+    DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -94,6 +98,39 @@ here is the order a week is shown in, not a stored rank.
 
 MINUTES_IN_A_DAY = 24 * 60
 """Upper bound on `available_minutes`. A day cannot hold more study than it has."""
+
+PLAN_TYPES = ("roadmap", "monthly", "weekly", "daily")
+"""The plan types `study_plans.plan_type` accepts, all four approved by DEC-021.
+
+Two are written today: a `roadmap` ordering the whole curriculum and a `weekly`
+plan dating the topics the coming week has room for. `monthly` and `daily` are
+constrained now so adding one stays a use-case change rather than a migration.
+"""
+
+PLAN_STATUSES = ("draft", "active", "superseded", "archived")
+"""The statuses `study_plans.status` accepts.
+
+Generating a plan writes `active` and moves what it replaces to `superseded`,
+because docs/database/schema.md asks that plans be superseded rather than deleted
+so a learner's plan history stays explainable.
+"""
+
+PLAN_ITEM_ACTIONS = ("study", "practice", "revise", "review_mistakes")
+"""The actions `plan_items.action_type` accepts.
+
+Every item written today is `study`. The other three name work the product does
+not model yet -- practice needs checkpoint quizzes, revision needs revision
+records, mistake review needs mistake evidence -- so nothing writes them.
+"""
+
+PLAN_ITEM_STATUSES = ("planned", "completed", "skipped", "postponed")
+"""The statuses `plan_items.status` accepts.
+
+Every item is written `planned` and stays there: moving one is PLN-004's work,
+which belongs to FR-004 and is not implemented. The column exists because an item
+without a state is not a plan item, and because the alternative -- adding it once
+learners have plans -- means backfilling rows whose state nobody recorded.
+"""
 
 
 class Learner(UuidPrimaryKeyMixin, TimestampMixin, Base):
@@ -208,5 +245,99 @@ class AvailabilitySlot(UuidPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             f"available_minutes >= 0 AND available_minutes <= {MINUTES_IN_A_DAY}",
             name="available_minutes_within_a_day",
+        ),
+    )
+
+
+class StudyPlan(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    """One generated plan of recommended work toward a study goal.
+
+    A plan is a snapshot. `generation_reason` records why it was written, in the
+    terms that produced it, and is never rewritten afterwards -- so a plan set
+    aside months ago still explains itself, which is what makes a plan history
+    worth keeping.
+
+    `learner_id` sits beside `study_goal_id` although the goal already names the
+    learner. docs/database/schema.md carries both, and the required index leads on
+    `learner_id`, so a learner's plans are reachable without joining through their
+    goals.
+
+    `period_start` and `period_end` are nullable as that document has them. A
+    roadmap's end is the goal's horizon, which is absent only when the goal aims
+    at an examination schedule publishing no sitting day and carries no target
+    date beside it -- a shape the seed refuses to create but a database can hold.
+    """
+
+    __tablename__ = "study_plans"
+
+    learner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("learners.id"), nullable=False)
+    study_goal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("study_goals.id"), nullable=False)
+    plan_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    generation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(in_clause("plan_type", PLAN_TYPES), name="plan_type_is_known"),
+        CheckConstraint(in_clause("status", PLAN_STATUSES), name="status_is_known"),
+        # The access pattern docs/database/schema.md lists for this table: a
+        # learner's plans for one goal, in a given state, by the period they
+        # cover. It also serves the read generation makes before it writes --
+        # every active plan of the goal being replanned.
+        Index(
+            "ix_study_plans_learner_id_study_goal_id_status_period_start",
+            "learner_id",
+            "study_goal_id",
+            "status",
+            "period_start",
+        ),
+    )
+
+
+class PlanItem(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    """One recommended action inside a study plan.
+
+    `topic_id` is nullable, as docs/database/schema.md has it, so a later item
+    recommending work that belongs to no single topic has somewhere to live.
+    Nothing writes one today: every item this planner produces names a topic.
+
+    `scheduled_for` is null on a roadmap item and set on a weekly one. A roadmap
+    says what order to work in; only a dated plan says which day.
+
+    `status` records whether planned work happened, and is deliberately separate
+    from the learner's long-term topic progress: completing a plan item is not a
+    claim about understanding, which is rule 4 of the domain model.
+    """
+
+    __tablename__ = "plan_items"
+
+    study_plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("study_plans.id"), nullable=False)
+    topic_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("topics.id"), nullable=True)
+    action_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    scheduled_for: Mapped[date | None] = mapped_column(Date, nullable=True)
+    estimated_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    recommendation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(in_clause("action_type", PLAN_ITEM_ACTIONS), name="action_type_is_known"),
+        CheckConstraint(in_clause("status", PLAN_ITEM_STATUSES), name="status_is_known"),
+        # docs/database/schema.md approves this bound. An item estimated at zero
+        # minutes is scheduling overhead rather than study, and a negative one is
+        # always a mistake.
+        CheckConstraint(
+            "estimated_minutes IS NULL OR estimated_minutes > 0",
+            name="estimated_minutes_is_positive",
+        ),
+        # The access pattern docs/database/schema.md lists: one plan's items, by
+        # the day they fall on and what has become of them.
+        Index(
+            "ix_plan_items_study_plan_id_scheduled_for_status",
+            "study_plan_id",
+            "scheduled_for",
+            "status",
         ),
     )

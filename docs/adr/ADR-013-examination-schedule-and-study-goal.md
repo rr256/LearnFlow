@@ -4,6 +4,7 @@ status: accepted
 owner: architecture-and-data
 last_updated: 2026-08-06
 related:
+  - ADR-020-initial-study-plan-generation.md
   - ../00-project-context.md
   - ADR-003-postgresql-persistence.md
   - ADR-009-configuration-naming-and-validation.md
@@ -175,6 +176,23 @@ met. [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the 
 learner timezone are unaffected, and the migration alters no column this record created. The two other
 things this record left open — how superseded examination periods are retired, and whether a learner may
 hold goals for more than one program at a time — are untouched.
+
+*Note added 2026-08-06, later the same day. The decision below is unchanged; this closes the last
+thing it left open in the learner-planning area.*
+
+**The planning preferences are now read.** [ADR-020](ADR-020-initial-study-plan-generation.md)
+generates a study plan from them, so the statement under
+[Implementation notes](#implementation-notes) that "Nothing reads it still — no plan is generated" is
+overtaken. `preferred_session_minutes` decides how long a plan item runs, and `topic_sequencing`
+decides the order the plan works through the curriculum.
+
+The examination window this record models is what a plan is built toward: a roadmap's horizon is the
+earlier of the window's **first sitting day** and the goal's target date, derived from the stored
+periods on every generation rather than copied, so a corrected schedule reaches the next plan. No plan
+names a paper date, and a provisional schedule says so in the plan's own explanation.
+
+**Nothing else changed.** The window is still derived rather than stored, and a goal still references
+a schedule rather than copying its dates.
 
 ## Context
 
@@ -420,3 +438,4 @@ curriculum area's first-API-contract review as pending for the same reason.
 - [API endpoints](../api/endpoints.md) — GOAL-001 to GOAL-005 and LRN-001, deferred by this record
 - [Environments and configuration](../deployment/environments.md) — the `APP_DEFAULT_TIMEZONE` catalogue entry
 - [Architecture decision register](../architecture/decisions.md) — DEC-026
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](ADR-020-initial-study-plan-generation.md) — the planner that builds toward the examination window this record models, and that reads the preferences it held back

@@ -64,6 +64,22 @@ class TopicProgressRepository(Protocol):
         """
         ...
 
+    def list_recorded_stages(
+        self, *, learner_id: uuid.UUID, curriculum_version_id: uuid.UUID
+    ) -> tuple[TopicProgressRecord, ...]:
+        """Every stage this learner has recorded under this curriculum version.
+
+        Unpaged, unlike `list_topic_progress` above, because the planner reads all
+        of them at once: it explains each item of a whole plan, so a window over
+        the records would leave some items unable to mention a stage the learner
+        did record. A single-learner installation holds at most one record per
+        topic, and the curated GATE CSE curriculum has 65.
+
+        A learner who has recorded nothing contributes an empty result, which is
+        the ordinary state of a fresh installation rather than a failure.
+        """
+        ...
+
     def find_topic_progress(
         self, *, learner_id: uuid.UUID, topic_id: uuid.UUID
     ) -> TopicProgressRecord | None:

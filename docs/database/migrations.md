@@ -15,6 +15,7 @@ related:
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
+  - ../adr/ADR-020-initial-study-plan-generation.md
   - ../deployment/environments.md
 ---
 
@@ -137,6 +138,7 @@ The applied revisions are:
 | `20260805_01` | `create_learner_topic_progress_table` — the first table of the progress area, holding one learning stage per learner and topic. Creates one empty table with five of its eight documented columns; adds nothing to an existing one. See [schema.md](schema.md#learner_topic_progress) for which three are deferred and why. |
 | `20260806_01` | `create_availability_slots_table` — the third learner-planning table, holding one day's available study time per study goal. Creates one empty table; adds nothing to an existing one. `day_of_week` holds a day *name* rather than the `smallint` [schema.md](schema.md#availability_slots) first documented, which retires the numbering convention rather than answering it. |
 | `20260806_02` | `add_study_goal_planning_preferences` — the learner's planning preferences, as `preferred_session_minutes` and `topic_sequencing` on `study_goals`, each guarded by a `CHECK`. Two nullable columns rather than the `planning_preferences jsonb` [schema.md](schema.md#study_goals) first documented, because no `CHECK` reaches a key inside JSON. Additive; safe on populated tables, and every goal already stored reads back with no preferences set. |
+| `20260806_03` | `create_study_plan_tables` — the last two learner-planning tables, `study_plans` and `plan_items`, completing that schema area. Creates two empty tables and both indexes [schema.md](schema.md#required-indexes) lists for them; adds nothing to an existing one. `plan_type`, `status`, and `action_type` are `varchar(32)` guarded by a `CHECK` rather than the `text` [schema.md](schema.md#study_plans) first documented, for the reason `day_of_week` and `topic_sequencing` already changed. |
 
 ## What Requires a Migration
 
@@ -466,6 +468,7 @@ An AI assistant may propose or generate a migration, but it must not:
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why revision `20260805_01` creates five of its table's eight documented columns
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — why revision `20260806_01` stores a day name rather than an index
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — why revision `20260806_02` adds two typed columns rather than a `jsonb` payload
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — why revision `20260806_03` creates the plan tables with CHECK-guarded columns, and the code that reads them
 - [CI/CD strategy](../deployment/ci-cd.md) — the `database` job that runs these migrations on every pull request
 - [Environments and configuration](../deployment/environments.md) — the authoritative catalogue for `DATABASE_URL` and `TEST_DATABASE_URL`
 - [API endpoints](../api/endpoints.md) — the curriculum endpoints that read what the curriculum seed writes

@@ -124,8 +124,8 @@ export default function HomePage() {
     <>
       <h1>Your study setup</h1>
       <p className={styles.lead}>
-        What LearnFlow has saved for you, and what you are working toward. Planning, progress, and
-        the mentor are not built yet.
+        What LearnFlow has saved for you, and what you are working toward. Your study plan is built
+        from it; the mentor, quizzes, and revision are not built yet.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading your study setup…</p>}>
@@ -134,6 +134,9 @@ export default function HomePage() {
       </div>
       <nav aria-label="Learner actions">
         <ul className={styles.actions}>
+          <li>
+            <Link href="/plan">Your study plan</Link>
+          </li>
           <li>
             <Link href="/setup">Edit your setup</Link>
           </li>

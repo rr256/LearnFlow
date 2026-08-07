@@ -70,7 +70,7 @@ describe("PlanningPreferences", () => {
     expect(screen.getByRole("link", { name: /what you are working toward/i })).toBeDefined();
   });
 
-  it("says plainly that nothing acts on a saved preference yet", () => {
+  it("says plainly what a plan does with a saved preference", () => {
     render(
       <PlanningPreferences
         goal={goal({
@@ -79,7 +79,7 @@ describe("PlanningPreferences", () => {
       />,
     );
 
-    expect(screen.getByText(/No plan is generated yet/)).toBeDefined();
+    expect(screen.getByText(/Your study plan is built with these/)).toBeDefined();
   });
 
   it("skips a topic order this build does not recognise rather than showing it raw", () => {

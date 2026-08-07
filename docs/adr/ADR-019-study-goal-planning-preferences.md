@@ -4,6 +4,7 @@ status: accepted
 owner: architecture-and-data
 last_updated: 2026-08-06
 related:
+  - ADR-020-initial-study-plan-generation.md
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
   - ADR-013-examination-schedule-and-study-goal.md
@@ -37,6 +38,38 @@ acceptance criterion, whose other half [ADR-018](ADR-018-weekly-availability-slo
 also answers the last thing [ADR-013](ADR-013-examination-schedule-and-study-goal.md) left open in the
 learner-planning area: `study_goals.planning_preferences`, which that record held back because
 "nothing reads it, and its shape is undecided."
+
+## Implementation status — 2026-08-06, later the same day
+
+*Note added 2026-08-06, later the same day. The decision below is unchanged: the two typed columns,
+the replace-as-a-group rule, and the unset-is-not-a-default rule are all untouched.*
+
+**The preferences are now consumed.** [ADR-020](ADR-020-initial-study-plan-generation.md) generates a
+study plan from them, and **FR-002 is met in full** —
+[endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the count and stays
+authoritative for it.
+
+**Five statements are overtaken:**
+
+- The section heading *Nothing consumes, ranks, or scores a preference*, and its text "No plan is
+  generated … Milestone 3's planner is what reads them". Nothing still **ranks or scores** a
+  preference; a plan now **consumes** both.
+- "The home screen says so in the page." That copy has been replaced: the panel now says what a plan
+  does with a preference.
+- Under [Positive](#positive), "four of its five criteria are met and one — receiving an initial plan
+  — remains".
+- Under [Positive](#positive), "The learner-planning schema area is now complete except for
+  `study_plans` and `plan_items`". Both now exist.
+- Under [Negative](#negative), "A preference can be saved that no plan will honour for as long as no
+  plan exists", and under [Neutral](#neutral), "Nothing reads a preference yet."
+
+**The risk this record recorded did not materialise.** It warned that fixing the shape before a
+planner existed might prove wrong — "a planner may find that a session length wants a range rather
+than a single value, or that a topic order needs a third choice". The planner needed neither: a single
+session length was exactly what placing work on a day required, and both topic orders were
+implementable. One thing it could not have known did surface: **the curated curriculum stores no
+prerequisite link**, so `prerequisites_first` yields syllabus order today, and the plan says so rather
+than implying otherwise. That is a curriculum-data gap, not a contract defect.
 
 ## Context
 
@@ -416,6 +449,7 @@ how they want to study at all until something stores it.
 - [ADR-016: Fix the learner setup API contracts](ADR-016-learner-onboarding-api-contracts.md) — the GOAL-004 contract this record extends, and the absent-versus-null rule it builds on
 - [ADR-017: Record manual topic progress as a learner-owned stage](ADR-017-topic-progress-api-and-schema.md) — the stored-form rule and the absent-versus-explicit distinction this record reuses
 - [ADR-018: Store weekly availability as named days replaced a week at a time](ADR-018-weekly-availability-slots.md) — the other half of FR-002's criterion, the replace-the-group precedent, and the documented-target departure this one repeats
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](ADR-020-initial-study-plan-generation.md) — the planner that reads these preferences, and the risk this record recorded that did not materialise
 - [API conventions](../api/conventions.md) — the envelope, the error codes, and the `snake_case` rule
 - [API endpoint catalog](../api/endpoints.md) — the contract this record decides
 - [API versioning](../api/versioning.md) — what makes a change to it breaking

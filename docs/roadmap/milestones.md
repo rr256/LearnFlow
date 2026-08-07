@@ -20,6 +20,7 @@ related:
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
+  - ../adr/ADR-020-initial-study-plan-generation.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -157,7 +158,8 @@ remain.
   topic order, each optional and neither given a default, so a preference nobody set never reads as one
   somebody chose. They are two controls on the same setup form and ride on the same goal write, so no
   endpoint and no further request were added, and they read back on `/setup` and on the home screen off
-  the goal response. Nothing consumes a preference any more than it consumes a week. That completes
+  the goal response. Both are now consumed by the plan PLN-001 generates, which arrived with the item
+  below. That completes
   [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s second criterion;
   [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the count.
 - [x] Learner can browse curriculum in the frontend without hardcoded topic data. `/curriculum` lists
@@ -180,8 +182,10 @@ remain.
   is deliberately not created and `study_activities` does not exist, each waiting on the code that
   would write it, per [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) and
   [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md).
-- [ ] Progress overview shows subject/topic progress and priority focus areas. PRG-001 needs the plan
-  and revision records Milestone 3 brings; nothing is built.
+- [ ] Progress overview shows subject/topic progress and priority focus areas. PRG-001 needs the
+  revision records Milestone 3 brings, and nothing is built. The plan half of it now exists:
+  `study_plans` and `plan_items` are created and PLN-002 reads them, so what PRG-001 still lacks is
+  revision and the priority-focus evidence.
 - [x] Supportive learning-stage labels and next actions are used in UI. The stored values are
   `snake_case`, and the screen renders the five labels
   [terminology](../domain/terminology.md) defines, each paired with a constructive next action rather
@@ -198,22 +202,62 @@ remain.
   script. **The integration tests have not been run against a live database locally** — that
   workstation has no PostgreSQL, so they skip; the CI `database` job runs them. The remaining
   transitions arrive with the records that have them.
+- [x] Learner receives an initial study plan with no previous progress. PLN-001 generates a roadmap
+  over every trackable topic and a plan for the coming week, from the curriculum, the goal's horizon,
+  the saved study week, the planning preferences, and any recorded stages; PLN-002 and PLN-003 read
+  them back, and `/plan` shows them with the reason for every item. That completes
+  [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s fifth and last acceptance
+  criterion, so all five are now met;
+  [endpoints.md](../api/endpoints.md#fr-002-acceptance-criteria) carries the count. It also delivers
+  part of Milestone 3 early, which is recorded there. Contracted by
+  [ADR-020](../adr/ADR-020-initial-study-plan-generation.md).
 - [ ] Requirements/API/schema docs are updated to match implementation.
 
 ## Milestone 3 — Planning and Revision
 
 **Outcome:** LearnFlow provides an actionable study timeline and adapts it to learner progress.
 
+Part of this milestone arrived early, with the change that completed
+[FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s last acceptance criterion: a
+learner cannot "start with no previous progress and still receive an initial plan" without a planner,
+so PLN-001 to PLN-003, `study_plans`, `plan_items`, and the deterministic planning rules were
+delivered in Milestone 2's closing change. They are checked below with their evidence. What remains
+is plan *adaptation* and revision — the parts that need a learner to act on a plan and the product to
+respond.
+
 ### Definition of Done
 
-- [ ] Learner can generate roadmap, monthly, weekly, and daily plan views.
-- [ ] Plan items link to topics and supported actions.
-- [ ] Learner can complete, skip, or postpone plan items.
-- [ ] Learner can request plan adaptation after missed work or availability changes.
-- [ ] Revision records are generated, listed, and updateable by learner action.
-- [ ] Planning works with deterministic rules when Ollama is unavailable.
-- [ ] Insufficient-time trade-offs are visible rather than hidden.
-- [ ] Core planning/revision rules have deterministic tests.
+- [ ] Learner can generate roadmap, monthly, weekly, and daily plan views. **Roadmap and weekly are
+  done**: PLN-001 generates both from the learner's curriculum, horizon, saved week, planning
+  preferences, and recorded stages, PLN-002 and PLN-003 read them back, and `/plan` shows them.
+  Monthly and daily remain — both are accepted `plan_type` values that nothing writes, so each is a
+  use-case change rather than a migration. Contracted by
+  [ADR-020](../adr/ADR-020-initial-study-plan-generation.md), with migration `20260806_03` creating
+  the two tables.
+- [x] Plan items link to topics and supported actions. Every generated item names a trackable topic
+  and carries `action_type = 'study'`; `practice`, `revise`, and `review_mistakes` are constrained and
+  unwritten, each waiting on the work it names — checkpoint quizzes, revision records, and mistake
+  evidence.
+- [ ] Learner can complete, skip, or postpone plan items. PLN-004 is not implemented.
+  `plan_items.status` exists and holds `planned` on every row.
+- [ ] Learner can request plan adaptation after missed work or availability changes. PLN-005 is not
+  implemented. Generating again through PLN-001 supersedes the previous plans rather than adapting
+  them, which is a replacement rather than the trade-off-aware re-plan FR-004 asks for.
+- [ ] Revision records are generated, listed, and updateable by learner action. `revision_records`
+  does not exist; nothing is built.
+- [x] Planning works with deterministic rules when Ollama is unavailable. No AI provider is involved
+  at all: the same goal, curriculum, week, preferences, and date produce the same plan every time, and
+  the two rules that decide it — topic order and session placement — are pure functions in
+  `backend/app/domain/study_planning.py`.
+- [ ] Insufficient-time trade-offs are visible rather than hidden. Partly: a plan states what it was
+  built from, what the planner chose for itself, and when no week could be scheduled. What it does not
+  yet say is whether the saved week can reach the horizon at all — that judgement belongs with the
+  adaptation work above.
+- [ ] Core planning/revision rules have deterministic tests. **Covered for planning**: unit tests over
+  the domain rules with no database or clock, unit tests over the use case against fakes with a fixed
+  clock, API tests over the real application factory, and PostgreSQL integration tests that generate a
+  plan over the seeded GATE CSE curriculum and read it back. The revision half arrives with the records
+  that have it, so the item stays open.
 
 ## Milestone 4 — Resources, RAG, and Mentor
 
@@ -301,4 +345,5 @@ remain.
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — the contracts and the migration behind the progress items in Milestone 2
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the contract and the migration behind the weekly availability item in Milestone 2
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the contract and the migration behind the planning-preference half of the same item
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the contracts, the migration, and the planning rules behind the Milestone 3 items delivered early
 - [Deferred ideas](future-ideas.md)

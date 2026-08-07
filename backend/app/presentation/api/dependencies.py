@@ -21,6 +21,7 @@ from fastapi import Request
 
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
+from app.application.use_cases.manage_study_plans import ManageStudyPlans
 from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.application.use_cases.read_examination_schedules import ReadExaminationSchedules
@@ -31,6 +32,7 @@ READ_CURRICULUM_PROVIDER = "read_curriculum_provider"
 READ_EXAMINATION_SCHEDULES_PROVIDER = "read_examination_schedules_provider"
 LEARNER_PROFILE_PROVIDER = "learner_profile_provider"
 STUDY_GOALS_PROVIDER = "study_goals_provider"
+STUDY_PLANS_PROVIDER = "study_plans_provider"
 TOPIC_PROGRESS_PROVIDER = "topic_progress_provider"
 
 
@@ -62,6 +64,13 @@ def provide_learner_profile(request: Request) -> Iterator[ManageLearnerProfile]:
 def provide_study_goals(request: Request) -> Iterator[ManageStudyGoals]:
     """Yield the study-goal use case bound to this request's unit of work."""
     provider = getattr(request.app.state, STUDY_GOALS_PROVIDER)
+    with provider() as use_case:
+        yield use_case
+
+
+def provide_study_plans(request: Request) -> Iterator[ManageStudyPlans]:
+    """Yield the study-plan use case bound to this request's unit of work."""
+    provider = getattr(request.app.state, STUDY_PLANS_PROVIDER)
     with provider() as use_case:
         yield use_case
 

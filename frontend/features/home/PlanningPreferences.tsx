@@ -58,7 +58,8 @@ export function PlanningPreferences({ goal }: PlanningPreferencesProps) {
             ))}
           </dl>
           <p className={styles.pending}>
-            Saved for a study plan. No plan is generated yet, so nothing acts on these.
+            Your study plan is built with these. A preference you have not set is chosen by the
+            planner, which says so in the plan.
           </p>
         </>
       )}

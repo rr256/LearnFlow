@@ -16,6 +16,7 @@ related:
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
+  - ../adr/ADR-020-initial-study-plan-generation.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -39,7 +40,7 @@ tables arrive in more than one migration.
 | --- | --- |
 | Curriculum | Implemented — migrations `20260731_01_create_curriculum_tables` and `20260731_02_add_topic_code_unique_constraint`, populated by the idempotent seed described in [migrations](migrations.md#the-curriculum-seed). |
 | Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
-| Learner planning | Partly implemented — `learners` and `study_goals` arrive in migration `20260801_01`, `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots), and `study_goals`' planning preferences in `20260806_02`, as two typed columns rather than the `planning_preferences jsonb` documented [below](#study_goals); `study_plans` and `plan_items` arrive with Milestone 3. |
+| Learner planning | Implemented — `learners` and `study_goals` arrive in migration `20260801_01`, `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots), `study_goals`' planning preferences in `20260806_02`, as two typed columns rather than the `planning_preferences jsonb` documented [below](#study_goals), and `study_plans` and `plan_items` in `20260806_03`, whose controlled columns are `varchar(32)` guarded by a `CHECK` rather than the `text` documented [below](#study_plans). |
 | Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `study_activities` arrives with the code that records study work, and `revision_records` with Milestone 3. |
 | Resources and RAG metadata | Not implemented — arrives with Milestone 4. |
 | Assessment | Not implemented — arrives with Milestone 5. |
@@ -316,10 +317,11 @@ departure from a documented target that [`availability_slots`](#availability_slo
 [`availability_slots`](#availability_slots) not to store a clock time; nothing here records when in a
 day a session falls.
 
-Nothing reads either column yet — no plan is generated — which is the position availability and
-`learner_topic_progress.stage_source` already hold. They are created now because
+Both columns are now read by the plan PLN-001 generates: a session length decides how long an item
+runs, and a topic order decides the sequence. They were created before that planner existed because
 [FR-002](../requirements/functional.md#fr-002-initial-learner-setup) asks what a learner can *set*, and
 [endpoints](../api/endpoints.md#fr-002-acceptance-criteria) carries that criterion's status.
+`learner_topic_progress.stage_source` is now the one column in this schema that nothing reads.
 
 ### `availability_slots`
 
@@ -368,12 +370,38 @@ Stores a generated or learner-adjusted plan.
 | `id` | uuid PK | Plan identifier. |
 | `learner_id` | uuid FK | References `learners.id`. |
 | `study_goal_id` | uuid FK | References `study_goals.id`. |
-| `plan_type` | text | `roadmap`, `monthly`, `weekly`, or `daily`. |
+| `plan_type` | varchar(32) | `roadmap`, `monthly`, `weekly`, or `daily`. |
 | `period_start` | date nullable | Start of covered period. |
 | `period_end` | date nullable | End of covered period. |
-| `status` | text | `draft`, `active`, `superseded`, or `archived`. |
+| `status` | varchar(32) | `draft`, `active`, `superseded`, or `archived`. |
 | `generation_reason` | text nullable | Why it was created/replanned. |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. |
+
+**Constraints:** `plan_type` and `status` are each constrained to their documented values.
+
+`plan_type` and `status` are `varchar(32)` guarded by a `CHECK`, not the bare `text` this document
+first approved. It is the departure [`availability_slots`](#availability_slots) and
+[`study_goals`](#study_goals) each made, for the reason the [Conventions](#conventions) above give:
+every controlled value in this schema is validated text, and one guarded by application code alone is
+stored and trusted the first time a caller gets it wrong. See
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md).
+
+Both period columns are nullable as approved. A roadmap's `period_end` is the goal's horizon — the
+earlier of the examination window's first sitting day and the target date — and is NULL only when the
+goal aims at a schedule publishing no sitting day and carries no target date beside it, which
+`generation_reason` then states.
+
+`generation_reason` is written when the plan is generated and never rewritten, so a plan set aside
+months ago still explains itself in the terms that produced it. That is what makes a superseded plan
+worth keeping.
+
+`learner_id` sits beside `study_goal_id` although the goal already names the learner, as this document
+first approved: the required index leads on `learner_id`, so a learner's plans are reachable without
+joining through their goals.
+
+Generation writes `active` and moves what it replaces to `superseded`, which is the lifecycle rule
+[below](#referential-integrity-and-lifecycle-notes). `draft` and `archived` are constrained and
+unused: nothing proposes a plan before adopting it, and nothing files one away by hand.
 
 ### `plan_items`
 
@@ -384,16 +412,37 @@ Stores one actionable recommendation within a plan.
 | `id` | uuid PK | Plan item identifier. |
 | `study_plan_id` | uuid FK | References `study_plans.id`. |
 | `topic_id` | uuid FK nullable | References `topics.id`. |
-| `action_type` | text | `study`, `practice`, `revise`, or `review_mistakes`. |
+| `action_type` | varchar(32) | `study`, `practice`, `revise`, or `review_mistakes`. |
 | `scheduled_for` | date nullable | Recommended date. |
 | `estimated_minutes` | integer nullable | Expected effort. |
-| `priority` | integer | Relative plan priority. |
-| `status` | text | `planned`, `completed`, `skipped`, or `postponed`. |
+| `priority` | integer | Position within the plan, counting from 1. |
+| `status` | varchar(32) | `planned`, `completed`, `skipped`, or `postponed`. |
 | `recommendation_reason` | text nullable | Learner-facing rationale. |
 | `completed_at` | timestamptz nullable | Completion timestamp. |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. |
 
-**Constraints:** `estimated_minutes > 0` when present.
+**Constraints:** `estimated_minutes > 0` when present; `action_type` and `status` are each
+constrained to their documented values.
+
+`action_type` and `status` are `varchar(32)` guarded by a `CHECK` for the same reason `plan_type` is.
+
+`scheduled_for` is NULL on a roadmap item and set on a dated one: a roadmap says what order to work
+in, not which day to do it on.
+
+`priority` is the item's position within its plan, counting from 1. It is an **order, not a score** —
+nothing ranks one topic above another by anything except where the planning rules placed it.
+
+Every item written today carries `action_type = 'study'` and `status = 'planned'`. The other three
+actions name work the product does not yet model — practice needs checkpoint quizzes, revision needs
+`revision_records`, mistake review needs `mistake_evidence` — and moving an item's status is PLN-004's
+work, which belongs to
+[FR-004](../requirements/functional.md#fr-004-plan-adaptation) and is not implemented. `status` and
+`completed_at` are created anyway: an item without a state is not a plan item, and adding the column
+once learners hold plans would mean backfilling rows whose state nobody recorded — the argument
+[ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md) made for `stage_source`.
+
+`topic_id` is nullable as approved, so a later item recommending work belonging to no single topic
+has somewhere to live. Nothing writes one today.
 
 ### `learner_topic_progress`
 
@@ -716,8 +765,8 @@ the migration that creates its table; the three marked below are implemented tod
 - `topics(subject_id, parent_topic_id, position)` — implemented
 - `examination_periods(examination_schedule_id, starts_on)` — implemented
 - `learner_topic_progress(learner_id, topic_id)` unique — implemented, as the unique constraint named above
-- `study_plans(learner_id, study_goal_id, status, period_start)`
-- `plan_items(study_plan_id, scheduled_for, status)`
+- `study_plans(learner_id, study_goal_id, status, period_start)` — implemented
+- `plan_items(study_plan_id, scheduled_for, status)` — implemented
 - `revision_records(learner_id, due_on, status)`
 - `study_activities(learner_id, topic_id, created_at desc)`
 - `resource_topic_links(topic_id, resource_id)`
@@ -893,8 +942,8 @@ these tables. **No schema change resulted.** What the review settled:
 
 This review covers only `learners` and `study_goals`, the two tables migration `20260801_01` creates.
 `availability_slots` has since been created and reviewed
-[separately below](#availability_slots-review-approved-2026-08-06); `study_plans` and `plan_items`
-are unreviewed and unimplemented.
+[separately below](#availability_slots-review-approved-2026-08-06), and `study_plans` and `plan_items`
+[below that](#study_plans-and-plan_items-review-2026-08-06).
 
 What the review settled:
 
@@ -913,13 +962,15 @@ What the review settled:
 | Review input | State |
 | --- | --- |
 | The first API contracts | **Reviewed 2026-08-05** — LRN-001, LRN-002, and GOAL-001 to GOAL-004 are implemented and their schemas need no change to `learners` or `study_goals`. See below. |
-| The actual revision-scheduling rules | **Pending** — they constrain `study_plans` and `plan_items`, which arrive in Milestone 3. |
+| The actual revision-scheduling rules | **Pending** — `study_plans` and `plan_items` now exist and are reviewed [below](#study_plans-and-plan_items-review-2026-08-06), but the rules deciding what a revision plan item looks like arrive with `revision_records` in Milestone 3. |
 | The `day_of_week` numbering convention | **Retired 2026-08-06** — `availability_slots` stores the day's name, so there is no numbering. See [its own review](#availability_slots-review-approved-2026-08-06) below. |
 
-One input remains pending, and it belongs to tables this review does not cover, so the area stays
-**fully reviewed** for `learners`, `study_goals`, and `availability_slots` — `study_goals`' planning
-preferences are reviewed [below](#planning-preferences-review-2026-08-06) — and unreviewed for
-`study_plans` and `plan_items`, which do not exist yet.
+One input remains pending. Every table in the area now exists and has been reviewed — `learners`,
+`study_goals`, and `availability_slots` above, `study_goals`' planning preferences
+[below](#planning-preferences-review-2026-08-06), and `study_plans` and `plan_items`
+[below](#study_plans-and-plan_items-review-2026-08-06) — so the area is **fully reviewed except for
+the revision-scheduling input**, which constrains what a revision plan item looks like and arrives
+with `revision_records` in Milestone 3.
 
 #### API-contract review outcome
 
@@ -1014,6 +1065,41 @@ the review settled:
 revision-scheduling rules remain **pending** for `study_plans` and `plan_items`, as recorded above.
 `study_goals` itself is now **fully reviewed**.
 
+#### `study_plans` and `plan_items` review — 2026-08-06
+
+This review covers the last two learner-planning tables, created by migration `20260806_03` and read
+and written by PLN-001 to PLN-003, whose contract is fixed by
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md). **Three documented column types changed**,
+and every other column is created as approved. What the review settled:
+
+- `plan_type`, `study_plans.status`, `plan_items.action_type`, and `plan_items.status` are
+  `varchar(32)` guarded by a `CHECK` rather than the bare `text` the tables above first described.
+  This follows the [Conventions](#conventions) in this document and the validated-text rule ADR-011
+  chose, as `day_of_week` and `topic_sequencing` did.
+- **Both required indexes are created**, exactly as [Required Indexes](#required-indexes) lists them.
+  `ix_study_plans_learner_id_study_goal_id_status_period_start` also serves the read generation makes
+  before it writes — every `active` plan of the goal being replanned — so no further index was needed.
+- `estimated_minutes > 0` is created as approved, written with an explicit NULL branch because the
+  column is nullable.
+- **No unique constraint was added.** A goal may hold several active plans deliberately — a roadmap
+  and a week are generated together — and a plan may hold two items naming the same topic, which is
+  what makes the week the first stretch of the roadmap rather than separate work. A key forbidding
+  either would have made the chosen plan shape unstorable.
+- `plan_items.status` and `completed_at` are created although nothing writes anything but `planned`.
+  They are the exception to ADR-011's ordering rule that ADR-017 established for `stage_source`: a
+  state added after learners hold plans could only be backfilled by guessing.
+- Items are read one plan at a time and counted a page at a time, so no index on `topic_id` was
+  needed; nothing yet asks which plans mention a topic.
+- The constraint-name length limit was checked, as the examination-schedule precedent requires: the
+  longest, `ix_study_plans_learner_id_study_goal_id_status_period_start`, is 58 characters, inside
+  PostgreSQL's 63-character limit. The unit test guarding that limit covers both tables.
+- **The revision-scheduling review input is not discharged.** These tables were created for planning
+  rather than for revision, and `revision_records` still does not exist; a revision plan item is an
+  `action_type` the `CHECK` already accepts and nothing writes.
+
+**Review inputs:** the first API contracts — PLN-001 to PLN-003 — were reviewed here. The
+revision-scheduling rules remain **pending** and are the last input outstanding for this area.
+
 ### Progress and revision area — partial review approved 2026-08-05
 
 This review covers only `learner_topic_progress`, the one table migration `20260805_01` creates, and
@@ -1076,6 +1162,7 @@ yet.
 - [ADR-017: Record manual topic progress as a learner-owned stage](../adr/ADR-017-topic-progress-api-and-schema.md) — why `learner_topic_progress` is created without three of its documented columns, and why `stage_source` is not one of them
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — why `availability_slots.day_of_week` holds a day name rather than the documented `smallint`
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — why `study_goals` holds two typed preference columns rather than the documented `planning_preferences jsonb`
+- [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — why the plan tables' controlled columns are `varchar(32)` guarded by a `CHECK` rather than the documented `text`, and the code that reads them
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated
