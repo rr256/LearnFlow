@@ -2,7 +2,7 @@
 title: LearnFlow Docker Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-05
+last_updated: 2026-08-08
 related:
   - ../00-project-context.md
   - environments.md
@@ -64,10 +64,25 @@ is still waiting on its consumer.
 | Decision | Value |
 | --- | --- |
 | Image | `postgres:18-alpine`, pinned to a major version so a rebuild cannot silently move the local database to a new major. The version floor is owned by [database schema](../database/schema.md), which requires PostgreSQL 15 or later. |
-| Persistent data | The named volume `postgres_data`. |
+| Persistent data | The named volume `postgres_data`, mounted at `/var/lib/postgresql` — **not** `/var/lib/postgresql/data`. See the note below. |
 | Health check | `pg_isready` against the configured user and database. |
 | Published port | `127.0.0.1:5432` only, so the database is unreachable from other devices. It is published at all so a contributor can run Alembic and the integration tests from the host. |
 | Credentials | `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`, each defaulting to `learnflow`. Local development values, not secrets. |
+
+**The volume is mounted at `/var/lib/postgresql`, one level above the path most PostgreSQL Compose
+examples use.** From version 18 the official images store data in a major-version-specific
+subdirectory under that single mount — `/var/lib/postgresql/18/docker` — so that a later
+`pg_upgrade --link` can move between majors without crossing a mount-point boundary. An image of 18
+or later **refuses to start** when it finds a volume at the older `/var/lib/postgresql/data` path,
+reporting it as an "unused mount/volume" rather than risking a botched upgrade. Upstream discussion:
+[docker-library/postgres#1259](https://github.com/docker-library/postgres/pull/1259).
+
+This was found the first time the stack was ever started, on 2026-08-08: `compose.yaml` pinned
+`postgres:18-alpine` while mounting the pre-18 path, and `postgres` exited `1` on startup, taking
+`backend` and `frontend` with it through their `depends_on` conditions. **No CI check could have
+caught it** — the `containers` job validates the topology and builds the images but starts no
+container, which is precisely the limit [verification status](#verification-status) records. The
+volume was empty, so nothing was lost.
 
 The `backend` service waits for `postgres` to report healthy. That is convenience, not necessity:
 the backend creates its engine lazily and applies no schema at startup, so it boots whether or not
@@ -174,27 +189,56 @@ are well-formed.
 
 Two further limits, both still true after run `30850601752`:
 
-- **No container has been started.** CI validates and builds; it does not run `docker compose up`.
-  No health-check probe has therefore executed, no request has been served through a container, the
-  backend has never connected to the `postgres` service, and the frontend has never called the
-  backend over the Compose network. A successful `docker build` shows that an image can be produced,
-  not that the process inside it runs, serves, or reaches another service. Runtime behavior remains
-  unverified, as distinct from the build.
-- **The commands have never been run locally**, because Docker was not installed on the workstation
-  when this setup was prepared, nor when the `postgres` service was added, nor when the `frontend`
-  service was added, and it is still not installed. CI is therefore the only verification these
-  commands have ever received. Container commands are deliberately outside the canonical
-  [local quality checks](../development/coding-standards.md#local-quality-checks), which cover the
-  checks needing nothing beyond Python and Node.js; running them locally is optional and needs a
+- **CI still starts no container.** It validates and builds; it does not run `docker compose up`, so
+  no health-check probe executes there and no request is served through a container in CI. A
+  successful `docker build` shows that an image can be produced, not that the process inside it runs,
+  serves, or reaches another service. That gap is what the local run below closed, and it is still
+  open in CI.
+- **Container commands remain outside the canonical
+  [local quality checks](../development/coding-standards.md#local-quality-checks)**, which cover the
+  checks needing nothing beyond Python and Node.js. Running them locally is optional and needs a
   Docker installation.
+
+#### First local run — 2026-08-08
+
+**The stack has now been started, once, on a Windows 11 workstation with Docker Desktop 29.6.2 and
+Compose v5.3.1.** This supersedes the previous statements that no container had been started and that
+the commands had never been run locally.
+
+It found one defect immediately, which is recorded above under
+[the `postgres` service](#the-postgres-service): the volume was mounted at the pre-18
+`/var/lib/postgresql/data` while the image was pinned to `postgres:18-alpine`, so `postgres` exited
+`1` and took `backend` and `frontend` with it. With the mount corrected, the whole sequence ran.
+
+What the run demonstrated, for the first time:
+
+- `docker compose up -d` starts all three services, and **both health checks pass** —
+  `postgres` reports healthy through `pg_isready`, `backend` through `GET /health`, and `frontend`
+  through its own static `/health`.
+- The `depends_on` conditions work in both directions: they held `backend` back while `postgres` was
+  failing, and released it once `postgres` was healthy.
+- **The backend reaches `postgres` over the Compose network** by service name, and **the frontend
+  reaches `backend`** the same way — the home screen rendered the seeded study goal, which it can only
+  do by calling the API.
+- Host-side Alembic reaches the published port: all seven migrations applied against the container.
+- Both seeds and `set_study_goal` ran against it, and `GET /api/v1/curriculum/programs` returned the
+  seeded program over the published backend port.
+- **No API address appeared in the served HTML**, confirming through a container what
+  [ADR-015](../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md) decided.
+
+What it did **not** demonstrate: any behaviour under restart, upgrade, or data already in the volume.
+The volume was created empty by this run, so `pg_upgrade` across majors and the mount-boundary
+reasoning behind the corrected path are still untested in practice.
 
 The migrations themselves are verified separately and more strongly: the CI `database` job applies
 them to a real PostgreSQL service container on every pull request. That job uses a GitHub Actions
 service rather than Compose, so it exercises the schema without exercising this topology.
 
-The Milestone 1 Compose item stays unticked on two counts: no container has been started, per the
-first limit above, and the topology covers four services, three of which now exist.
-[Milestones](../roadmap/milestones.md) records the same two.
+The Milestone 1 Compose item stays unticked, but now on **one** count rather than two: the topology
+covers four services and three exist, `chromadb` still waiting on its consumer. The other count — that
+no container had been started — is discharged by
+[the first local run](#first-local-run-2026-08-08) above.
+[Milestones](../roadmap/milestones.md) records the same.
 
 ## Service Responsibilities
 
@@ -218,7 +262,7 @@ first limit above, and the topology covers four services, three of which now exi
 Use named volumes or configured local mounts for durable runtime data:
 
 ```text
-postgres_data    PostgreSQL database files
+postgres_data    PostgreSQL database files, mounted at /var/lib/postgresql
 chroma_data      ChromaDB/vector index files
 resource_storage Learner-owned PDFs and attachments, if stored through a container mount
 ```

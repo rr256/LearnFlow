@@ -121,7 +121,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-learnflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-learnflow}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Mounted at /var/lib/postgresql, not /var/lib/postgresql/data. The
+      # postgres:18+ images store data in a major-version-specific subdirectory
+      # under this single mount, so that `pg_upgrade --link` can later move
+      # between majors without crossing a mount-point boundary. An image of 18
+      # or later refuses to start when it finds a volume at the older
+      # /var/lib/postgresql/data path — see docker-library/postgres#1259.
+      - postgres_data:/var/lib/postgresql
     # Published on loopback only, so the database is not reachable from other
     # devices on the local network. It is published at all so a contributor can
     # run Alembic and the integration tests from the host.
