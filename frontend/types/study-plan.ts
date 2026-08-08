@@ -47,6 +47,20 @@ export const PLAN_ITEM_ACTION_LABELS: Record<PlanItemAction, string> = {
   review_mistakes: "Review mistakes",
 };
 
+/** The states a plan item can be in. Generation writes `planned`. */
+export type PlanItemStatus = "planned" | "completed" | "skipped" | "postponed";
+
+/**
+ * The statuses PLN-004 accepts as a target.
+ *
+ * A subset of the statuses the column holds: `skipped` and `postponed` are
+ * approved and the API does not yet accept them, so offering either would be a
+ * control that always fails.
+ */
+export const PLAN_ITEM_STATUS_CHANGES = ["planned", "completed"] as const;
+
+export type PlanItemStatusChange = (typeof PLAN_ITEM_STATUS_CHANGES)[number];
+
 /** True when a string is one of the plan types this build knows. */
 export function isPlanType(value: string): value is PlanType {
   return (PLAN_TYPES as readonly string[]).includes(value);
@@ -72,8 +86,13 @@ export interface PlanItem {
   estimated_minutes: number | null;
   /** Where the item falls in its plan, counting from 1. An order, not a score. */
   priority: number;
-  status: string;
+  status: PlanItemStatus | string;
   recommendation_reason: string | null;
+  /**
+   * When the learner marked this work done. Null unless `status` is
+   * `completed`, and cleared when an item is put back to `planned`.
+   */
+  completed_at: string | null;
 }
 
 /** One study plan. `items` is empty on a listed plan and filled on one read. */
@@ -103,3 +122,4 @@ export interface GeneratedStudyPlans {
 export type StudyPlanCollectionResponse = CollectionEnvelope<StudyPlan>;
 export type StudyPlanResponse = DataEnvelope<StudyPlan>;
 export type GenerateStudyPlanResponse = DataEnvelope<GeneratedStudyPlans>;
+export type PlanItemResponse = DataEnvelope<PlanItem>;

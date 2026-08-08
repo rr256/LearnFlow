@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-06
+last_updated: 2026-08-08
 related:
   - ../00-project-context.md
   - overview.md
@@ -17,6 +17,7 @@ related:
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
+  - ../adr/ADR-021-plan-item-completion.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -432,14 +433,31 @@ in, not which day to do it on.
 `priority` is the item's position within its plan, counting from 1. It is an **order, not a score** —
 nothing ranks one topic above another by anything except where the planning rules placed it.
 
-Every item written today carries `action_type = 'study'` and `status = 'planned'`. The other three
+Every item is *generated* with `action_type = 'study'` and `status = 'planned'`. The other three
 actions name work the product does not yet model — practice needs checkpoint quizzes, revision needs
-`revision_records`, mistake review needs `mistake_evidence` — and moving an item's status is PLN-004's
-work, which belongs to
-[FR-004](../requirements/functional.md#fr-004-plan-adaptation) and is not implemented. `status` and
-`completed_at` are created anyway: an item without a state is not a plan item, and adding the column
-once learners hold plans would mean backfilling rows whose state nobody recorded — the argument
-[ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md) made for `stage_source`.
+`revision_records`, mistake review needs `mistake_evidence` — so nothing writes one.
+
+**`status` and `completed_at` are now written**, by PLN-004, which moves an item between `planned`
+and `completed` and is contracted by
+[ADR-021](../adr/ADR-021-plan-item-completion.md). It needed no migration: both columns were created
+by `20260806_03` ahead of the code that writes them, which is the argument
+[ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md) made for `stage_source` — an item without
+a state is not a plan item, and adding the column once learners held plans would have meant
+backfilling rows whose state nobody recorded.
+
+The two move together: `completed_at` holds the instant the learner marked the item completed and is NULL
+for every other status, including an item put back to `planned`. It is written from the server's
+clock rather than from a request, so no caller can backdate work.
+
+`skipped` and `postponed` remain constrained and unwritten. PLN-004 refuses both, because postponing
+work raises the question of what it moves *to*, which is the re-planning PLN-005 does not yet do.
+
+A completed item is a record that planned work happened. It is **not** a claim that the topic is
+understood — rule 4 of the [domain model](../domain/domain-model.md#domain-rules-and-invariants) —
+so completing one writes nothing to `learner_topic_progress`, and a completion on a weekly item
+leaves a roadmap item naming the same topic `planned`. Only a plan whose `status` is `active` may
+have an item moved — see
+[PLN-004](../api/endpoints.md#pln-004-patch-apiv1plan-itemsplan_item_id) for the rule and its error.
 
 `topic_id` is nullable as approved, so a later item recommending work belonging to no single topic
 has somewhere to live. Nothing writes one today.
@@ -1087,7 +1105,9 @@ and every other column is created as approved. What the review settled:
   either would have made the chosen plan shape unstorable.
 - `plan_items.status` and `completed_at` are created although nothing writes anything but `planned`.
   They are the exception to ADR-011's ordering rule that ADR-017 established for `stage_source`: a
-  state added after learners hold plans could only be backfilled by guessing.
+  state added after learners hold plans could only be backfilled by guessing. **Both are now written**
+  by PLN-004, which arrived on 2026-08-08 needing no migration —
+  see [the review note below](#plan_items-status-review-2026-08-08).
 - Items are read one plan at a time and counted a page at a time, so no index on `topic_id` was
   needed; nothing yet asks which plans mention a topic.
 - The constraint-name length limit was checked, as the examination-schedule precedent requires: the
@@ -1099,6 +1119,33 @@ and every other column is created as approved. What the review settled:
 
 **Review inputs:** the first API contracts — PLN-001 to PLN-003 — were reviewed here. The
 revision-scheduling rules remain **pending** and are the last input outstanding for this area.
+
+#### `plan_items` status review — 2026-08-08
+
+This review covers the first code to write `plan_items.status` and `completed_at`, contracted by
+[ADR-021](../adr/ADR-021-plan-item-completion.md). **No schema change resulted, and no migration was
+written**: both columns, the `status` `CHECK`, and
+`ix_plan_items_study_plan_id_scheduled_for_status` were all created by `20260806_03`. What the
+review settled:
+
+- **The columns created ahead of their code were the right shape.** The `CHECK` already accepted
+  `completed`, and `completed_at` was already nullable and timezone-aware, so the endpoint stored what
+  the review above anticipated without altering anything. That discharges the risk ADR-011's ordering
+  rule exists to catch, in the one place ADR-017's exception was applied to this area.
+- **The application accepts fewer statuses than the column holds.** `skipped` and `postponed` pass the
+  `CHECK` and are refused by PLN-004. The constraint stays as approved: it describes what a plan item
+  may *be*, and which of those a learner may currently *ask for* is a contract rule, not a column one.
+- **`completed_at` is application-maintained, not defaulted.** No column default and no trigger sets
+  it; the use case writes the clock's instant when an item becomes `completed` and NULL when it does
+  not. A database default would have made an item completed the moment a row was touched.
+- **No index was added.** Nothing yet asks which items a learner has completed — the plan screen reads
+  one plan at a time, and the existing index already leads with `study_plan_id`.
+- **No `CHECK` ties `status` to `completed_at`.** The pairing is enforced in the application and
+  asserted by the study-plan fake. A two-column constraint was considered and not added: nothing else
+  in this schema constrains one column by another, and the pair is written by exactly one caller.
+
+**Review inputs:** the API contract PLN-004 was reviewed here. The revision-scheduling rules remain
+**pending** and are still the last input outstanding for this area.
 
 ### Progress and revision area — partial review approved 2026-08-05
 
@@ -1163,6 +1210,7 @@ yet.
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — why `availability_slots.day_of_week` holds a day name rather than the documented `smallint`
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — why `study_goals` holds two typed preference columns rather than the documented `planning_preferences jsonb`
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — why the plan tables' controlled columns are `varchar(32)` guarded by a `CHECK` rather than the documented `text`, and the code that reads them
+- [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the first code to write `plan_items.status` and `completed_at`, and why it needed no migration
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated

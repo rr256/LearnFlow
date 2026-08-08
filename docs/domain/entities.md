@@ -2,7 +2,7 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-06
+last_updated: 2026-08-08
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -12,6 +12,7 @@ related:
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
+  - ../adr/ADR-021-plan-item-completion.md
   - ../database/schema.md
 ---
 
@@ -298,6 +299,7 @@ Topic ── Learning Resource
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the availability slot entity, and why it holds minutes rather than clock times
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the planning preferences the study goal owns, and why they are attributes rather than an entity
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the study plan and plan item entities as they are persisted today
+- [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the plan item whose completion state a learner now sets, reversibly
 - [Domain model](domain-model.md)
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)

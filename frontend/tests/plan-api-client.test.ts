@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, generateStudyPlan, listStudyPlans, readStudyPlan } from "@/lib/api-client";
+import {
+  ApiError,
+  generateStudyPlan,
+  listStudyPlans,
+  readStudyPlan,
+  updatePlanItemStatus,
+} from "@/lib/api-client";
 
 function respondWith(body: unknown, status = 200): void {
   vi.stubGlobal(
@@ -43,9 +49,12 @@ const roadmap = {
       priority: 1,
       status: "planned",
       recommendation_reason: "Topic 1 of 60 in syllabus order, from Operating Systems.",
+      completed_at: null,
     },
   ],
 };
+
+const planItem = roadmap.items[0]!;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -200,5 +209,86 @@ describe("readStudyPlan (PLN-003)", () => {
     );
 
     await expect(readStudyPlan(roadmap.id)).rejects.toMatchObject({ code: "api_unreachable" });
+  });
+});
+
+describe("updatePlanItemStatus (PLN-004)", () => {
+  it("patches the item and returns it with its new status", async () => {
+    respondWith({
+      data: { ...planItem, status: "completed", completed_at: "2026-08-06T09:00:00Z" },
+    });
+
+    const item = await updatePlanItemStatus(planItem.id, "completed");
+
+    expect(requestUrl()).toMatch(new RegExp(`/api/v1/plan-items/${planItem.id}$`));
+    expect(requestInit().method).toBe("PATCH");
+    expect(JSON.parse(requestInit().body as string)).toEqual({ status: "completed" });
+    expect(item.status).toBe("completed");
+    expect(item.completed_at).toBe("2026-08-06T09:00:00Z");
+  });
+
+  it("sends only the status, so no caller can backdate work", async () => {
+    respondWith({ data: { ...planItem, status: "completed" } });
+
+    await updatePlanItemStatus(planItem.id, "completed");
+
+    expect(Object.keys(JSON.parse(requestInit().body as string))).toEqual(["status"]);
+  });
+
+  it("puts an item back and reads the cleared timestamp", async () => {
+    respondWith({ data: { ...planItem, status: "planned", completed_at: null } });
+
+    const item = await updatePlanItemStatus(planItem.id, "planned");
+
+    expect(JSON.parse(requestInit().body as string)).toEqual({ status: "planned" });
+    expect(item.completed_at).toBeNull();
+  });
+
+  it("raises a conflict when the item's plan has been superseded", async () => {
+    respondWith(
+      {
+        error: {
+          code: "conflict",
+          message: "That item belongs to a study plan that has been replaced.",
+          details: [],
+        },
+      },
+      409,
+    );
+
+    await expect(updatePlanItemStatus(planItem.id, "completed")).rejects.toMatchObject({
+      code: "conflict",
+      status: 409,
+    });
+  });
+
+  it("raises the API's own code when the item is not stored", async () => {
+    respondWith(
+      { error: { code: "not_found", message: "No plan item is stored.", details: [] } },
+      404,
+    );
+
+    await expect(updatePlanItemStatus(planItem.id, "completed")).rejects.toMatchObject({
+      code: "not_found",
+    });
+  });
+
+  it("rejects a success body without the data envelope", async () => {
+    respondWith({ status: "completed" });
+
+    await expect(updatePlanItemStatus(planItem.id, "completed")).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("reports an unreachable backend distinctly from a backend that answered", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+    );
+
+    await expect(updatePlanItemStatus(planItem.id, "completed")).rejects.toMatchObject({
+      code: "api_unreachable",
+    });
   });
 });

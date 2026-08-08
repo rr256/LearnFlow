@@ -1,10 +1,11 @@
 """SQLAlchemy implementation of the study-plan repository port.
 
-Serves PLN-001, PLN-002, and PLN-003. It maps rows to the application's plain
-records and back, and reads the curriculum rows a plan item describes.
+Serves PLN-001 to PLN-004. It maps rows to the application's plain records and
+back, and reads the curriculum rows a plan item describes.
 
 It decides nothing. Which topics belong in a plan, what order they go in, which
-day each lands on, and what replaces what are all settled above this layer
+day each lands on, what replaces what, and which status a learner may move an
+item to are all settled above this layer
 (docs/architecture/dependency-rules.md).
 
 The session's transaction is owned by the caller. Nothing here commits.
@@ -114,6 +115,11 @@ class SqlAlchemyStudyPlanRepository:
         )
         return tuple(_item_record(model) for model in models)
 
+    def find_plan_item(self, plan_item_id: uuid.UUID) -> PlanItemRecord | None:
+        """The item with this identifier, or None."""
+        model = self._session.get(PlanItem, plan_item_id)
+        return None if model is None else _item_record(model)
+
     def add_plan_item(self, record: PlanItemRecord) -> None:
         """Store a new plan item."""
         self._session.add(
@@ -127,8 +133,28 @@ class SqlAlchemyStudyPlanRepository:
                 priority=record.priority,
                 status=record.status,
                 recommendation_reason=record.recommendation_reason,
+                completed_at=record.completed_at,
             )
         )
+
+    def update_plan_item(self, record: PlanItemRecord) -> None:
+        """Overwrite the stored item identified by ``record.id``.
+
+        What the plan recommended is written back unchanged. Only `status` and
+        `completed_at` ever differ, because PLN-004 is the only caller and a
+        learner acting on a recommendation does not rewrite it.
+        """
+        model = self._session.get(PlanItem, record.id)
+        if model is None:
+            raise LookupError(f"Plan item {record.id} is not stored.")
+        model.topic_id = record.topic_id
+        model.action_type = record.action_type
+        model.scheduled_for = record.scheduled_for
+        model.estimated_minutes = record.estimated_minutes
+        model.priority = record.priority
+        model.status = record.status
+        model.recommendation_reason = record.recommendation_reason
+        model.completed_at = record.completed_at
 
     def flush(self) -> None:
         """Send pending writes to the database without ending the transaction.
@@ -223,4 +249,5 @@ def _item_record(model: PlanItem) -> PlanItemRecord:
         priority=model.priority,
         status=model.status,
         recommendation_reason=model.recommendation_reason,
+        completed_at=model.completed_at,
     )

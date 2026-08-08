@@ -4,6 +4,7 @@ import {
   describeAction,
   describeEstimate,
   groupByDay,
+  itemClassName,
   planOfType,
 } from "@/features/planner/plan";
 import type { PlanItem, StudyPlan } from "@/types/study-plan";
@@ -24,6 +25,7 @@ function item(overrides: Partial<PlanItem> = {}): PlanItem {
     priority: 1,
     status: "planned",
     recommendation_reason: "Topic 1 of 60 in syllabus order, from Operating Systems.",
+    completed_at: null,
     ...overrides,
   };
 }
@@ -123,5 +125,21 @@ describe("planOfType", () => {
 
   it("returns null when no plan of that type was generated", () => {
     expect(planOfType([plan({ plan_type: "roadmap" })], "weekly")).toBeNull();
+  });
+});
+
+describe("itemClassName", () => {
+  const styles = { item: "item", completed: "completed" };
+
+  it("marks a completed item without dropping its base class", () => {
+    expect(itemClassName(item({ status: "completed" }), styles)).toBe("item completed");
+  });
+
+  it("leaves a planned item unmarked", () => {
+    expect(itemClassName(item(), styles)).toBe("item");
+  });
+
+  it("leaves a status this build offers no control for unmarked", () => {
+    expect(itemClassName(item({ status: "skipped" }), styles)).toBe("item");
   });
 });

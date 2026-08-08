@@ -1,9 +1,10 @@
 """Input and output structures for a learner's study plans.
 
-These carry what PLN-001, PLN-002, and PLN-003 generate and read. They are
-framework-independent by design, as the other DTOs in this package are: the API
-schemas that serialise them are a separate representation, so a change to the
-HTTP contract does not reach back into the use case.
+These carry what PLN-001, PLN-002, and PLN-003 generate and read, and what
+PLN-004 moves. They are framework-independent by design, as the other DTOs in
+this package are: the API schemas that serialise them are a separate
+representation, so a change to the HTTP contract does not reach back into the use
+case.
 
 A plan is learner-owned and belongs to one study goal, so every structure here
 carries both identifiers. Nothing inbound carries a `learner_id`: the effective
@@ -17,7 +18,7 @@ is refused by the database rather than stored and trusted later.
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 PLAN_TYPES: tuple[str, ...] = ("roadmap", "monthly", "weekly", "daily")
 """The plan types `study_plans.plan_type` accepts.
@@ -48,9 +49,21 @@ the constraint holds them ready.
 PLAN_ITEM_STATUSES: tuple[str, ...] = ("planned", "completed", "skipped", "postponed")
 """The statuses `plan_items.status` accepts.
 
-Every item is written `planned` and stays there. Moving one is PLN-004's work,
-which is FR-004 and is not implemented; the column exists because a plan item
-without a state is not a plan item.
+Every item is written `planned`. PLN-004 moves one to `completed` and back again;
+`skipped` and `postponed` are approved and unwritten, and arrive with the change
+that can answer what postponing work moves it *to*, which is FR-004's re-planning
+(PLN-005). The constraint carries all four, so adding one is a use-case change
+rather than a migration.
+"""
+
+PLAN_ITEM_STATUS_CHANGES: tuple[str, ...] = ("planned", "completed")
+"""The statuses PLN-004 accepts as a target.
+
+A subset of `PLAN_ITEM_STATUSES` rather than the whole of it: this is what a
+learner may *ask for*, while the column holds what a plan item may *be*. Naming
+the two separately is what lets the endpoint refuse `skipped` and `postponed`
+with a message saying they are not built yet, rather than storing a status
+nothing produces and nothing reads.
 """
 
 ROADMAP = "roadmap"
@@ -58,6 +71,7 @@ WEEKLY = "weekly"
 ACTIVE = "active"
 SUPERSEDED = "superseded"
 PLANNED = "planned"
+COMPLETED = "completed"
 STUDY = "study"
 
 DEFAULT_SESSION_MINUTES = 60
@@ -104,6 +118,12 @@ class PlanItemDetail:
     `recommendation_reason` is the sentence FR-003 asks for — why this item, here.
     It is written when the plan is generated and never rewritten, so a superseded
     plan still explains itself in the terms that produced it.
+
+    `status` and `completed_at` are the one part of an item a learner moves, and
+    they travel together: an item is `completed` at an instant or it is not
+    completed at all. Completing an item says its planned work happened; it says
+    nothing about how well the learner understands the topic, which is rule 4 of
+    the domain model and the reason nothing here touches their learning stage.
     """
 
     id: uuid.UUID
@@ -114,6 +134,7 @@ class PlanItemDetail:
     priority: int
     status: str
     recommendation_reason: str | None
+    completed_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +201,22 @@ class PlanGenerationRequest:
     """
 
     study_goal_id: uuid.UUID
+
+
+@dataclass(frozen=True, slots=True)
+class PlanItemStatusChange:
+    """A learner moving one plan item's status (PLN-004).
+
+    The item is named in the path rather than here, and no learner is named at
+    all: the effective learner is resolved server-side, and whether the item is
+    theirs is decided by the use case.
+
+    Only the status is carried. `completed_at` is the server's record of *when*
+    the learner said so, so accepting one from a client would let a caller
+    backdate work; the use case reads it from the clock instead.
+    """
+
+    status: str
 
 
 @dataclass(frozen=True, slots=True)

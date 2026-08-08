@@ -2,7 +2,7 @@
 title: "ADR-020: Generate the Initial Study Plan Deterministically as a Roadmap and a Week"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-07
+last_updated: 2026-08-08
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -75,6 +75,38 @@ that section flagged as unverified:
 decided: the plan shape, the ordering rules, the supersede lifecycle, the contracts, and the table
 shapes are all as accepted. Two test gaps were closed with them — the study-plan fake now mirrors the
 foreign key, and the panel suite asserts an item's reason on both panels at once.
+
+## Implementation status — 2026-08-08
+
+*Note added 2026-08-08. The decision above is unchanged; this records that the two columns this record
+created without a writer now have one.*
+
+**`plan_items.status` and `plan_items.completed_at` are now written.** PLN-004 moves an item between
+`planned` and `completed`, contracted by [ADR-021](ADR-021-plan-item-completion.md). It needed **no
+migration**: both columns, the `status` `CHECK`, and
+`ix_plan_items_study_plan_id_scheduled_for_status` were created by `20260806_03` exactly as this
+record describes, and the endpoint stored what they anticipated without altering anything.
+
+**Three statements above are overtaken**, all in the same direction:
+
+- Under [Decision](#two-tables-with-controlled-values-guarded-by-a-check) — "`plan_items.status` and
+  `completed_at` are created although nothing writes anything but `planned`." The argument this record
+  made for creating them early — that "adding the column once learners have plans would mean
+  backfilling rows whose state nobody recorded" — is what has now paid off, so the sentence is
+  overtaken by its own reasoning rather than contradicted.
+- The heading [Three endpoints, all catalogued; PLN-004 and PLN-005 stay
+  unimplemented](#three-endpoints-all-catalogued-pln-004-and-pln-005-stay-unimplemented), and its
+  closing line, "PLN-004 and PLN-005 belong to FR-004 and are not implemented. Nothing here moves a
+  plan item's status." Both remain true **of this change**; PLN-004 arrived in a later one. PLN-005 is
+  still unimplemented, as are `skipped` and `postponed`.
+- Under [Consequences](#negative) — "**A weekly plan goes stale** … nothing re-plans it". Still true.
+  A learner can now record that a session happened, but nothing re-plans around what they recorded,
+  which is the same FR-004 work arriving later.
+
+**Nothing in the decision changed, and one refusal was inherited.** ADR-021 keeps this record's
+supersede lifecycle intact by refusing to move an item on a superseded plan: a plan kept because it
+"reads exactly as it was written" cannot also be written into. The plan shape, the ordering rules, the
+contracts of PLN-001 to PLN-003, and both table shapes are all as accepted.
 
 ## Context
 

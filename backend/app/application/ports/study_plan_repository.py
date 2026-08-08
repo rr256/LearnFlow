@@ -20,7 +20,7 @@ their order is `priority`, which the use case assigned, so it sorts them itself.
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Protocol
 
 from app.application.dto.study_plan import StudyPlanFilters
@@ -54,6 +54,10 @@ class PlanItemRecord:
     `topic_id` is nullable because docs/database/schema.md allows an item that
     recommends work belonging to no single topic. Nothing writes one today: every
     item this planner produces names a topic.
+
+    `completed_at` is null unless `status` is `completed`. The two are written
+    together by PLN-004 and by nothing else — generation writes `planned` and no
+    timestamp.
     """
 
     id: uuid.UUID
@@ -65,6 +69,7 @@ class PlanItemRecord:
     priority: int
     status: str
     recommendation_reason: str | None
+    completed_at: datetime | None = None
 
 
 class StudyPlanRepository(Protocol):
@@ -131,11 +136,31 @@ class StudyPlanRepository(Protocol):
         """
         ...
 
+    def find_plan_item(self, plan_item_id: uuid.UUID) -> PlanItemRecord | None:
+        """The item with this identifier, or None.
+
+        Ownership is deliberately not filtered here, as `find_study_plan` does
+        not filter it: whether the item's plan belongs to the effective learner
+        is a rule, so the use case decides it.
+        """
+        ...
+
     def add_plan_item(self, record: PlanItemRecord) -> None:
         """Store a new plan item.
 
         The item's plan must already have been sent to the store — see
         `flush` — because an item references its plan by foreign key.
+        """
+        ...
+
+    def update_plan_item(self, record: PlanItemRecord) -> None:
+        """Overwrite the stored item identified by ``record.id``.
+
+        Only `status` and `completed_at` are ever different: PLN-004 is the one
+        caller, and what a plan recommended is not rewritten by a learner acting
+        on it. The whole record is passed anyway, matching `update_study_plan`,
+        so the port stays a storage primitive rather than growing a method per
+        column.
         """
         ...
 

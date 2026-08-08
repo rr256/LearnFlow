@@ -41,6 +41,22 @@
   padding-left: var(--space-3);
 }
 
+/*
+ * A completed item stays on its day. Hiding finished work would leave the day
+ * looking undone, and the plan is a record of what it held. The change is a
+ * border, never struck-through text: "Marked completed" beside it carries the meaning
+ * in words, so nothing depends on the colour being seen.
+ */
+.completed {
+  border-left-color: var(--colour-accent);
+}
+
+.completedLabel {
+  margin: var(--space-1) 0 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 .topic {
   margin: 0;
 }

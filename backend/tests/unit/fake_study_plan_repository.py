@@ -17,6 +17,7 @@ from collections.abc import Sequence
 
 from app.application.dto.study_plan import (
     ACTIVE,
+    COMPLETED,
     PLAN_ITEM_ACTIONS,
     PLAN_ITEM_STATUSES,
     PLAN_STATUSES,
@@ -89,6 +90,9 @@ class FakeStudyPlanRepository:
     def list_plan_items(self, study_plan_id: uuid.UUID) -> tuple[PlanItemRecord, ...]:
         return tuple(item for item in self.items if item.study_plan_id == study_plan_id)
 
+    def find_plan_item(self, plan_item_id: uuid.UUID) -> PlanItemRecord | None:
+        return next((item for item in self.items if item.id == plan_item_id), None)
+
     def add_plan_item(self, record: PlanItemRecord) -> None:
         assert record.action_type in PLAN_ITEM_ACTIONS, f"{record.action_type!r} is not an action"
         assert record.status in PLAN_ITEM_STATUSES, f"{record.status!r} is not an item status"
@@ -103,6 +107,22 @@ class FakeStudyPlanRepository:
             "would refuse this item"
         )
         self.items.append(record)
+
+    def update_plan_item(self, record: PlanItemRecord) -> None:
+        assert record.status in PLAN_ITEM_STATUSES, f"{record.status!r} is not an item status"
+        # The database has no such constraint — `status` and `completed_at` are
+        # separate columns — so this guards the application rule instead: a
+        # timestamp on an item that is not completed would be a completion
+        # nothing can read back, and a completed item without one could not say
+        # when.
+        assert (record.completed_at is not None) == (record.status == COMPLETED), (
+            f"{record.status!r} and completed_at={record.completed_at!r} disagree"
+        )
+        for index, stored in enumerate(self.items):
+            if stored.id == record.id:
+                self.items[index] = record
+                return
+        raise AssertionError(f"plan item {record.id} is not stored")
 
     def flush(self) -> None:
         """Make every plan added so far visible to the items that reference it."""

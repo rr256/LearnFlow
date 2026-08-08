@@ -1,4 +1,4 @@
-"""Tests for generating and reading a learner's study plans.
+"""Tests for generating, reading, and updating a learner's study plans.
 
 Every port is a fake and the clock is fixed, so each assertion is about a rule
 rather than about a database or the day the suite happens to run.
@@ -13,11 +13,14 @@ from app.application.dto.availability import WEEKDAYS
 from app.application.dto.planning_preferences import PlanningPreferences
 from app.application.dto.study_plan import (
     ACTIVE,
+    COMPLETED,
     DEFAULT_SESSION_MINUTES,
+    PLANNED,
     ROADMAP,
     SUPERSEDED,
     WEEKLY,
     PlanGenerationRequest,
+    PlanItemStatusChange,
     StudyPlanFilters,
 )
 from app.application.ports.curriculum_seed_repository import TopicRelationshipRecord
@@ -25,14 +28,17 @@ from app.application.ports.study_goal_repository import StudyGoalRecord
 from app.application.use_cases.local_learner import AmbiguousLocalLearnerError
 from app.application.use_cases.manage_study_plans import (
     LearnerNotSetUpError,
+    PlanItemNotFoundError,
+    PlanItemNotOnActivePlanError,
     StudyGoalNotFoundError,
     StudyPlanIntegrityError,
     StudyPlanNotFoundError,
     UnknownPlanFilterError,
+    UnknownPlanItemStatusError,
 )
 from tests.unit.fake_learner_repository import learner
 from tests.unit.fake_topic_progress_repository import progress
-from tests.unit.planning_fixtures import TODAY, Planning
+from tests.unit.planning_fixtures import DEFAULT_INSTANT, TODAY, Planning
 from tests.unit.schedule_fixtures import gate_2027_periods
 
 
@@ -462,6 +468,195 @@ def test_a_learner_who_does_not_exist_yet_has_no_plans():
 
     assert page.plans == ()
     assert page.total == 0
+
+
+# -- completing a plan item -------------------------------------------------
+
+
+def test_marking_an_item_completed_records_the_status_and_the_time():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+
+    updated = planning.planner().record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    assert updated.status == COMPLETED
+    assert updated.completed_at == DEFAULT_INSTANT
+
+
+def test_completing_an_item_can_be_undone_and_clears_the_time():
+    """A learner who marked the wrong line must be able to put it back. Nothing
+    here treats finishing work as a verdict, so nothing here is one-way."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+    planner.record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    reverted = planner.record_item_status(item.id, PlanItemStatusChange(status=PLANNED))
+
+    assert reverted.status == PLANNED
+    assert reverted.completed_at is None
+
+
+def test_recording_the_status_an_item_already_holds_writes_nothing():
+    """A repeated form submission must not fail on its second attempt."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+    first = planner.record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    planning.clock.instant = datetime(2026, 8, 7, 9, 0, tzinfo=UTC)
+    again = planner.record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    assert again.status == COMPLETED
+    assert again.completed_at == first.completed_at
+
+
+@pytest.mark.parametrize("status", ["skipped", "postponed", "finished", ""])
+def test_a_status_this_endpoint_does_not_accept_is_refused(status):
+    """`skipped` and `postponed` are approved statuses that nothing writes yet;
+    they are refused here rather than stored where nothing reads them."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+
+    with pytest.raises(UnknownPlanItemStatusError):
+        planning.planner().record_item_status(item.id, PlanItemStatusChange(status=status))
+
+
+def test_a_refused_status_does_not_name_the_value_it_rejected():
+    """docs/api/conventions.md keeps the rejected input out of the envelope."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+
+    with pytest.raises(UnknownPlanItemStatusError) as raised:
+        planning.planner().record_item_status(
+            item.id, PlanItemStatusChange(status="definitely-not-a-status")
+        )
+
+    assert "definitely-not-a-status" not in str(raised.value)
+
+
+def test_completing_one_item_moves_no_other_item():
+    """The same topic sits on the roadmap and in the week. Completing the week's
+    session says that session happened; it does not decide anything about the
+    roadmap, and nothing here infers a link the schema does not store."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    session = weekly(generated).items[0]
+    planner = planning.planner()
+
+    planner.record_item_status(session.id, PlanItemStatusChange(status=COMPLETED))
+
+    roadmap_items = planner.read(roadmap(generated).id).items
+    assert [item.status for item in roadmap_items] == [PLANNED, PLANNED, PLANNED]
+    assert all(item.completed_at is None for item in roadmap_items)
+
+
+def test_completing_an_item_records_no_learning_stage():
+    """Rule 4 of the domain model: a plan item records whether planned work
+    happened, not that the topic is understood."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+
+    planning.planner().record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    assert planning.progress.records == []
+
+
+def test_completing_an_item_leaves_the_plan_and_its_reason_alone():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    week = weekly(generated)
+    item = week.items[0]
+    planner = planning.planner()
+
+    planner.record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    stored = planner.read(week.id)
+    assert stored.status == ACTIVE
+    assert stored.generation_reason == week.generation_reason
+    completed = next(line for line in stored.items if line.id == item.id)
+    assert completed.recommendation_reason == item.recommendation_reason
+    assert completed.priority == item.priority
+    assert completed.scheduled_for == item.scheduled_for
+
+
+def test_a_completed_item_reads_back_completed_through_its_plan():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    week = weekly(generated)
+    item = week.items[0]
+    planner = planning.planner()
+
+    planner.record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    statuses = {line.id: line.status for line in planner.read(week.id).items}
+    assert statuses[item.id] == COMPLETED
+
+
+def test_completing_an_item_on_a_superseded_plan_is_refused():
+    """A superseded plan is kept because it reads exactly as it was written.
+    Writing into one would change the record whose worth is that it does not."""
+    planning = Planning(availability={"thursday": 120})
+    first = planning.generate()
+    item = weekly(first).items[0]
+    planning.generate()
+
+    with pytest.raises(PlanItemNotOnActivePlanError):
+        planning.planner().record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+
+def test_completing_another_learner_s_item_reports_it_as_missing():
+    """Not forbidden: saying "that exists but is not yours" would confirm a
+    record the caller may not read."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planning.learners.learners = [learner(display_name="Someone else")]
+
+    with pytest.raises(PlanItemNotFoundError):
+        planning.planner().record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+
+def test_completing_an_item_that_is_not_stored_is_refused():
+    with pytest.raises(PlanItemNotFoundError):
+        Planning().planner().record_item_status(
+            uuid.uuid4(), PlanItemStatusChange(status=COMPLETED)
+        )
+
+
+def test_completing_an_item_with_no_learner_stored_is_refused():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planning.learners.learners = []
+
+    with pytest.raises(LearnerNotSetUpError):
+        planning.planner().record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+
+def test_completing_an_item_with_more_than_one_learner_stored_is_refused():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planning.learners.add_learner(learner(display_name="Second"))
+
+    with pytest.raises(AmbiguousLocalLearnerError):
+        planning.planner().record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+
+def test_a_status_is_validated_before_the_item_is_looked_up():
+    """A caller who has misread the contract is told so, whichever item they
+    named -- the order `record_stage` applies to an unknown learning stage."""
+    with pytest.raises(UnknownPlanItemStatusError):
+        Planning().planner().record_item_status(
+            uuid.uuid4(), PlanItemStatusChange(status="skipped")
+        )
 
 
 # -- refusals ---------------------------------------------------------------

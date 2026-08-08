@@ -35,6 +35,7 @@ from app.presentation.api.routes import (
     examination_schedules,
     health,
     learner,
+    plan_items,
     progress,
     study_goals,
     study_plans,
@@ -109,5 +110,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(learner.router)
     app.include_router(study_goals.router)
     app.include_router(study_plans.router)
+    app.include_router(plan_items.router)
     app.include_router(progress.router)
     return app

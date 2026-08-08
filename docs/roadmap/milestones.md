@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-06
+last_updated: 2026-08-08
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -21,6 +21,7 @@ related:
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
+  - ../adr/ADR-021-plan-item-completion.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -221,9 +222,11 @@ Part of this milestone arrived early, with the change that completed
 [FR-002](../requirements/functional.md#fr-002-initial-learner-setup)'s last acceptance criterion: a
 learner cannot "start with no previous progress and still receive an initial plan" without a planner,
 so PLN-001 to PLN-003, `study_plans`, `plan_items`, and the deterministic planning rules were
-delivered in Milestone 2's closing change. They are checked below with their evidence. What remains
-is plan *adaptation* and revision — the parts that need a learner to act on a plan and the product to
-respond.
+delivered in Milestone 2's closing change. They are checked below with their evidence. The first half
+of plan adaptation has since followed: PLN-004 lets a learner act on a plan by marking an item
+completed.
+What remains is the product *responding* — skipping and postponing work, re-planning around it, and
+revision.
 
 ### Definition of Done
 
@@ -238,8 +241,16 @@ respond.
   and carries `action_type = 'study'`; `practice`, `revise`, and `review_mistakes` are constrained and
   unwritten, each waiting on the work it names — checkpoint quizzes, revision records, and mistake
   evidence.
-- [ ] Learner can complete, skip, or postpone plan items. PLN-004 is not implemented.
-  `plan_items.status` exists and holds `planned` on every row.
+- [ ] Learner can complete, skip, or postpone plan items. **Completing is delivered**: PLN-004 marks an
+  item `completed` and puts it back to `planned`, writing `plan_items.status` and `completed_at` —
+  the two columns `20260806_03` created ahead of the code that writes them, so this needed no
+  migration. The `/plan` screen offers the control beside every item on both panels, and a completed
+  item keeps its place rather than disappearing. Completing is reversible, as a learning stage is, and
+  it moves that item alone: no plan, no other item, and no learning stage, because a plan item records
+  whether planned work happened rather than that a topic is understood. Nothing is counted and nothing
+  is re-planned. **Skipping and postponing remain**, refused with a `422` rather than stored, because
+  postponing work raises the question of what it moves *to* — which is the re-planning in the item
+  below. Contracted by [ADR-021](../adr/ADR-021-plan-item-completion.md).
 - [ ] Learner can request plan adaptation after missed work or availability changes. PLN-005 is not
   implemented. Generating again through PLN-001 supersedes the previous plans rather than adapting
   them, which is a replacement rather than the trade-off-aware re-plan FR-004 asks for.
@@ -256,8 +267,18 @@ respond.
 - [ ] Core planning/revision rules have deterministic tests. **Covered for planning**: unit tests over
   the domain rules with no database or clock, unit tests over the use case against fakes with a fixed
   clock, API tests over the real application factory, and PostgreSQL integration tests that generate a
-  plan over the seeded GATE CSE curriculum and read it back. The revision half arrives with the records
-  that have it, so the item stays open.
+  plan over the seeded GATE CSE curriculum and read it back. **Completion is covered on three of
+  those levels** — use case, API, and PostgreSQL integration — plus a frontend panel test. There is
+  deliberately **no domain-level test** for it: deciding which status a learner may ask for is a
+  contract check rather than a planning calculation, and `study_planning.py` is untouched. Those tests
+  assert that completing one item moves no other row, that a refused status writes nothing, and that
+  neither panel can drop the control. It was also exercised end to end against the production
+  standalone frontend with a contract-shaped stub API and **JavaScript disabled**: 25 checks passed,
+  covering a no-JavaScript completion reaching PLN-004 exactly once, the undo, the `409` for an item
+  on a superseded plan, that only the item acted on moved, and that no API address appeared in any
+  served page or client script. **One verification is outstanding**, recorded in
+  [ADR-021](../adr/ADR-021-plan-item-completion.md): the PostgreSQL integration tests have not been
+  run locally, because that workstation has no PostgreSQL; the CI `database` job runs them. The revision half arrives with the records that have it, so the item stays open.
 
 ## Milestone 4 — Resources, RAG, and Mentor
 
@@ -346,4 +367,5 @@ respond.
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the contract and the migration behind the weekly availability item in Milestone 2
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the contract and the migration behind the planning-preference half of the same item
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the contracts, the migration, and the planning rules behind the Milestone 3 items delivered early
+- [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the contract behind the completion half of the plan-item item above, and why skipping and postponing wait
 - [Deferred ideas](future-ideas.md)
