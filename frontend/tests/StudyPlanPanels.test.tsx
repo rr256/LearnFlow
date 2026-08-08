@@ -1,8 +1,14 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PlanWeek } from "@/features/planner/PlanWeek";
-import { StudyRoadmap } from "@/features/planner/StudyRoadmap";
+// Both panels render the status control, which imports the server action and
+// pulls in `next/cache`. A component test exercises the markup, not the write
+// path; the action's own parsing is covered by tests/plan-submission.test.ts.
+vi.mock("@/features/planner/actions", () => ({ savePlanItemStatus: vi.fn() }));
+
+const { PlanWeek } = await import("@/features/planner/PlanWeek");
+const { StudyRoadmap } = await import("@/features/planner/StudyRoadmap");
+
 import type { PlanItem, StudyPlan } from "@/types/study-plan";
 
 afterEach(cleanup);
@@ -23,6 +29,7 @@ function item(overrides: Partial<PlanItem> = {}): PlanItem {
     priority: 1,
     status: "planned",
     recommendation_reason: "Topic 1 of 60 in syllabus order, from Operating Systems.",
+    completed_at: null,
     ...overrides,
   };
 }
@@ -201,5 +208,84 @@ describe("every panel that shows an item shows its reason", () => {
     render(<Panel plan={reasoned} />);
 
     expect(screen.getByText("Because it is next.")).toBeDefined();
+  });
+});
+
+/**
+ * A plan item is a plan item, whichever panel it appears on, so the completion
+ * behaviour is asserted over both at once. Asserting it on one would let a
+ * rewrite of the other drop the control silently -- which is exactly how the
+ * missing reason on `PlanWeek` reached CI.
+ */
+describe("every panel that shows an item lets the learner complete it", () => {
+  const panels: [string, typeof StudyRoadmap][] = [
+    ["StudyRoadmap", StudyRoadmap],
+    ["PlanWeek", PlanWeek],
+  ];
+
+  function withStatus(status: string) {
+    return plan({
+      item_count: 1,
+      items: [item({ scheduled_for: "2026-08-10", status })],
+    });
+  }
+
+  it.each(panels)("%s offers a control naming the topic on a planned item", (_name, Panel) => {
+    render(<Panel plan={withStatus("planned")} />);
+
+    expect(screen.getByRole("button", { name: /Mark completed.*CPU scheduling/ })).toBeDefined();
+  });
+
+  it.each(panels)("%s says in words that an item is completed", (_name, Panel) => {
+    /* Never colour alone: the meaning has to survive a monochrome screen. */
+    render(<Panel plan={withStatus("completed")} />);
+
+    expect(screen.getByText("Marked completed")).toBeDefined();
+  });
+
+  it.each(panels)("%s offers a way to undo a completed item", (_name, Panel) => {
+    /* A learner who marked the wrong line must not be stuck with it. */
+    render(<Panel plan={withStatus("completed")} />);
+
+    expect(
+      screen.getByRole("button", { name: /Return to planned.*CPU scheduling/ }),
+    ).toBeDefined();
+  });
+
+  it.each(panels)("%s keeps a completed item in place rather than hiding it", (_name, Panel) => {
+    /* The plan is a record of what it held. Hiding finished work would leave a
+     * roadmap short of a topic and a day looking undone. */
+    render(<Panel plan={withStatus("completed")} />);
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.getByText(/Topic 1 of 60 in syllabus order/)).toBeDefined();
+  });
+
+  it.each(panels)("%s shows no control for a status the API will not accept", (_name, Panel) => {
+    /* `skipped` and `postponed` are stored values PLN-004 does not accept, so a
+     * button offering either would be one that always fails. */
+    render(<Panel plan={withStatus("skipped")} />);
+
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByText(/Status: skipped/)).toBeDefined();
+  });
+
+  it.each(panels)("%s counts nothing about what is done", (_name, Panel) => {
+    /* ADR-020: nothing totals a day, a week, or a plan. Counting completions
+     * would be the same second opinion in a new form. */
+    render(
+      <Panel
+        plan={plan({
+          item_count: 2,
+          items: [
+            item({ id: "a", scheduled_for: "2026-08-10", status: "completed" }),
+            item({ id: "b", scheduled_for: "2026-08-10", priority: 2 }),
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/1 of 2 completed/i)).toBeNull();
+    expect(screen.queryByText(/\d+%/)).toBeNull();
   });
 });

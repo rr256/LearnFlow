@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-06
+last_updated: 2026-08-08
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -19,6 +19,7 @@ related:
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
+  - ../adr/ADR-021-plan-item-completion.md
   - ../domain/terminology.md
 ---
 
@@ -247,8 +248,8 @@ app/
 │       └── page.module.css
 ├── plan/
 │   ├── page.tsx                            # PLN-002 and PLN-003 over the learner's
-│   │                                       # active goal; writes PLN-001 via a
-│   │                                       # server action
+│   │                                       # active goal; writes PLN-001 and PLN-004
+│   │                                       # via server actions
 │   └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
@@ -324,12 +325,13 @@ onboarded — and it writes nothing.
 | `onboarding/availability.ts` | Reads the availability form into the request it makes, owns that form's state shape, and writes a saved week the way a learner reads it. Plain functions, for the same reason. |
 | `onboarding/preferences.ts` | Writes a saved planning preference the way a learner reads it. Presentation only — the reading half lives in `submission.ts`, because preferences ride on the goal write that form already makes. Plain functions, for the same reason, and used by the home panel as well as the setup screen. |
 | `onboarding/actions.ts` | The `"use server"` module holding both write paths. |
-| `planner/StudyRoadmap.tsx` | The order the plan works through the curriculum, read-only, with its CSS Module. Every item shows the reason it is where it is, which is what FR-003 asks a recommendation to carry. It reorders nothing: ordering is a planning rule. |
-| `planner/PlanWeek.tsx` | The work the plan places on each of the coming days, read-only, with its CSS Module. A day with no work is absent rather than shown empty, and no day or week is totalled. |
+| `planner/StudyRoadmap.tsx` | The order the plan works through the curriculum, with its CSS Module. Every item shows the reason it is where it is, which is what FR-003 asks a recommendation to carry, and carries the control that marks it completed. It reorders nothing: ordering is a planning rule, and a completed item keeps its place. |
+| `planner/PlanWeek.tsx` | The work the plan places on each of the coming days, with its CSS Module, each item carrying the control that marks it completed. A day with no work is absent rather than shown empty; no day or week is totalled, and nothing counts how much of one is done. |
 | `planner/GeneratePlanForm.tsx` | The button that asks for a plan, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says plainly that rebuilding keeps the previous plan. |
-| `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. |
-| `planner/submission.ts` | Reads the generate-plan form into the request it makes, and owns that form's state shape. It reads no preference: a plan is built from what the learner stored, never from what a client sends. |
-| `planner/actions.ts` | The `"use server"` module holding the generate path. |
+| `planner/PlanItemStatusControl.tsx` | The control beside one plan item that marks it completed or returns it to `planned`, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. An item in a status PLN-004 does not accept is shown with no control rather than as something a learner can move. |
+| `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. It also decides the classes an item carries, so both panels mark a completed one the same way. |
+| `planner/submission.ts` | Reads the planner's two forms into the requests they make, and owns their state shapes. It reads no preference and no completion time: a plan is built from what the learner stored, and *when* they marked an item completed is the server's record, never what a client sends. |
+| `planner/actions.ts` | The `"use server"` module holding the generate and mark-completed paths. |
 | `progress/TopicStageControl.tsx` | The learning-stage control beside one trackable topic, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. |
 | `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
 | `progress/submission.ts` | Reads the stage form into the request it makes, and owns the control's state shape. |
@@ -489,6 +491,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the contract the availability form and panel implement, and why a week is saved all at once
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the contract the preference controls and panel implement, and why they need no form or action of their own
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — why the planning rules live in the domain layer, and the contracts the `planner/` module implements
+- [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the plan-item control the planner feature gained, and the write path it shares with generation
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

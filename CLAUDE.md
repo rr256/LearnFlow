@@ -79,8 +79,10 @@ planning preferences by
 [`docs/adr/ADR-019-study-goal-planning-preferences.md`](docs/adr/ADR-019-study-goal-planning-preferences.md),
 the topic-progress endpoints by
 [`docs/adr/ADR-017-topic-progress-api-and-schema.md`](docs/adr/ADR-017-topic-progress-api-and-schema.md),
-and study-plan generation by
-[`docs/adr/ADR-020-initial-study-plan-generation.md`](docs/adr/ADR-020-initial-study-plan-generation.md).
+study-plan generation by
+[`docs/adr/ADR-020-initial-study-plan-generation.md`](docs/adr/ADR-020-initial-study-plan-generation.md),
+and plan-item completion by
+[`docs/adr/ADR-021-plan-item-completion.md`](docs/adr/ADR-021-plan-item-completion.md).
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -115,8 +117,18 @@ back exactly as written. An unset session length becomes 60 minutes *chosen by t
 as its own* — nothing is stored against the goal. A recorded stage explains an item and never reorders
 one; `priority` is an order, not a score; and nothing totals a day, a week, or a plan.
 `prerequisites_first` currently yields syllabus order, because the curated curriculum stores no
-prerequisite link, and the plan says so. PLN-004 and PLN-005 — completing an item and re-planning —
-belong to FR-004 and are not implemented.
+prerequisite link, and the plan says so.
+
+**PLN-004 marks one plan item completed and returns it to `planned`** — the first delivery against
+FR-004. It accepts
+`completed` and `planned` only, refusing `skipped` and `postponed` with a `422` because postponing
+work has nowhere to move it to until PLN-005 exists. Completing is reversible and clears
+`completed_at`, which is read from the server's clock rather than accepted from a caller. **Only the
+named item moves**: no plan, no other item — including a roadmap item naming the same topic — and no
+learning stage, because a plan item records whether planned work happened, not that a topic is
+understood. Nothing is counted and nothing is re-planned. An item on a superseded plan is refused with
+`409`. It needed **no migration**: `plan_items.status` and `completed_at` were created ahead of it.
+PLN-005 — re-planning after missed work — is not implemented.
 
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
@@ -137,7 +149,7 @@ server action, so the browser never reaches the backend, no CORS configuration e
 also reads the learner's recorded stages over PRG-002 and writes one over PRG-004, a `/setup` screen
 over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-005, a home screen at `/` that reads the
 saved setup back over LRN-001, GOAL-002, and EXM-001, and a `/plan` screen that reads the current plan
-over PLN-002 and PLN-003 and generates one over PLN-001. A goal response carries the saved study week
+over PLN-002 and PLN-003, generates one over PLN-001, and marks an item completed over PLN-004. A goal response carries the saved study week
 and the saved planning preferences, so neither setup nor home calls anything extra to show them.
 
 The frontend serves its own static `/health` for the container health check, distinct from the

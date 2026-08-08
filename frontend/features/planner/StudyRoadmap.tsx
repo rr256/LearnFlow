@@ -1,5 +1,6 @@
 import styles from "@/features/planner/StudyRoadmap.module.css";
-import { describeEstimate } from "@/features/planner/plan";
+import { PlanItemStatusControl } from "@/features/planner/PlanItemStatusControl";
+import { describeEstimate, itemClassName } from "@/features/planner/plan";
 import type { StudyPlan } from "@/types/study-plan";
 
 interface StudyRoadmapProps {
@@ -20,7 +21,12 @@ interface StudyRoadmapProps {
  * it rather than in today's.
  *
  * Nothing here is a score. `priority` is a position in a list, and a topic
- * further down is later, not worse.
+ * further down is later, not worse, and nothing counts how many are done.
+ *
+ * Each item carries the control that marks it completed, as the week's items do:
+ * a plan item is a plan item, and a learner working ahead of their week should not
+ * have to wait for it to appear there. Completing one moves that item alone —
+ * the same topic on the week's plan is a separate item and stays as it was.
  */
 export function StudyRoadmap({ plan }: StudyRoadmapProps) {
   if (!plan) {
@@ -48,7 +54,7 @@ export function StudyRoadmap({ plan }: StudyRoadmapProps) {
       ) : (
         <ol className={styles.items}>
           {plan.items.map((item) => (
-            <li className={styles.item} key={item.id}>
+            <li className={itemClassName(item, styles)} key={item.id}>
               <p className={styles.topic}>
                 {item.topic ? item.topic.name : "A topic that is no longer stored"}
               </p>
@@ -56,9 +62,17 @@ export function StudyRoadmap({ plan }: StudyRoadmapProps) {
                 {item.topic ? `${item.topic.subject_name} · ` : ""}
                 {describeEstimate(item.estimated_minutes)}
               </p>
+              {item.status === "completed" ? (
+                <p className={styles.completedLabel}>Marked completed</p>
+              ) : null}
               {item.recommendation_reason ? (
                 <p className={styles.why}>{item.recommendation_reason}</p>
               ) : null}
+              <PlanItemStatusControl
+                planItemId={item.id}
+                status={item.status}
+                topicName={item.topic ? item.topic.name : "this item"}
+              />
             </li>
           ))}
         </ol>

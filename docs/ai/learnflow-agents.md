@@ -2,10 +2,11 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-06
+last_updated: 2026-08-08
 related:
   - ../00-project-context.md
   - ../adr/ADR-020-initial-study-plan-generation.md
+  - ../adr/ADR-021-plan-item-completion.md
   - ../api/endpoints.md
   - ../architecture/overview.md
   - ../architecture/clean-architecture.md
@@ -86,12 +87,20 @@ Core scheduling and prioritization are deterministic application rules. An AI pr
 ### What is built today
 
 The planner is partly implemented, by
-[ADR-020](../adr/ADR-020-initial-study-plan-generation.md) and PLN-001 to PLN-003; see
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md) and PLN-001 to PLN-003, together with
+PLN-004, which records that a plan item was completed —
+[ADR-021](../adr/ADR-021-plan-item-completion.md). See
 [planning endpoints](../api/endpoints.md#planning-endpoints).
 
 Of the inputs above, four are read: the active study goal and its horizon, the availability slots and
-planning preferences, the curriculum structure and topic relationships, and topic progress. Revision
-records, pending plan items, and assessment evidence are not — none of them is stored yet.
+planning preferences, the curriculum structure and topic relationships, and topic progress. The other
+two are not, for different reasons. **Revision records and assessment evidence are not stored at
+all** — `revision_records`, `quiz_attempts`, and `mistake_evidence` do not exist. **Pending plan items
+are stored and are not read**: `plan_items` has existed since ADR-020 and now carries a real state, a
+learner having marked items completed through PLN-004, but generation still plans from the curriculum
+and the goal rather than from what an earlier plan left outstanding. Planning around outstanding work
+is re-planning, which is [FR-004](../requirements/functional.md#fr-004-plan-adaptation)'s PLN-005 and
+does not exist.
 
 Of the outputs, two exist: study plans and plan items, and a transparent rationale, which every plan
 and every item carries as prose written when the plan was generated. The third — a warning when
@@ -277,6 +286,7 @@ The orchestrator selects a workflow; it does not become a second place for busin
 | --- | --- |
 | Mark material completed / set learning stage | Yes; explicit learner action. |
 | Create/accept plan recommendations | Learner can view and adjust; application records plan state transparently. |
+| Mark a plan item completed | Yes; explicit learner action, and reversible — the learner can return the item to `planned`. It records that planned work happened and writes no learning stage, so nothing infers understanding from it. |
 | Save quiz attempt | Yes; learner submits the attempt. |
 | Save external test result | Yes; learner enters/confirms data. |
 | Mark revision complete | Yes; explicit learner action. |
@@ -295,6 +305,7 @@ Potential future needs include long-running workflow checkpoints, multi-agent ha
 - [Domain terminology](../domain/terminology.md) — the canonical vocabulary for stages, evidence, and focus areas used here
 - [RAG overview](../rag/overview.md)
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the part of the Planner Service that is built, and the rules it follows
+- [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the learner control that records a plan item completed, and why it writes no learning stage
 - [API endpoint catalog](../api/endpoints.md) — the planning endpoints that serve it
 - [Functional requirements](../requirements/functional.md)
 - [Engineering AI workflow](engineering-ai.md) — the engineering assistant subagents, a separate sense of “agent” from the product agents defined here

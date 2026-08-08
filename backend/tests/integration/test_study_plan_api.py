@@ -3,8 +3,9 @@
 The API tests prove the contract against fakes. These prove the part a fake
 cannot: that the SQL the repository emits reads and writes the rows the seeds
 actually created, that the `CHECK` constraints agree with the rules the use case
-enforces, and that a plan generated over HTTP is stored and reads back — all
-through the same composition root the running backend uses.
+enforces, and that a plan generated over HTTP is stored, reads back, and can have
+one of its items marked completed — all through the same composition root the
+running backend uses.
 
 The curriculum is the bundled GATE CSE one, so the plan generated here is over
 real syllabus rows: 60 trackable topics across 11 subjects. That is what makes
@@ -36,6 +37,7 @@ CURRICULUM = "/api/v1/curriculum"
 LEARNER = "/api/v1/learner"
 GOALS = "/api/v1/study-goals"
 PLANS = "/api/v1/study-plans"
+ITEMS = "/api/v1/plan-items"
 SEED_TIME = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
 
 
@@ -97,6 +99,13 @@ def goal(client: TestClient) -> dict:
 
 def generate(client: TestClient, goal: dict):
     return client.post(PLANS + "/generate", json={"study_goal_id": goal["id"]})
+
+
+def first_weekly_item(client: TestClient, goal: dict) -> dict:
+    """The first dated item of a freshly generated plan."""
+    created = generate(client, goal).json()["data"]
+    week = next(plan for plan in created["plans"] if plan["plan_type"] == "weekly")
+    return week["items"][0]
 
 
 def test_a_plan_is_generated_over_the_seeded_curriculum(client: TestClient, goal: dict):
@@ -285,3 +294,83 @@ def test_a_failed_generation_writes_nothing(client: TestClient, goal: dict, sess
 
     assert generate(client, goal).status_code == 201
     assert session.scalar(select(func.count()).select_from(StudyPlan)) == 2
+
+
+def test_marking_an_item_done_is_stored(client: TestClient, goal: dict, session: Session):
+    """PLN-004 against real rows: the status and the timestamp both land, and the
+    `CHECK` on `plan_items.status` accepts what the use case wrote."""
+    item = first_weekly_item(client, goal)
+
+    response = client.patch(f"{ITEMS}/{item['id']}", json={"status": "completed"})
+
+    assert response.status_code == 200, response.text
+    session.expire_all()
+    stored = session.get(PlanItem, uuid.UUID(item["id"]))
+    assert stored is not None
+    assert stored.status == "completed"
+    assert stored.completed_at is not None
+
+
+def test_putting_an_item_back_clears_the_stored_timestamp(
+    client: TestClient, goal: dict, session: Session
+):
+    item = first_weekly_item(client, goal)
+    client.patch(f"{ITEMS}/{item['id']}", json={"status": "completed"})
+
+    client.patch(f"{ITEMS}/{item['id']}", json={"status": "planned"})
+
+    session.expire_all()
+    stored = session.get(PlanItem, uuid.UUID(item["id"]))
+    assert stored is not None
+    assert stored.status == "planned"
+    assert stored.completed_at is None
+
+
+def test_completing_one_item_moves_no_other_row(client: TestClient, goal: dict, session: Session):
+    """Sixty-odd items are stored across the two plans. Exactly one moves."""
+    item = first_weekly_item(client, goal)
+
+    client.patch(f"{ITEMS}/{item['id']}", json={"status": "completed"})
+
+    session.expire_all()
+    completed = session.scalars(select(PlanItem).where(PlanItem.status == "completed")).all()
+    assert [record.id for record in completed] == [uuid.UUID(item["id"])]
+
+
+def test_a_completion_reads_back_over_the_read_endpoint(client: TestClient, goal: dict):
+    """The sequence the plan screen performs against a real database."""
+    created = generate(client, goal).json()["data"]
+    week = next(plan for plan in created["plans"] if plan["plan_type"] == "weekly")
+    item = week["items"][0]
+    client.patch(f"{ITEMS}/{item['id']}", json={"status": "completed"})
+
+    read = client.get(f"{PLANS}/{week['id']}").json()["data"]
+
+    line = next(entry for entry in read["items"] if entry["id"] == item["id"])
+    assert line["status"] == "completed"
+    assert line["completed_at"]
+
+
+def test_completing_an_item_on_a_superseded_plan_is_refused(client: TestClient, goal: dict):
+    item = first_weekly_item(client, goal)
+    generate(client, goal)
+
+    response = client.patch(f"{ITEMS}/{item['id']}", json={"status": "completed"})
+
+    assert response.status_code == 409, response.text
+
+
+def test_a_refused_completion_writes_nothing(client: TestClient, goal: dict, session: Session):
+    """A status the endpoint does not accept must not reach the database, where
+    the `CHECK` would take it: `skipped` is a valid column value and an invalid
+    request."""
+    item = first_weekly_item(client, goal)
+
+    refused = client.patch(f"{ITEMS}/{item['id']}", json={"status": "skipped"})
+
+    assert refused.status_code == 422
+    session.expire_all()
+    stored = session.get(PlanItem, uuid.UUID(item["id"]))
+    assert stored is not None
+    assert stored.status == "planned"
+    assert stored.completed_at is None

@@ -242,12 +242,12 @@ def test_reading_a_plan_with_a_malformed_identifier_is_422(planning_client):
     assert response.json()["error"]["code"] == "validation_error"
 
 
-def test_a_plan_item_is_never_completed_by_these_endpoints(planning_client, planning):
-    """Moving an item is PLN-004's work, which belongs to FR-004 and is not
-    implemented. Nothing here writes any other status."""
+def test_a_generated_item_is_always_planned_and_never_completed(planning_client, planning):
+    """Generation writes one status. Moving an item is PLN-004's work, and it is
+    addressed at its own path -- these endpoints do not move one."""
     payload = generate(planning_client, planning.goal.id).json()
 
-    assert all(
-        item["status"] == "planned" for plan in payload["data"]["plans"] for item in plan["items"]
-    )
+    items = [item for plan in payload["data"]["plans"] for item in plan["items"]]
+    assert all(item["status"] == "planned" for item in items)
+    assert all(item["completed_at"] is None for item in items)
     assert planning_client.patch(f"{PLANS}/{uuid.uuid4()}").status_code in (404, 405)

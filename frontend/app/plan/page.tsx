@@ -139,8 +139,9 @@ export default function PlanPage() {
       <h1>Your study plan</h1>
       <p className={styles.lead}>
         Built from your curriculum, the date you are working toward, the study time you saved, and
-        how you said you want to study. Marking work done, monthly and daily views, and re-planning
-        after a missed week are not built yet.
+        how you said you want to study. Mark each item completed as you go, and change your mind
+        whenever you like — nothing is re-planned around it. Monthly and daily views, and re-planning
+        after a missed week, are not built yet.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading your study plan…</p>}>

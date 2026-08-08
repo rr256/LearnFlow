@@ -2,7 +2,7 @@
 title: LearnFlow Domain Model
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-06
+last_updated: 2026-08-08
 related:
   - ../00-project-context.md
   - entities.md
@@ -12,6 +12,7 @@ related:
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
+  - ../adr/ADR-021-plan-item-completion.md
   - ../requirements/functional.md
   - ../database/schema.md
 ---
@@ -281,6 +282,7 @@ This document intentionally does not define database fields, table names, API en
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the availability slot concept, and why nothing totals a week
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the planning preference concept, and why an unset preference is not a default
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — what a generated plan contains today, and why it is deterministic and self-explaining
+- [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the first code to write a plan item's status, and why it writes no learning stage with it
 - [Functional requirements](../requirements/functional.md)
 - [Domain entities](entities.md)
 - [Terminology](terminology.md)

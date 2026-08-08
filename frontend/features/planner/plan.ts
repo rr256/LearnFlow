@@ -91,3 +91,23 @@ export function describeAction(action: string): string {
 export function planOfType(plans: StudyPlan[], planType: string): StudyPlan | null {
   return plans.find((plan) => plan.plan_type === planType) ?? null;
 }
+
+/**
+ * The classes both panels give one item, marked when the learner has done it.
+ *
+ * `styles` is a CSS Module, whose generated type is an index signature rather
+ * than a named shape, so each class is read by key and falls back to nothing.
+ * A missing class is a stylesheet that no longer defines it, which should leave
+ * the item unstyled rather than render the word `undefined` into an attribute.
+ *
+ * Only `completed` is marked. `skipped` and `postponed` are stored values
+ * nothing writes, and styling a state the product cannot reach would be a claim
+ * about what the plan holds.
+ */
+export function itemClassName(item: PlanItem, styles: Readonly<Record<string, string>>): string {
+  const base = styles.item ?? "";
+  if (item.status !== "completed") {
+    return base;
+  }
+  return `${base} ${styles.completed ?? ""}`.trim();
+}

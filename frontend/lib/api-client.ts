@@ -33,6 +33,9 @@ import type {
 import type {
   GenerateStudyPlanResponse,
   GeneratedStudyPlans,
+  PlanItem,
+  PlanItemResponse,
+  PlanItemStatusChange,
   StudyPlan,
   StudyPlanCollectionResponse,
   StudyPlanResponse,
@@ -532,4 +535,33 @@ export async function readStudyPlan(studyPlanId: string): Promise<StudyPlan> {
     );
   }
   return (body as StudyPlanResponse).data;
+}
+
+/**
+ * PLN-004 -- mark one plan item done, or put it back.
+ *
+ * Only `planned` and `completed` are accepted. Sending the status an item
+ * already holds is accepted and changes nothing, so a repeated submission does
+ * not fail.
+ *
+ * Nothing else moves: no other item changes and no plan is re-planned. Marking
+ * work done is a statement that it happened, not a claim about the topic.
+ *
+ * @throws ApiError with `isNotFound` when no such item is stored or it is not
+ *   the local learner's, or `isConflict` when its plan has been superseded.
+ */
+export async function updatePlanItemStatus(
+  planItemId: string,
+  status: PlanItemStatusChange,
+): Promise<PlanItem> {
+  const body = await requestJson(`/api/v1/plan-items/${encodeURIComponent(planItemId)}`, {
+    method: "PATCH",
+    body: { status },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed plan item.", null);
+  }
+  return (body as PlanItemResponse).data;
 }

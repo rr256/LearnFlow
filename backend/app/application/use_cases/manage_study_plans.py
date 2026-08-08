@@ -1,4 +1,4 @@
-"""Generate and read a learner's study plans (PLN-001 to PLN-003).
+"""Generate, read, and update a learner's study plans (PLN-001 to PLN-004).
 
 This is the first code that *consumes* what learner setup records. Availability,
 planning preferences, and recorded learning stages have all been stored and read
@@ -23,8 +23,14 @@ a superseded plan still explains itself in the terms that produced it.
 across the goal's horizon without dating anything, and a `weekly` plan places the
 first of those topics onto the next seven days using the saved availability. The
 roadmap answers "in what order", the week answers "what now". Monthly and daily
-plans, plan-item completion, and re-planning after missed work are FR-003 and
-FR-004 work that Milestone 3 continues.
+plans, and re-planning after missed work, are FR-003 and FR-004 work that
+Milestone 3 continues.
+
+**Completing a plan item moves that item and nothing else.** PLN-004 writes an item's
+`status` and `completed_at`, and touches no plan, no other item, and no topic
+progress. Completing planned work is a statement that it happened, not a claim
+about how well the learner understands the topic — rule 4 of the domain model —
+and re-planning around what was completed is FR-004's work, which this is not.
 
 **Generating again supersedes rather than refuses.** The goal's active plans
 become `superseded` and a new pair is written, so the learner's plan history stays
@@ -53,7 +59,9 @@ from app.application.dto.availability import WEEKDAYS
 from app.application.dto.planning_preferences import PlanningPreferences
 from app.application.dto.study_plan import (
     ACTIVE,
+    COMPLETED,
     DEFAULT_SESSION_MINUTES,
+    PLAN_ITEM_STATUS_CHANGES,
     PLAN_STATUSES,
     PLAN_TYPES,
     PLAN_WEEK_DAYS,
@@ -65,6 +73,7 @@ from app.application.dto.study_plan import (
     GeneratedStudyPlans,
     PlanGenerationRequest,
     PlanItemDetail,
+    PlanItemStatusChange,
     PlanItemTopic,
     StudyPlanDetail,
     StudyPlanFilters,
@@ -159,6 +168,23 @@ class StudyGoalNotFoundError(StudyPlanManagementError):
 
 class StudyPlanNotFoundError(StudyPlanManagementError):
     """No plan with the requested identifier belongs to the local learner."""
+
+
+class PlanItemNotFoundError(StudyPlanManagementError):
+    """No item with the requested identifier belongs to the local learner."""
+
+
+class UnknownPlanItemStatusError(StudyPlanManagementError):
+    """A learner asked to move an item to a status PLN-004 does not accept."""
+
+
+class PlanItemNotOnActivePlanError(StudyPlanManagementError):
+    """The item belongs to a plan that has been superseded.
+
+    A superseded plan is kept precisely so it still reads exactly as it was
+    written (ADR-020). Writing into one would change a record whose worth is that
+    it does not change, so the learner is pointed at their current plan instead.
+    """
 
 
 class UnknownPlanFilterError(StudyPlanManagementError):
@@ -430,6 +456,104 @@ class ManageStudyPlans:
             item_count=len(items),
             items=self._describe(items, curriculum_version_id=goal.curriculum_version_id),
         )
+
+    def record_item_status(
+        self, plan_item_id: uuid.UUID, change: PlanItemStatusChange
+    ) -> PlanItemDetail:
+        """Mark one of the learner's plan items completed, or return it to planned.
+
+        The caller owns the transaction: this method writes through the
+        repository but never commits.
+
+        **Only the item moves.** Its `status` and `completed_at` are written and
+        nothing else is: not the plan, not another item naming the same topic,
+        and not the learner's topic progress. A completed item records that
+        planned work happened, which is not a claim that the topic is understood
+        (rule 4 of the domain model), and nothing re-plans around it — that is
+        PLN-005 and does not exist.
+
+        **Completing is reversible.** A learner who marked the wrong line can put
+        it back to `planned`, which clears the timestamp. Nothing here treats
+        completion as a verdict, and a mis-tap that could not be undone would be
+        one.
+
+        **Recording the status an item already holds is accepted and writes
+        nothing**, as PRG-004 does: a repeated form submission must not fail on
+        its second attempt.
+
+        Raises:
+            UnknownPlanItemStatusError: The status is not one PLN-004 accepts.
+            LearnerNotSetUpError: No learner exists to own the item.
+            PlanItemNotFoundError: No such item is stored, or its plan belongs to
+                another learner.
+            PlanItemNotOnActivePlanError: Its plan has been superseded.
+            StudyPlanIntegrityError: The item's plan is not stored.
+            AmbiguousLocalLearnerError: More than one learner is stored.
+        """
+        if change.status not in PLAN_ITEM_STATUS_CHANGES:
+            # The rejected value is deliberately not repeated back, which
+            # docs/api/conventions.md keeps out of the error envelope. Naming
+            # what is accepted is what a caller needs, and saying that skipping
+            # and postponing are not built yet keeps a client from reading their
+            # absence as a typo.
+            raise UnknownPlanItemStatusError(
+                "A plan item can be marked "
+                f"{' or '.join(PLAN_ITEM_STATUS_CHANGES)}. Skipping and postponing work are "
+                "not built yet."
+            )
+
+        learner = resolve_local_learner(self._learners)
+        if learner is None:
+            raise LearnerNotSetUpError(
+                "No learner profile exists yet. Complete setup before completing a plan item."
+            )
+
+        item = self._plans.find_plan_item(plan_item_id)
+        if item is None:
+            raise PlanItemNotFoundError(f"No plan item is stored with identifier {plan_item_id}.")
+        plan = self._plans.find_study_plan(item.study_plan_id)
+        if plan is None:
+            raise StudyPlanIntegrityError(
+                f"Plan item {item.id} references study plan {item.study_plan_id}, "
+                "which is not stored."
+            )
+        # An item on somebody else's plan is reported as missing rather than
+        # forbidden, the rule `_require_own_goal` follows: saying "that exists
+        # but is not yours" would confirm a record the caller may not read.
+        if plan.learner_id != learner.id:
+            raise PlanItemNotFoundError(f"No plan item is stored with identifier {plan_item_id}.")
+        if plan.status != ACTIVE:
+            raise PlanItemNotOnActivePlanError(
+                "That item belongs to a study plan that has been replaced. It is kept as a "
+                "record of what was planned, so it cannot be changed; mark the work done on "
+                "your current plan instead."
+            )
+
+        if item.status != change.status:
+            item = PlanItemRecord(
+                id=item.id,
+                study_plan_id=item.study_plan_id,
+                topic_id=item.topic_id,
+                action_type=item.action_type,
+                scheduled_for=item.scheduled_for,
+                estimated_minutes=item.estimated_minutes,
+                priority=item.priority,
+                status=change.status,
+                recommendation_reason=item.recommendation_reason,
+                # Read from the clock rather than accepted from the caller, so
+                # nobody can backdate work, and cleared on the way back so a
+                # `planned` item never carries a completion instant.
+                completed_at=self._clock.now() if change.status == COMPLETED else None,
+            )
+            self._plans.update_plan_item(item)
+
+        goal = self._goals.find_study_goal(plan.study_goal_id)
+        if goal is None:
+            raise StudyPlanIntegrityError(
+                f"Study plan {plan.id} references study goal {plan.study_goal_id}, "
+                "which is not stored."
+            )
+        return self._describe([item], curriculum_version_id=goal.curriculum_version_id)[0]
 
     def _require_own_goal(
         self, study_goal_id: uuid.UUID, learner: LearnerRecord
@@ -988,4 +1112,5 @@ def _item_detail(
         priority=record.priority,
         status=record.status,
         recommendation_reason=record.recommendation_reason,
+        completed_at=record.completed_at,
     )

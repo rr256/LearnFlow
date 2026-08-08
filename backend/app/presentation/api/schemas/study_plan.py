@@ -1,4 +1,4 @@
-"""Request and response schemas for the study-plan endpoints (PLN-001 to PLN-003).
+"""Request and response schemas for the study-plan endpoints (PLN-001 to PLN-004).
 
 No request accepts a `learner_id`: the effective learner is resolved server-side
 (docs/api/conventions.md). Generation names the *goal* to plan for, because a
@@ -17,18 +17,20 @@ large a listed plan is.
 """
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.application.dto.study_plan import (
     PLAN_ITEM_ACTIONS,
+    PLAN_ITEM_STATUS_CHANGES,
     PLAN_ITEM_STATUSES,
     PLAN_STATUSES,
     PLAN_TYPES,
     GeneratedStudyPlans,
     PlanGenerationRequest,
     PlanItemDetail,
+    PlanItemStatusChange,
     PlanItemTopic,
     StudyPlanDetail,
     StudyPlanPage,
@@ -85,9 +87,20 @@ class PlanItemSchema(BaseModel):
             "nothing here ranks one topic above another by anything but position."
         )
     )
-    status: str = Field(description=f"One of: {', '.join(PLAN_ITEM_STATUSES)}.")
+    status: str = Field(
+        description=(
+            f"One of: {', '.join(PLAN_ITEM_STATUSES)}. Generation writes `planned`; PLN-004 "
+            "moves an item between `planned` and `completed`."
+        )
+    )
     recommendation_reason: str | None = Field(
         description="Why this item is here, as written when the plan was generated."
+    )
+    completed_at: datetime | None = Field(
+        description=(
+            "When the learner marked this item completed. Null unless `status` is `completed`, "
+            "and cleared when an item is put back to `planned`."
+        )
     )
 
     @classmethod
@@ -102,6 +115,7 @@ class PlanItemSchema(BaseModel):
             priority=item.priority,
             status=item.status,
             recommendation_reason=item.recommendation_reason,
+            completed_at=item.completed_at,
         )
 
 
@@ -240,3 +254,36 @@ class GenerateStudyPlanResponse(BaseModel):
     """
 
     data: GeneratedStudyPlansSchema
+
+
+class UpdatePlanItemRequest(BaseModel):
+    """A learner marking one plan item completed, or returning it to planned (PLN-004).
+
+    Only the status is accepted. `completed_at` is the server's record of when
+    the learner said so, so taking one from a client would let a caller backdate
+    work; an unknown field is rejected rather than ignored, as generation
+    rejects one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str = Field(
+        description=(
+            f"One of: {', '.join(PLAN_ITEM_STATUS_CHANGES)}. `skipped` and `postponed` are "
+            "approved statuses that this endpoint does not yet accept."
+        )
+    )
+
+    def to_change(self) -> PlanItemStatusChange:
+        """Map the request onto the application's status-change structure."""
+        return PlanItemStatusChange(status=self.status)
+
+
+class PlanItemResponse(BaseModel):
+    """One plan item, under the documented `data` envelope.
+
+    The whole item is returned rather than the status alone, so a client can
+    re-render the line it just changed without reading the plan back.
+    """
+
+    data: PlanItemSchema

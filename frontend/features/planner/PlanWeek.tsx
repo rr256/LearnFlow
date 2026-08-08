@@ -1,5 +1,6 @@
 import styles from "@/features/planner/PlanWeek.module.css";
-import { describeAction, describeEstimate, groupByDay } from "@/features/planner/plan";
+import { PlanItemStatusControl } from "@/features/planner/PlanItemStatusControl";
+import { describeAction, describeEstimate, groupByDay, itemClassName } from "@/features/planner/plan";
 import type { StudyPlan } from "@/types/study-plan";
 
 interface PlanWeekProps {
@@ -20,9 +21,15 @@ interface PlanWeekProps {
  * the panel they act on daily — a dated item without its reason would be an
  * instruction rather than a recommendation.
  *
- * No day is totalled and no week is added up. Turning a plan into an hours figure
- * would be a second opinion about the learner's time, formed here rather than by
- * the planner that has the trade-offs in view.
+ * No day is totalled and no week is added up, and nothing counts how much of a
+ * day is done. Turning a plan into a figure would be a second opinion about the
+ * learner's time or their progress, formed here rather than by the planner that
+ * has the trade-offs in view.
+ *
+ * Each item carries the control that marks it completed, which is the panel a
+ * learner acts on daily. A completed item stays where it is rather than moving or
+ * disappearing: the plan says what the day held, and hiding what was finished
+ * would leave the day looking undone.
  */
 export function PlanWeek({ plan }: PlanWeekProps) {
   const days = groupByDay(plan);
@@ -48,7 +55,7 @@ export function PlanWeek({ plan }: PlanWeekProps) {
             <h3 className={styles.date}>{day.on}</h3>
             <ul className={styles.items}>
               {day.items.map((item) => (
-                <li className={styles.item} key={item.id}>
+                <li className={itemClassName(item, styles)} key={item.id}>
                   <p className={styles.topic}>
                     <span className={styles.action}>{describeAction(item.action_type)}</span>{" "}
                     {item.topic ? item.topic.name : "A topic that is no longer stored"}
@@ -57,9 +64,17 @@ export function PlanWeek({ plan }: PlanWeekProps) {
                     {item.topic ? `${item.topic.subject_name} · ` : ""}
                     {describeEstimate(item.estimated_minutes)}
                   </p>
+                  {item.status === "completed" ? (
+                    <p className={styles.completedLabel}>Marked completed</p>
+                  ) : null}
                   {item.recommendation_reason ? (
                     <p className={styles.why}>{item.recommendation_reason}</p>
                   ) : null}
+                  <PlanItemStatusControl
+                    planItemId={item.id}
+                    status={item.status}
+                    topicName={item.topic ? item.topic.name : "this item"}
+                  />
                 </li>
               ))}
             </ul>

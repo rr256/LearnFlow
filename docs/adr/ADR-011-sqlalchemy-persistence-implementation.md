@@ -2,7 +2,7 @@
 title: "ADR-011: Implement PostgreSQL Persistence Synchronously and Migrate Per Milestone"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-06
+last_updated: 2026-08-08
 related:
   - ADR-020-initial-study-plan-generation.md
   - ../00-project-context.md
@@ -20,6 +20,7 @@ related:
   - ../deployment/environments.md
   - ../deployment/ci-cd.md
   - ../architecture/decisions.md
+  - ADR-021-plan-item-completion.md
 ---
 
 # ADR-011: Implement PostgreSQL Persistence Synchronously and Migrate Per Milestone
@@ -187,6 +188,33 @@ Two further points of fact, neither altering the decision:
   `learner_topic_progress.stage_source` under ADR-017 and the planning preferences under ADR-019. It
   is created although nothing writes anything but `planned`, for the reason ADR-017 gave: a state
   added after learners hold plans could only be backfilled by guessing.
+
+**The one open item is still the one open item**: numeric precision for score columns, in tables that
+do not exist.
+
+*Note added 2026-08-08. The decision below is unchanged; this records the discharge of the third
+ordering-rule exception the note above created.*
+
+**The third exception is discharged, and it cost no migration.** PLN-004 now writes
+`plan_items.status` and `plan_items.completed_at`, moving an item between `planned` and `completed`.
+Both columns, the `status` `CHECK`, and `ix_plan_items_study_plan_id_scheduled_for_status` were
+created by `20260806_03`; the endpoint stored what they anticipated and **altered nothing**.
+[ADR-021](ADR-021-plan-item-completion.md) records the decision.
+
+**One statement above is overtaken**: "`plan_items.status` … is created although nothing writes
+anything but `planned`." It is still the record of why the column arrived before its code, and that
+argument now has its result — the columns were the right shape when the code came, so no row had to be
+backfilled by guessing. Of the three recorded exceptions, this is the first to be closed;
+`learner_topic_progress.stage_source` and the planning preferences each remain as their notes describe.
+
+Two points of fact, neither altering the decision:
+
+- **The `CHECK` is deliberately wider than the endpoint.** `skipped` and `postponed` pass it and
+  PLN-004 refuses them. That is the validated-text rule working as intended: the constraint says what
+  a plan item may *be*, and which of those a learner may currently *ask for* is a contract rule.
+- **No constraint ties `status` to `completed_at`.** The pairing is an application rule, as
+  [schema.md](../database/schema.md#plan_items-status-review-2026-08-08) records; nothing else in this
+  schema constrains one column by another.
 
 **The one open item is still the one open item**: numeric precision for score columns, in tables that
 do not exist.
