@@ -2,7 +2,7 @@
 title: "ADR-020: Generate the Initial Study Plan Deterministically as a Roadmap and a Week"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-08
+last_updated: 2026-08-09
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -13,6 +13,8 @@ related:
   - ADR-017-topic-progress-api-and-schema.md
   - ADR-018-weekly-availability-slots.md
   - ADR-019-study-goal-planning-preferences.md
+  - ADR-021-plan-item-completion.md
+  - ADR-022-plan-adaptation.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -107,6 +109,39 @@ record describes, and the endpoint stored what they anticipated without altering
 supersede lifecycle intact by refusing to move an item on a superseded plan: a plan kept because it
 "reads exactly as it was written" cannot also be written into. The plan shape, the ordering rules, the
 contracts of PLN-001 to PLN-003, and both table shapes are all as accepted.
+
+## Implementation status — 2026-08-09
+
+*Note added 2026-08-09. The decision above is unchanged; this records that the staleness this record
+named as its own worst consequence now has a remedy.*
+
+**A weekly plan can now be rebuilt around what happened to it.** PLN-005 supersedes a goal's active
+plans and writes a new pair from the topics that remain, contracted by
+[ADR-022](ADR-022-plan-adaptation.md), which is **proposed rather than accepted**. It reuses this
+record's rules exactly — the same ordering, the same session placement, the same horizon and session
+length — differing only in which topics go in. It needed **no migration**.
+
+**Three statements above are overtaken:**
+
+- Under [Consequences](#negative) — "**A weekly plan goes stale.** It covers seven days from the day
+  it was generated, and nothing re-plans it: a learner who misses a week must generate again, which is
+  FR-004's work arriving later." That work has arrived. The plan still goes stale on its own; what has
+  changed is that the learner now has something better than regenerating to do about it.
+- The [2026-08-08 note](#implementation-status-2026-08-08) above — "PLN-005 is still unimplemented, as
+  are `skipped` and `postponed`." PLN-005 is implemented and `postponed` is written. **`skipped`
+  remains unwritten.**
+- The same note's "**A weekly plan goes stale** … **Still true.** A learner can now record that a
+  session happened, but nothing re-plans around what they recorded." Something now does.
+
+**One statement is *not* overtaken**, and is worth naming because a reader may expect it to be: under
+[Decision](#generating-again-supersedes-it-never-refuses-and-never-deletes), "**PLN-001 accepts only a
+goal identifier**" and generating again re-plans every topic. That is unchanged. Generation still
+plans the whole curriculum; only adaptation leaves out what is done, which is why the two are separate
+endpoints rather than one with a flag.
+
+**Nothing in the decision changed.** The plan shape, the two pure rules, the supersede lifecycle, the
+contracts of PLN-001 to PLN-003, and both table shapes are all as accepted. The domain module gained a
+third rule beside the two this record placed there.
 
 ## Context
 
@@ -542,4 +577,6 @@ calculations". Creating the folder when its first file needs it is that document
 - [LearnFlow product agents](../ai/learnflow-agents.md) — the planner service's inputs, outputs, and deterministic rule
 - [Repository and folder structure](../development/folder-structure.md) — where the domain module and the planner feature live
 - [Delivery milestones](../roadmap/milestones.md) — the Milestone 2 criterion this completes and the Milestone 3 work it starts
+- [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](ADR-021-plan-item-completion.md) — the first code to write the `status` and `completed_at` columns this record created
+- [ADR-022: Adapt a study plan by rebuilding it around what happened](ADR-022-plan-adaptation.md) — the re-planning that answers the stale-week consequence above, reusing these rules
 - [Architecture decision register](../architecture/decisions.md) — DEC-032

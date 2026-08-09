@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-08
+last_updated: 2026-08-09
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -20,6 +20,7 @@ related:
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
+  - ../adr/ADR-022-plan-adaptation.md
   - ../domain/terminology.md
 ---
 
@@ -133,7 +134,7 @@ records onto these values rather than the other way round.
 
 | Path | Responsibility |
 | --- | --- |
-| `study_planning.py` | The two deterministic rules a study plan is made of: what order the topics are worked through, and which day each session lands on. Pure functions over plain values — no clock, no session, no configuration — which is what makes a plan replayable and exhaustively testable rather than merely observable. It knows nothing of day *names*, learning stages, or storage; a capacity arrives as a date and a number of minutes. See [ADR-020](../adr/ADR-020-initial-study-plan-generation.md). |
+| `study_planning.py` | The deterministic rules a study plan is made of: what order the topics are worked through, which day each session lands on, and — since ADR-022 — what makes an item overdue. Pure functions over plain values — no clock, no session, no configuration — which is what makes a plan replayable and exhaustively testable rather than merely observable. It knows nothing of day *names*, learning stages, or storage; a capacity arrives as a date and a number of minutes. See [ADR-020](../adr/ADR-020-initial-study-plan-generation.md) and [ADR-022](../adr/ADR-022-plan-adaptation.md). |
 
 The package exists from the change that first needed it, which is the folder-creation rule below.
 
@@ -330,8 +331,9 @@ onboarded — and it writes nothing.
 | `planner/GeneratePlanForm.tsx` | The button that asks for a plan, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says plainly that rebuilding keeps the previous plan. |
 | `planner/PlanItemStatusControl.tsx` | The control beside one plan item that marks it completed or returns it to `planned`, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. An item in a status PLN-004 does not accept is shown with no control rather than as something a learner can move. |
 | `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. It also decides the classes an item carries, so both panels mark a completed one the same way. |
-| `planner/submission.ts` | Reads the planner's two forms into the requests they make, and owns their state shapes. It reads no preference and no completion time: a plan is built from what the learner stored, and *when* they marked an item completed is the server's record, never what a client sends. |
-| `planner/actions.ts` | The `"use server"` module holding the generate and mark-completed paths. |
+| `planner/submission.ts` | Reads the planner's three forms into the requests they make, and owns their state shapes. It reads no preference and no completion time: a plan is built from what the learner stored, and *when* they marked an item completed is the server's record, never what a client sends. |
+| `planner/AdaptPlanForm.tsx` | The button that asks for the plan to be rebuilt around what happened, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says what adapting will do — what is dropped, what is carried forward, and that the old plan is kept — before it is pressed, and it is rendered only when a plan exists. |
+| `planner/actions.ts` | The `"use server"` module holding the generate, mark-completed, and adapt paths. |
 | `progress/TopicStageControl.tsx` | The learning-stage control beside one trackable topic, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. |
 | `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
 | `progress/submission.ts` | Reads the stage form into the request it makes, and owns the control's state shape. |
@@ -492,6 +494,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the contract the preference controls and panel implement, and why they need no form or action of their own
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — why the planning rules live in the domain layer, and the contracts the `planner/` module implements
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the plan-item control the planner feature gained, and the write path it shares with generation
+- [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the adapt control, and the third rule in the domain layer
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

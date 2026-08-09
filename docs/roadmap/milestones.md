@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-08
+last_updated: 2026-08-09
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -22,6 +22,7 @@ related:
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
+  - ../adr/ADR-022-plan-adaptation.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -200,8 +201,10 @@ remain.
   and verify the constraints. Exercised end to end against the production standalone frontend with a
   contract-shaped stub API — a no-JavaScript submission created a stage, a second updated it, the
   saved stage and its next action read back, and no API address appeared in any served page or client
-  script. **The integration tests have not been run against a live database locally** — that
-  workstation has no PostgreSQL, so they skip; the CI `database` job runs them. The remaining
+  script. **The integration tests were not run against a live database locally when this item
+  was delivered** — that workstation then had no PostgreSQL, so they skipped and the CI `database` job
+  was their only run. They have since been run locally, on 2026-08-09; see the planning-test item in
+  Milestone 3 below. The remaining
   transitions arrive with the records that have them.
 - [x] Learner receives an initial study plan with no previous progress. PLN-001 generates a roadmap
   over every trackable topic and a plan for the coming week, from the curriculum, the goal's horizon,
@@ -223,10 +226,11 @@ Part of this milestone arrived early, with the change that completed
 learner cannot "start with no previous progress and still receive an initial plan" without a planner,
 so PLN-001 to PLN-003, `study_plans`, `plan_items`, and the deterministic planning rules were
 delivered in Milestone 2's closing change. They are checked below with their evidence. The first half
-of plan adaptation has since followed: PLN-004 lets a learner act on a plan by marking an item
-completed.
-What remains is the product *responding* — skipping and postponing work, re-planning around it, and
-revision.
+of plan adaptation has since followed, and then the second: PLN-004 lets a learner mark an item
+completed, and PLN-005 rebuilds the plan around what they have and have not done — leaving out what is
+finished and carrying forward what was missed.
+What remains is letting a learner *skip* an item outright, saying whether their week can reach their
+horizon, and revision.
 
 ### Definition of Done
 
@@ -241,19 +245,26 @@ revision.
   and carries `action_type = 'study'`; `practice`, `revise`, and `review_mistakes` are constrained and
   unwritten, each waiting on the work it names — checkpoint quizzes, revision records, and mistake
   evidence.
-- [ ] Learner can complete, skip, or postpone plan items. **Completing is delivered**: PLN-004 marks an
+- [ ] Learner can complete, skip, or postpone plan items. **Completing and postponing are delivered**: PLN-004 marks an
   item `completed` and puts it back to `planned`, writing `plan_items.status` and `completed_at` —
   the two columns `20260806_03` created ahead of the code that writes them, so this needed no
   migration. The `/plan` screen offers the control beside every item on both panels, and a completed
   item keeps its place rather than disappearing. Completing is reversible, as a learning stage is, and
   it moves that item alone: no plan, no other item, and no learning stage, because a plan item records
   whether planned work happened rather than that a topic is understood. Nothing is counted and nothing
-  is re-planned. **Skipping and postponing remain**, refused with a `422` rather than stored, because
-  postponing work raises the question of what it moves *to* — which is the re-planning in the item
-  below. Contracted by [ADR-021](../adr/ADR-021-plan-item-completion.md).
-- [ ] Learner can request plan adaptation after missed work or availability changes. PLN-005 is not
-  implemented. Generating again through PLN-001 supersedes the previous plans rather than adapting
-  them, which is a replacement rather than the trade-off-aware re-plan FR-004 asks for.
+  is re-planned. **Postponing is now written by PLN-005** rather than by a learner: adaptation marks
+  work whose day passed as `postponed` and re-places it, which is the answer to what postponing moves
+  work *to*. **Skipping remains**, refused with a `422`, because nothing yet lets a learner abandon a
+  topic outright. Contracted by [ADR-021](../adr/ADR-021-plan-item-completion.md) and
+  [ADR-022](../adr/ADR-022-plan-adaptation.md).
+- [x] Learner can request plan adaptation after missed work or availability changes. **Done**:
+  PLN-005 rebuilds a goal's active plans around what happened. A topic with a completed session
+  anywhere on the goal is not planned again; work whose day passed with the task undone is marked
+  `postponed` on the plan being set aside and re-placed on the new one. The learner asks — nothing
+  adapts on its own. It supersedes as generation does, uses the same ordering and placement rules,
+  and needed **no migration**. Contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md), which is
+  proposed and awaiting acceptance. What FR-004's third criterion asks for — reporting that the
+  learner's week cannot reach their horizon — is still not built, and is the item below.
 - [ ] Revision records are generated, listed, and updateable by learner action. `revision_records`
   does not exist; nothing is built.
 - [x] Planning works with deterministic rules when Ollama is unavailable. No AI provider is involved
@@ -261,9 +272,10 @@ revision.
   the two rules that decide it — topic order and session placement — are pure functions in
   `backend/app/domain/study_planning.py`.
 - [ ] Insufficient-time trade-offs are visible rather than hidden. Partly: a plan states what it was
-  built from, what the planner chose for itself, and when no week could be scheduled. What it does not
-  yet say is whether the saved week can reach the horizon at all — that judgement belongs with the
-  adaptation work above.
+  built from, what the planner chose for itself, when no week could be scheduled, and — since PLN-005 —
+  how many topics remain and how much was carried forward. What it still does not say is whether the
+  saved week can reach the horizon at all. That is FR-004's third acceptance criterion and the last
+  part of it unbuilt; adaptation narrowed the gap without closing it.
 - [ ] Core planning/revision rules have deterministic tests. **Covered for planning**: unit tests over
   the domain rules with no database or clock, unit tests over the use case against fakes with a fixed
   clock, API tests over the real application factory, and PostgreSQL integration tests that generate a
@@ -276,9 +288,15 @@ revision.
   standalone frontend with a contract-shaped stub API and **JavaScript disabled**: 25 checks passed,
   covering a no-JavaScript completion reaching PLN-004 exactly once, the undo, the `409` for an item
   on a superseded plan, that only the item acted on moved, and that no API address appeared in any
-  served page or client script. **One verification is outstanding**, recorded in
-  [ADR-021](../adr/ADR-021-plan-item-completion.md): the PostgreSQL integration tests have not been
-  run locally, because that workstation has no PostgreSQL; the CI `database` job runs them. The revision half arrives with the records that have it, so the item stays open.
+  served page or client script. **Adaptation is covered on the same
+  levels**, with a pure domain test for what makes an item overdue added beside them.
+
+  **The PostgreSQL integration tests have now been run locally**, for the first time in this
+  repository's history — the verification ADR-021 recorded as outstanding is discharged. Docker
+  Compose works since [the first local run](../deployment/docker.md#first-local-run-2026-08-08), so a
+  disposable `learnflow_test` database was created beside the development one and the whole suite ran
+  green: **923 passed, none skipped**. The revision half arrives with the records that have it, so the
+  item stays open.
 
 ## Milestone 4 — Resources, RAG, and Mentor
 
@@ -368,4 +386,5 @@ revision.
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the contract and the migration behind the planning-preference half of the same item
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the contracts, the migration, and the planning rules behind the Milestone 3 items delivered early
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the contract behind the completion half of the plan-item item above, and why skipping and postponing wait
+- [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the contract behind the adaptation item above, and the first write of `postponed`
 - [Deferred ideas](future-ideas.md)

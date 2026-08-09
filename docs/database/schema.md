@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-08
+last_updated: 2026-08-09
 related:
   - ../00-project-context.md
   - overview.md
@@ -18,6 +18,7 @@ related:
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
+  - ../adr/ADR-022-plan-adaptation.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -400,7 +401,7 @@ worth keeping.
 first approved: the required index leads on `learner_id`, so a learner's plans are reachable without
 joining through their goals.
 
-Generation writes `active` and moves what it replaces to `superseded`, which is the lifecycle rule
+Generation and adaptation both write `active` and move what they replace to `superseded`, which is the lifecycle rule
 [below](#referential-integrity-and-lifecycle-notes). `draft` and `archived` are constrained and
 unused: nothing proposes a plan before adopting it, and nothing files one away by hand.
 
@@ -449,8 +450,14 @@ The two move together: `completed_at` holds the instant the learner marked the i
 for every other status, including an item put back to `planned`. It is written from the server's
 clock rather than from a request, so no caller can backdate work.
 
-`skipped` and `postponed` remain constrained and unwritten. PLN-004 refuses both, because postponing
-work raises the question of what it moves *to*, which is the re-planning PLN-005 does not yet do.
+**`postponed` is now written**, by PLN-005. When adaptation supersedes a plan, an item whose day has
+passed with the work undone is marked `postponed` on the plan being set aside, and its topic is
+re-placed on the plan that replaces it — which is the answer to what postponing moves work *to*. That
+needed no migration either: the `CHECK` has accepted the value since this table was created. See
+[ADR-022](../adr/ADR-022-plan-adaptation.md).
+
+`skipped` remains constrained and unwritten. Nothing yet lets a learner abandon a topic outright.
+See [the review note below](#plan_items-adaptation-review-2026-08-09).
 
 A completed item is a record that planned work happened. It is **not** a claim that the topic is
 understood — rule 4 of the [domain model](../domain/domain-model.md#domain-rules-and-invariants) —
@@ -1147,6 +1154,32 @@ review settled:
 **Review inputs:** the API contract PLN-004 was reviewed here. The revision-scheduling rules remain
 **pending** and are still the last input outstanding for this area.
 
+#### `plan_items` adaptation review — 2026-08-09
+
+This review covers the first code to write `plan_items.status = 'postponed'`, contracted by
+[ADR-022](../adr/ADR-022-plan-adaptation.md). **No schema change resulted, and no migration was
+written**: the `CHECK` created by `20260806_03` already accepted the value. What the review settled:
+
+- **The status is written on the plan being superseded, not on the new one.** A superseded plan's
+  items therefore end in one of three states — `completed`, `postponed`, or `planned` and never due —
+  so the history distinguishes work the learner missed from work that was never reached. The plan's
+  `generation_reason` and its items' `recommendation_reason` are still never rewritten.
+- **`completed_at` is cleared when an item is postponed**, because a postponed item is by definition
+  not completed. The application rule pairing the two columns holds in both directions.
+- **No index was added.** Adaptation reads a goal's completed topics once per request, through
+  `study_plans.study_goal_id`, which
+  `ix_study_plans_learner_id_study_goal_id_status_period_start` already leads on; and it reads one
+  plan's items at a time through `ix_plan_items_study_plan_id_scheduled_for_status`.
+- **No constraint ties an item's status to its plan's.** A `postponed` item on an `active` plan is
+  unreachable through the API but not forbidden by the database, which matches how every other
+  controlled value in this schema is guarded: the column says what a value may be, the application
+  says who may set it.
+- **Adaptation writes no `learner_topic_progress`**, so rule 4 of the domain model holds across the
+  whole planning surface rather than only in PLN-004.
+
+**Review inputs:** the API contract PLN-005 was reviewed here. The revision-scheduling rules remain
+**pending**.
+
 ### Progress and revision area — partial review approved 2026-08-05
 
 This review covers only `learner_topic_progress`, the one table migration `20260805_01` creates, and
@@ -1211,6 +1244,7 @@ yet.
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — why `study_goals` holds two typed preference columns rather than the documented `planning_preferences jsonb`
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — why the plan tables' controlled columns are `varchar(32)` guarded by a `CHECK` rather than the documented `text`, and the code that reads them
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the first code to write `plan_items.status` and `completed_at`, and why it needed no migration
+- [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the first code to write `postponed`, and why it needed no migration either
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated

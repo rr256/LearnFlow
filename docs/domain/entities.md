@@ -2,7 +2,7 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-08
+last_updated: 2026-08-09
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -13,6 +13,7 @@ related:
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
+  - ../adr/ADR-022-plan-adaptation.md
   - ../database/schema.md
 ---
 
@@ -166,7 +167,10 @@ Represents one recommended action in a study plan.
 
 **Key relationships:** belongs to a study plan; usually links to a topic and may result in a study activity or revision record.
 
-An item's position within its plan is an order, not a ranking: nothing scores a topic, and a topic
+An item's status records what became of the work it names: `planned` while it stands, `completed`
+when the learner says the work happened, and `postponed` when adaptation finds its day has passed with
+the work undone and re-places the topic on the plan that replaces it. `skipped` is modelled and
+unused. An item's position within its plan is an order, not a ranking: nothing scores a topic, and a topic
 later in a plan is not one the learner is worse at. Its reason is a statement about the plan's
 reasoning rather than about the learner, and it is not rewritten, so a superseded plan still explains
 itself.
@@ -300,6 +304,7 @@ Topic ── Learning Resource
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the planning preferences the study goal owns, and why they are attributes rather than an entity
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the study plan and plan item entities as they are persisted today
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the plan item whose completion state a learner now sets, reversibly
+- [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the plan a learner has rebuilt around what happened, and the `postponed` state an item can reach
 - [Domain model](domain-model.md)
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)

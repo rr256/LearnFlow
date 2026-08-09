@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
-from app.application.dto.study_plan import ACTIVE, StudyPlanFilters
+from app.application.dto.study_plan import ACTIVE, COMPLETED, StudyPlanFilters
 from app.application.ports.curriculum_seed_repository import SubjectRecord, TopicRecord
 from app.application.ports.study_plan_repository import PlanItemRecord, StudyPlanRecord
 from app.infrastructure.persistence.curriculum import Subject, Topic
@@ -114,6 +114,20 @@ class SqlAlchemyStudyPlanRepository:
             select(PlanItem).where(PlanItem.study_plan_id == study_plan_id)
         )
         return tuple(_item_record(model) for model in models)
+
+    def list_completed_topic_ids(self, study_goal_id: uuid.UUID) -> frozenset[uuid.UUID]:
+        """Every topic this goal has a `completed` plan item for, on any plan."""
+        rows = self._session.scalars(
+            select(PlanItem.topic_id)
+            .join(StudyPlan, StudyPlan.id == PlanItem.study_plan_id)
+            .where(
+                StudyPlan.study_goal_id == study_goal_id,
+                PlanItem.status == COMPLETED,
+                PlanItem.topic_id.is_not(None),
+            )
+            .distinct()
+        )
+        return frozenset(row for row in rows if row is not None)
 
     def find_plan_item(self, plan_item_id: uuid.UUID) -> PlanItemRecord | None:
         """The item with this identifier, or None."""

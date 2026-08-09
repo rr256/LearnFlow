@@ -2,7 +2,7 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-08
+last_updated: 2026-08-09
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -14,6 +14,7 @@ related:
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
+  - ../adr/ADR-022-plan-adaptation.md
   - ../development/coding-standards.md
 ---
 
@@ -56,8 +57,12 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Session length** | How long one block of study should be, in minutes. | The learner's preference, stored as `preferred_session_minutes`, from 15 to 480. A **duration**, not a time of day — nothing records when in a day a session falls, for the reason *availability slot* gives. Report it in minutes; a total or an hours figure is planning arithmetic. |
 | **Topic order** | Which order a study plan works through the curriculum in. | The learner's preference, stored as `topic_sequencing`: `syllabus_order` follows the syllabus's own order, `prerequisites_first` follows the prerequisite links between topics. Stored and sent as the `snake_case` value; the labels a learner reads are *Syllabus order* and *Prerequisites first*. |
 | **Study plan** | A roadmap, monthly plan, weekly plan, or daily plan of recommended work. | Generated against a study goal and current evidence, by deterministic rules rather than by an AI provider. A roadmap and a weekly plan are generated today; see [ADR-020](../adr/ADR-020-initial-study-plan-generation.md). |
-| **Superseded plan** | A plan a later generation replaced. | Kept and readable, never deleted: plan history is what makes a change of direction explainable. It keeps the wording it was generated with. |
-| **Plan item** | One actionable recommendation in a study plan. | Examples: study, practise, revise, or review mistakes. Its position in the plan is an order, never a score. |
+| **Superseded plan** | A plan a later generation **or adaptation** replaced. | Kept and readable, never deleted: plan history is what makes a change of direction explainable. Its content and reasons keep the wording they were generated with. The one thing that may move on a superseded plan is an item's status, when adaptation marks overdue work *postponed* as it sets the plan aside — a statement about what happened, not a rewriting of what was planned. See [ADR-022](../adr/ADR-022-plan-adaptation.md). |
+| **Plan item** | One actionable recommendation in a study plan. | Examples: study, practise, revise, or review mistakes. Its position in the plan is an order, never a score. Its *plan item status* records what became of the work it names. |
+| **Plan item status** | What became of the work one plan item names: `planned`, `completed`, `postponed`, or `skipped`. | Stored and sent as the `snake_case` value. It records whether planned **work happened**, never how well a topic is understood — that is a *learning stage*, and nothing derives one from the other. |
+| **Postponed** | A plan item whose day passed with the work undone, carried forward onto the plan that replaced it. | Written by *adaptation* as it supersedes a plan, never requested by a learner: postponing means the work moved to the new plan, so there is nowhere to postpone to without one. It is a statement about a day that passed, **not** about the learner's effort or ability. Distinct from *skipped*, which is modelled and unused — nothing yet lets a learner abandon a topic outright. See [ADR-022](../adr/ADR-022-plan-adaptation.md). |
+| **Adaptation** | Rebuilding a goal's active plans around what the learner has and has not done. | The learner asks for it; nothing adapts on its own. It supersedes as a generation does, leaves out topics with completed work, and carries forward what was *postponed*. Deterministic, with no AI provider. Not a re-scoring of the learner and not a judgement about why a day passed. |
+| **Plan coverage count** | A count describing how much of the curriculum a plan covers — how many topics it holds, how many remain, how many are not planned again. | A description of the **plan**, never a measurement of the learner. Permitted because a plan must be able to explain what it covers and why it is shorter than the one before it. It is never a score, a percentage, a streak, or a total of the learner's time or effort; see the rule below the avoid list. |
 | **Recommendation reason** | The sentence a plan or a plan item gives for itself. | Written when the plan is generated and never rewritten, so a superseded plan still explains itself in the terms that produced it. A statement about the plan's reasoning, not about the learner. |
 | **Study activity** | A record of actual study, practice, or revision work completed by the learner. | May record duration and related resources/topics. |
 | **Learner topic progress** | The learner-specific state and evidence for one topic. | Combines several signals; it is not a single permanent score. |
@@ -92,7 +97,9 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | External test performance | External test result; Topic performance evidence | Use `External test result` for the recorded result and `Topic performance evidence` for topic-level detail. “Performance” alone is ambiguous between the two. |
 | Failed topic | Topic needing focused practice | A topic is not a pass/fail judgement. |
 | Mastered | Strong understanding | Mastery is difficult to prove and should not be inferred from one signal. |
-| Complete | Material completed; plan item completed | Clarify whether material or a planned task was completed. |
+| Complete | Material completed; plan item completed | Clarify whether material or a planned task was completed. A count of topics with completed planned work is a *plan coverage count*, not a claim that the topics themselves are complete. |
+| A learner who is behind; falling behind; an overdue learner | An **overdue item**; work whose day has passed; postponed work | A day passing is a fact about a date, not a verdict on a person. Say an *item* is overdue, never that the learner is behind: LearnFlow marks the item postponed and carries the work forward, and forms no view about why the day passed. *Overdue* is correct of an item and wrong of a learner. |
+| Progress percentage; completion rate; topics done out of total; streak | A plan coverage count, stated as a count | See the rule below. A plan may say how many topics it covers and how many are not planned again; nothing converts that into a rate, a percentage, or a running score. |
 | Exam date; examination date | Examination window; examination period | A body that publishes several sitting days has not named the learner's day. A single date presents a guess as a deadline. |
 | Exam; GATE date | Examination cycle; examination schedule | Keeps platform-core language reusable across learning programs. |
 | Onboarding | Learner setup | Use **learner setup** for the capability. **Onboarding** is permitted for one narrower thing only: the first-time UI flow a learner walks through before they have a profile or a goal. It never names the capability, its endpoints, or the ongoing ability to change a goal — a learner who edits an established goal is not being onboarded. |
@@ -105,6 +112,35 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Test integration | Manual external test result entry | The MVP does not connect to third-party test platforms. |
 | AI memory | Learner progress, resource retrieval, or conversation context | Store durable facts in the application/database, not in model memory. |
 | GATE topic | Topic in the GATE CSE learning program | Keeps platform-core language reusable. |
+
+### Plan coverage counts are not learner scores
+
+Adaptation gave LearnFlow its first numbers that describe a learner's situation rather than the
+curriculum, so the line between the two is drawn here rather than left to each change to rediscover.
+
+**Permitted — a plan describing its own coverage.** A plan may state how many topics it holds, how
+many remain, and how many are not planned again because their work is done. These are facts about
+*the plan*: they explain why an adapted plan is shorter than the one it replaced, which is what makes
+adaptation legible rather than mysterious. `completed_topic_count` and `remaining_topic_count` on
+PLN-005 are these, and so is `item_count`.
+
+**Forbidden — a number that rates the learner.** No percentage complete, no completion rate, no
+"14 of 60 done", no streak, no score, no total of a day, a week, or a plan. These turn a description
+of work into a measurement of a person, and every one of them invites the judgement
+[FR-005](../requirements/functional.md#fr-005-topic-progress-and-learning-evidence) refuses and the
+*weak topic* row above avoids.
+
+Three tests distinguish them:
+
+1. **What is the subject?** "This plan covers 55 topics" describes a plan. "You have completed 8%"
+   describes a learner.
+2. **Would it still be true of a plan nobody had acted on?** A coverage count of a freshly generated
+   plan is meaningful; a completion rate of one is zero, which says nothing.
+3. **Does it invite a comparison?** Against last week, against a target, against another learner — if
+   so it is a score, whatever it is called.
+
+A plan-coverage count is always reported **as a count**, never as a ratio or a proportion, because a
+ratio has a denominator and a denominator invites the comparison the third test rules out.
 
 ## Naming Rules
 
@@ -147,6 +183,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the planning-preference vocabulary above, and why an unset preference is not a default
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the plan vocabulary above, and why a plan item's position is an order rather than a score
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the wording a completed plan item uses, and why it is a statement about work rather than about the learner
+- [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the plan a learner has rebuilt around what happened, and the `postponed` state adaptation writes
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)

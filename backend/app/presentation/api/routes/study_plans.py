@@ -1,4 +1,4 @@
-"""Study plan endpoints (PLN-001 to PLN-003).
+"""Study plan endpoints (PLN-001 to PLN-003, and PLN-005).
 
 They serve FR-002's last acceptance criterion — a learner with no previous
 progress still receives an initial plan — and the first part of FR-003, which
@@ -15,8 +15,12 @@ No route accepts a learner identifier. The effective learner is resolved
 server-side, so a request cannot read or generate against another learner's
 records (docs/api/conventions.md).
 
-PLN-004 and PLN-005 — completing a plan item and re-planning after missed work —
-are FR-004 and are not implemented. Nothing here moves an item's status.
+PLN-004 — completing a plan item — lives beside these in `plan_items.py`, at its
+own path, because it addresses one item rather than a plan.
+
+PLN-005 is served here but sits under a **goal-scoped** path, on the second router
+below: adaptation supersedes and rewrites every active plan of a goal, so a path
+naming one plan would misdescribe what moves.
 """
 
 import uuid
@@ -35,6 +39,7 @@ from app.application.use_cases.local_learner import AmbiguousLocalLearnerError
 from app.application.use_cases.manage_study_plans import (
     LearnerNotSetUpError,
     ManageStudyPlans,
+    NoActivePlanToAdaptError,
     StudyGoalNotFoundError,
     StudyPlanNotFoundError,
     UnknownPlanFilterError,
@@ -44,6 +49,8 @@ from app.presentation.api.dependencies import provide_study_plans
 from app.presentation.api.errors import ErrorDetail, ErrorResponse, RequestRejected
 from app.presentation.api.schemas.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from app.presentation.api.schemas.study_plan import (
+    AdaptedStudyPlansSchema,
+    AdaptStudyPlanResponse,
     GeneratedStudyPlansSchema,
     GenerateStudyPlanRequest,
     GenerateStudyPlanResponse,
@@ -53,6 +60,16 @@ from app.presentation.api.schemas.study_plan import (
 )
 
 router = APIRouter(prefix=f"{API_V1_PREFIX}/study-plans", tags=["study-plans"])
+
+goal_router = APIRouter(prefix=f"{API_V1_PREFIX}/study-goals", tags=["study-plans"])
+"""Planning operations addressed by the goal rather than by one plan.
+
+PLN-005 lives here because adaptation acts on a goal's whole active set — it
+supersedes the roadmap and the week together and writes both — so
+`/study-plans/{plan_id}/adapt` would name one plan while moving two. The router
+is declared in this module rather than beside the goal endpoints because the
+operation is planning work served by `ManageStudyPlans`.
+"""
 
 _NOT_FOUND_RESPONSE = {HTTP_404_NOT_FOUND: {"model": ErrorResponse}}
 _CONFLICT_RESPONSE = {HTTP_409_CONFLICT: {"model": ErrorResponse}}
@@ -175,3 +192,47 @@ def read_study_plan(study_plan_id: uuid.UUID, planner: StudyPlanner) -> StudyPla
     except AmbiguousLocalLearnerError as error:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
     return StudyPlanResponse(data=StudyPlanSchema.of(plan))
+
+
+@goal_router.post(
+    "/{study_goal_id}/adapt",
+    summary="Adapt a goal's active study plan around what has happened",
+    response_model=AdaptStudyPlanResponse,
+    status_code=HTTP_201_CREATED,
+    responses=_NOT_FOUND_RESPONSE | _CONFLICT_RESPONSE,
+)
+def adapt_study_plan(study_goal_id: uuid.UUID, planner: StudyPlanner) -> AdaptStudyPlanResponse:
+    """Rebuild the goal's active plans around completed and missed work.
+
+    The learner asks for this. Nothing adapts on its own — not on completion, not
+    on a changed study week — which keeps PLN-004's promise that marking an item
+    done re-plans nothing.
+
+    **Topics with a completed session are not planned again**, wherever on this
+    goal they were completed, including on a plan long superseded. **Items whose
+    day passed with the work undone are marked `postponed`** on the plan being set
+    aside, and their topics are re-placed on the new one.
+
+    Everything else is the plan PLN-001 would have built from the same curriculum,
+    week, preferences, and horizon, by the same deterministic rules. No AI
+    provider is involved, and the same inputs produce the same adapted plan.
+
+    Takes no request body: everything adaptation reads is already stored, so no
+    caller can adapt toward a preference the learner never set.
+
+    A goal with no active plan is a `409` — generating a first plan is PLN-001's
+    work, not this endpoint's.
+
+    PLN-005. Serves FR-004.
+    """
+    try:
+        adapted = planner.adapt(study_goal_id)
+    except StudyGoalNotFoundError as error:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except (
+        LearnerNotSetUpError,
+        NoActivePlanToAdaptError,
+        AmbiguousLocalLearnerError,
+    ) as error:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
+    return AdaptStudyPlanResponse(data=AdaptedStudyPlansSchema.of(adapted))

@@ -85,3 +85,30 @@ export function readPlanItemSubmission(
 
   return { submission: { planItemId, status } };
 }
+
+/** What the adapt control shows after a submission. */
+export interface AdaptState {
+  status: "idle" | "adapted" | "error";
+  message: string;
+}
+
+/** The state before anything has been submitted, for the reason above. */
+export const INITIAL_ADAPT_STATE: AdaptState = { status: "idle", message: "" };
+
+/**
+ * Read one submission of the adapt form.
+ *
+ * It carries only the goal. Everything adaptation acts on is already stored, so
+ * there is nothing else a form could truthfully send.
+ *
+ * @returns The goal to adapt, or the reason it could not be read.
+ */
+export function readAdaptSubmission(
+  form: FormData,
+): { studyGoalId: string } | { problem: string } {
+  const studyGoalId = trimmed(form.get("study_goal_id"));
+  if (!studyGoalId) {
+    return { problem: "That form did not say which study goal to adapt." };
+  }
+  return { studyGoalId };
+}

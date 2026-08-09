@@ -2,7 +2,7 @@
 title: "ADR-021: Mark a Plan Item Completed as a Reversible Statement About Work, Not About the Learner"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-08
+last_updated: 2026-08-09
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -10,6 +10,7 @@ related:
   - ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ADR-017-topic-progress-api-and-schema.md
   - ADR-020-initial-study-plan-generation.md
+  - ADR-022-plan-adaptation.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -39,6 +40,57 @@ This is the first delivery against
 [FR-004](../requirements/functional.md#fr-004-plan-adaptation), and it delivers **one third** of
 its first acceptance criterion: a learner can mark a planned task completed. Skipping and postponing
 are deliberately not implemented, and neither is anything the other two criteria ask for.
+
+## Implementation status — 2026-08-09
+
+*Note added 2026-08-09. The decision above is unchanged; this records that the question this record
+left open by name has been answered, and that its worst consequence is discharged.*
+
+**Postponing work now has somewhere to go.** PLN-005 rebuilds a goal's active plans around what
+happened: it leaves out topics with completed work, marks items whose day passed `postponed` on the
+plan it supersedes, and re-places them on the new one. Contracted by
+[ADR-022](ADR-022-plan-adaptation.md), which is **proposed rather than accepted**. It needed **no
+migration**.
+
+**Seven statements above are overtaken.** None of them was wrong when written; each described a state
+of the product that has since moved.
+
+- Under [Decision](#two-statuses-completed-and-planned-to-undo-it) — "That is the re-planning FR-004's
+  second criterion asks for, which is PLN-005 and does not exist." It exists.
+- The same section's reason for refusing `postponed`: "A status stored where nothing reads it and
+  nothing acts on it would be a worse answer than an honest refusal." **The refusal itself is
+  unchanged** — PLN-004 still accepts only `completed` and `planned`, and still answers `422`
+  otherwise. What has changed is who writes `postponed`: adaptation, as it supersedes a plan, rather
+  than a learner asking for it. The reasoning held; the world moved.
+- Under [Decision](#only-the-item-moves) — "**Nothing is re-planned.** Generating again through
+  PLN-001 remains what a learner does after a missed week, and it still supersedes rather than
+  adapting." Adapting is now what a learner does after a missed week. Generating again still
+  supersedes rather than adapting, and still re-plans every topic.
+- Under [Consequences](#negative) — "**A completion survives a re-plan without meaning anything** …
+  a learner who completed Monday and then rebuilt their plan sees that work offered again." Through
+  PLN-005 they do not. Through PLN-001 they still do, which is the difference between the two
+  endpoints rather than a defect in either.
+- The same section's "**`skipped` remains unwritten**, so a learner who wants to abandon a topic still
+  cannot say so." **Still true**, and now the only part of FR-004's first criterion outstanding.
+- Under [Consequences](#neutral) — "`skipped` and `postponed` remain constrained and unwritten."
+  `postponed` is written; `skipped` is not.
+- Under [Implementation notes](#implementation-notes) — "**The PostgreSQL integration tests have not
+  been run locally.**" They have since been, on 2026-08-09: Docker Compose works after
+  [the first local run](../deployment/docker.md#first-local-run-2026-08-08), so a disposable
+  `learnflow_test` database was created beside the development one and the whole suite ran green,
+  **923 passed with none skipped**. The *Status* section above says this gap remains open; it no longer
+  does.
+
+**Two of the open questions this record listed are answered**: "when `skipped` and `postponed` arrive
+and what postponing moves work to" — `postponed` arrives here and moves work to the plan that replaces
+the one it was on — and "whether a completion should survive a re-plan", which it now does through
+adaptation and deliberately does not through generation. The others stand.
+
+**Nothing in the decision changed.** PLN-004's contract, its two accepted statuses, its reversibility,
+its refusal to touch anything but the named item, and its `409` for an item on a superseded plan are
+all as accepted. ADR-022 inherits that last rule rather than renegotiating it: adaptation writes
+`postponed` while superseding a plan, which is a different act from a learner writing into one already
+superseded.
 
 ## Context
 
@@ -337,4 +389,5 @@ would each need their own path later.
 - [Functional requirements](../requirements/functional.md) — FR-004's first criterion, and FR-005's refusal to claim mastery
 - [Repository and folder structure](../development/folder-structure.md) — where the route and the planner feature live
 - [Delivery milestones](../roadmap/milestones.md) — the Milestone 3 item this partly closes
+- [ADR-022: Adapt a study plan by rebuilding it around what happened](ADR-022-plan-adaptation.md) — the re-planning that answers what postponing moves work to, and the first write of `postponed`
 - [Architecture decision register](../architecture/decisions.md) — DEC-033

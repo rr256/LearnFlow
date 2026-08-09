@@ -31,6 +31,8 @@ import type {
   TopicProgressResponse,
 } from "@/types/progress";
 import type {
+  AdaptStudyPlanResponse,
+  AdaptedStudyPlans,
   GenerateStudyPlanResponse,
   GeneratedStudyPlans,
   PlanItem,
@@ -535,6 +537,36 @@ export async function readStudyPlan(studyPlanId: string): Promise<StudyPlan> {
     );
   }
   return (body as StudyPlanResponse).data;
+}
+
+/**
+ * PLN-005 -- adapt the goal's active plans around what has happened.
+ *
+ * Topics with a completed session are not planned again; items whose day passed
+ * with the work undone are marked `postponed` on the plan being set aside, and
+ * their topics are re-placed on the new one. The learner asks for this; nothing
+ * adapts on its own.
+ *
+ * Takes no request body: everything adaptation reads is already stored.
+ *
+ * @throws ApiError with `isNotFound` when the goal is not the local learner's,
+ *   or `isConflict` when it has no active plan to adapt.
+ */
+export async function adaptStudyPlan(studyGoalId: string): Promise<AdaptedStudyPlans> {
+  const body = await requestJson(
+    `/api/v1/study-goals/${encodeURIComponent(studyGoalId)}/adapt`,
+    { method: "POST", body: {} },
+  );
+  const data = unwrapData(body);
+
+  if (!isRecord(data) || !Array.isArray((data as Record<string, unknown>).plans)) {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned an adapted plan without a `plans` list.",
+      null,
+    );
+  }
+  return (body as AdaptStudyPlanResponse).data;
 }
 
 /**

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  INITIAL_ADAPT_STATE,
   INITIAL_PLAN_ITEM_STATE,
   INITIAL_PLAN_STATE,
+  readAdaptSubmission,
   readPlanItemSubmission,
   readPlanSubmission,
 } from "@/features/planner/submission";
@@ -124,5 +126,41 @@ describe("readPlanItemSubmission", () => {
 describe("INITIAL_PLAN_ITEM_STATE", () => {
   it("starts idle with nothing to report", () => {
     expect(INITIAL_PLAN_ITEM_STATE).toEqual({ status: "idle", message: "" });
+  });
+});
+
+describe("readAdaptSubmission", () => {
+  it("reads the goal the form names", () => {
+    expect(readAdaptSubmission(form({ study_goal_id: "goal-1" }))).toEqual({
+      studyGoalId: "goal-1",
+    });
+  });
+
+  it("trims a padded identifier", () => {
+    expect(readAdaptSubmission(form({ study_goal_id: "  goal-1  " }))).toEqual({
+      studyGoalId: "goal-1",
+    });
+  });
+
+  it("reports a form that names no goal", () => {
+    expect(readAdaptSubmission(form({}))).toHaveProperty("problem");
+  });
+
+  it("sends nothing but the goal", () => {
+    /*
+     * Everything adaptation acts on is already stored. Reading a preference out
+     * of the form would let a client adapt toward one the learner never set.
+     */
+    const read = readAdaptSubmission(
+      form({ study_goal_id: "goal-1", preferred_session_minutes: "45" }),
+    );
+
+    expect(read).toEqual({ studyGoalId: "goal-1" });
+  });
+});
+
+describe("INITIAL_ADAPT_STATE", () => {
+  it("starts idle with nothing to report", () => {
+    expect(INITIAL_ADAPT_STATE).toEqual({ status: "idle", message: "" });
   });
 });

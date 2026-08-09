@@ -1,7 +1,7 @@
 """Input and output structures for a learner's study plans.
 
-These carry what PLN-001, PLN-002, and PLN-003 generate and read, and what
-PLN-004 moves. They are framework-independent by design, as the other DTOs in
+These carry what PLN-001, PLN-002, and PLN-003 generate and read, what PLN-004
+moves, and what PLN-005 adapts. They are framework-independent by design, as the other DTOs in
 this package are: the API schemas that serialise them are a separate
 representation, so a change to the HTTP contract does not reach back into the use
 case.
@@ -49,11 +49,13 @@ the constraint holds them ready.
 PLAN_ITEM_STATUSES: tuple[str, ...] = ("planned", "completed", "skipped", "postponed")
 """The statuses `plan_items.status` accepts.
 
-Every item is written `planned`. PLN-004 moves one to `completed` and back again;
-`skipped` and `postponed` are approved and unwritten, and arrive with the change
-that can answer what postponing work moves it *to*, which is FR-004's re-planning
-(PLN-005). The constraint carries all four, so adding one is a use-case change
-rather than a migration.
+Every item is written `planned`. PLN-004 moves one to `completed` and back again.
+**PLN-005 writes `postponed`**: when adaptation supersedes a plan, the items whose
+day has passed with the work undone are marked postponed, and their topics are
+re-placed on the plan that replaces it — which is the answer to what postponing
+moves work *to* that ADR-021 could not give. `skipped` remains approved and
+unwritten: nothing yet lets a learner abandon a topic outright. The constraint
+carries all four, so adding one is a use-case change rather than a migration.
 """
 
 PLAN_ITEM_STATUS_CHANGES: tuple[str, ...] = ("planned", "completed")
@@ -72,6 +74,7 @@ ACTIVE = "active"
 SUPERSEDED = "superseded"
 PLANNED = "planned"
 COMPLETED = "completed"
+POSTPONED = "postponed"
 STUDY = "study"
 
 DEFAULT_SESSION_MINUTES = 60
@@ -237,3 +240,33 @@ class GeneratedStudyPlans:
     generated_on: date
     plans: tuple[StudyPlanDetail, ...]
     superseded_plan_ids: tuple[uuid.UUID, ...] = field(default=())
+
+
+@dataclass(frozen=True, slots=True)
+class AdaptedStudyPlans:
+    """What one adaptation produced (PLN-005).
+
+    The same pair of plans a generation writes, plus the three facts that make an
+    adaptation explainable in a way a plain regeneration is not: what it set
+    aside, what it postponed, and how much work the learner has already put
+    behind them.
+
+    `postponed_plan_item_ids` names the items whose day passed with the work
+    undone. They stay on the superseded plan, marked `postponed`, and their topics
+    are re-placed on the new one — so the history says what happened to each line
+    rather than leaving a missed day indistinguishable from one never due.
+
+    The two counts are **descriptions of the plan, not measurements of the
+    learner**. They say how much of the curriculum this plan covers and why it is
+    shorter than the last one; nothing ranks, scores, or congratulates. That is
+    the same line ADR-020 drew when it let a plan state "60 topics" while refusing
+    to total a day or a week.
+    """
+
+    study_goal_id: uuid.UUID
+    adapted_on: date
+    plans: tuple[StudyPlanDetail, ...]
+    superseded_plan_ids: tuple[uuid.UUID, ...] = field(default=())
+    postponed_plan_item_ids: tuple[uuid.UUID, ...] = field(default=())
+    completed_topic_count: int = 0
+    remaining_topic_count: int = 0
