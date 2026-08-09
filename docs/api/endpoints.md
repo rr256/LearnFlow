@@ -22,6 +22,7 @@ related:
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
+  - ../adr/ADR-023-daily-study-view.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -393,7 +394,7 @@ Supports **FR-003 — Study Timeline and Plan** and **FR-004 — Plan Adaptation
 
 | ID | Method and path | Purpose | Primary request/result | State |
 | --- | --- | --- | --- | --- |
-| PLN-001 | `POST /api/v1/study-plans/generate` | Generate or replan roadmap/monthly/weekly/daily recommendations for a goal. | Created plan; reason for generation/replan. | Implemented |
+| PLN-001 | `POST /api/v1/study-plans/generate` | Generate a goal's study plan: a `roadmap` always, and a `weekly` plan when the saved week has room for a session. | The plans written, the reason for each, and what was superseded. | Implemented |
 | PLN-002 | `GET /api/v1/study-plans` | List plans, filterable by goal, type, status, and period. | Plan collection. | Implemented |
 | PLN-003 | `GET /api/v1/study-plans/{plan_id}` | Read one plan and its ordered items. | Plan + plan items. | Implemented |
 | PLN-004 | `PATCH /api/v1/plan-items/{plan_item_id}` | Mark a plan item completed, or return it to `planned`. Skipping and postponing are catalogued and not accepted. | Updated plan item. | Implemented |
@@ -424,6 +425,13 @@ when the plan was generated and never rewritten, which is
 neither the order nor the time allowed; `priority` is a position in a list, not a score; and no total
 is reported for a day, a week, or a plan.
 
+**The daily study view adds no endpoint.** The `/plan/today` screen showing what a learner should
+study today is a *reading* of the goal's active `weekly` plan: it filters PLN-003's items to the
+learner's own calendar date, taken from `learners.timezone` on
+[LRN-001](#lrn-001-get-apiv1learnerprofile), and completes them through PLN-004. Nothing about the
+five contracts above changes, and **no `daily` plan is generated or read** — that `plan_type` stays
+constrained and unwritten. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md).
+
 ### PLN-001 — `POST /api/v1/study-plans/generate`
 
 Request body: `study_goal_id` (a UUID). It is required, and an unknown field is rejected. Returns
@@ -442,7 +450,10 @@ a silently ignored field.
 - `plans` holds what was written, each with its items. **A `roadmap` always**, ordering every
   trackable topic across the goal's horizon with no dates; and a **`weekly`** plan when the learner's
   saved week has room for at least one session, placing the first of those topics onto the next seven
-  days.
+  days. **Those two are the only plan types anything writes.** `monthly` and `daily` are values
+  [`study_plans.plan_type`](../database/schema.md#study_plans) accepts and no code stores, so no
+  generation returns one and no read can find one; each arrives with the code that writes it. The
+  `/plan/today` screen is not one — see [the note above](#planning-endpoints).
 - `superseded_plan_ids` names the plans this generation set aside. They are kept, not deleted, and
   each is still readable through PLN-003.
 
@@ -853,6 +864,7 @@ Implement in an order that enables one working learner flow:
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the request and response fields of PLN-001 to PLN-003, and the rules a generated plan follows
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the request and response fields of PLN-004, the two statuses it accepts, and why it refuses the other two
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the request and response fields of PLN-005, the path it departs from, and the first write of `postponed`
+- [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the daily study view that consumes five of these contracts and adds none
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

@@ -21,6 +21,7 @@ related:
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
+  - ../adr/ADR-023-daily-study-view.md
   - ../domain/terminology.md
 ---
 
@@ -249,9 +250,15 @@ app/
 │       └── page.module.css
 ├── plan/
 │   ├── page.tsx                            # PLN-002 and PLN-003 over the learner's
-│   │                                       # active goal; writes PLN-001 and PLN-004
-│   │                                       # via server actions
-│   └── page.module.css
+│   │                                       # active goal; writes PLN-001, PLN-004,
+│   │                                       # and PLN-005 via server actions
+│   ├── page.module.css
+│   └── today/
+│       ├── page.tsx                        # The daily study view: LRN-001 for the
+│       │                                   # learner's timezone, GOAL-002, PLN-002,
+│       │                                   # and PLN-003 for the active goal's weekly
+│       │                                   # plan; writes PLN-004 only
+│       └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
                                             # writes LRN-002, GOAL-001/GOAL-004 — which
@@ -262,6 +269,8 @@ app/
 Every home, curriculum, setup, and plan route sets `dynamic = "force-dynamic"`. The curriculum lives in the
 database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
 goal are learner data that changes on submission — and the container build has no API to reach.
+`plan/today` needs it most strongly of all: it is a screen *about* the current date, so a cached copy
+would be wrong from the first midnight after it was built.
 
 `health/route.ts` is the one deliberate exception: it is `force-static`, because it exists to answer
 the container health check and must reach nothing. It asks only whether the frontend process is
@@ -330,7 +339,9 @@ onboarded — and it writes nothing.
 | `planner/PlanWeek.tsx` | The work the plan places on each of the coming days, with its CSS Module, each item carrying the control that marks it completed. A day with no work is absent rather than shown empty; no day or week is totalled, and nothing counts how much of one is done. |
 | `planner/GeneratePlanForm.tsx` | The button that asks for a plan, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says plainly that rebuilding keeps the previous plan. |
 | `planner/PlanItemStatusControl.tsx` | The control beside one plan item that marks it completed or returns it to `planned`, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. An item in a status PLN-004 does not accept is shown with no control rather than as something a learner can move. |
-| `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. It also decides the classes an item carries, so both panels mark a completed one the same way. |
+| `planner/DailyStudyView.tsx` | The daily study view's two panels — the work the weekly plan placed on the learner's own date, and work whose day has passed — with its CSS Module. Each item shows its reason and carries the same completion control the other panels carry. It writes no plan and asks for none: rebuilding stays on `/plan`, where the learner asks for it. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md). |
+| `planner/today.ts` | Resolving the learner's own calendar date from their stored timezone, and splitting a weekly plan into today's work and work whose day has passed. Plain functions taking the instant as an argument, so they are testable at a fixed moment across zones without a running server. The overdue boundaries are mirrored from the domain rule `select_overdue`, which stays authoritative for what adaptation writes; nothing here writes anything. |
+| `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. It also decides the classes an item carries, so every panel marks a completed one the same way. |
 | `planner/submission.ts` | Reads the planner's three forms into the requests they make, and owns their state shapes. It reads no preference and no completion time: a plan is built from what the learner stored, and *when* they marked an item completed is the server's record, never what a client sends. |
 | `planner/AdaptPlanForm.tsx` | The button that asks for the plan to be rebuilt around what happened, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says what adapting will do — what is dropped, what is carried forward, and that the old plan is kept — before it is pressed, and it is rendered only when a plan exists. |
 | `planner/actions.ts` | The `"use server"` module holding the generate, mark-completed, and adapt paths. |
@@ -389,8 +400,9 @@ TypeScript types based on public API contracts. Do not copy database/ORM types i
 Vitest specs for the API client, the configuration reader, the curriculum, learner-setup, home,
 progress, and planner components, the setup, availability, stage, and generate-plan forms' submission
 parsing, the home screen's date presentation, the planning-preference presentation, the plan
-presentation, the stage-to-topic join, and the `"use server"` export rule. They stub `fetch` and reach no live backend, so `npm test` needs nothing
-running.
+presentation, the daily study view and the date and overdue rules behind it, the stage-to-topic join,
+and the `"use server"` export rule. They stub `fetch` and reach no live backend, so `npm test` needs
+nothing running.
 
 ## Docker and Scripts
 
@@ -495,6 +507,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — why the planning rules live in the domain layer, and the contracts the `planner/` module implements
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the plan-item control the planner feature gained, and the write path it shares with generation
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the adapt control, and the third rule in the domain layer
+- [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the `plan/today` route, the two planner modules behind it, and why it is force-dynamic
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

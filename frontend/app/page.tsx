@@ -135,6 +135,9 @@ export default function HomePage() {
       <nav aria-label="Learner actions">
         <ul className={styles.actions}>
           <li>
+            <Link href="/plan/today">What to study today</Link>
+          </li>
+          <li>
             <Link href="/plan">Your study plan</Link>
           </li>
           <li>
