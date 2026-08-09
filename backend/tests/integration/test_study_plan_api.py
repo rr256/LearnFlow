@@ -17,7 +17,7 @@ tests/integration/conftest.py.
 
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -374,3 +374,86 @@ def test_a_refused_completion_writes_nothing(client: TestClient, goal: dict, ses
     assert stored is not None
     assert stored.status == "planned"
     assert stored.completed_at is None
+
+
+def adapt(client: TestClient, goal: dict):
+    return client.post(f"{GOALS}/{goal['id']}/adapt")
+
+
+def test_adapting_supersedes_and_writes_a_new_pair(
+    client: TestClient, goal: dict, session: Session
+):
+    """PLN-005 against real rows: four plans stored, two of them active."""
+    generate(client, goal)
+
+    response = adapt(client, goal)
+
+    assert response.status_code == 201, response.text
+    session.expire_all()
+    assert session.scalar(select(func.count()).select_from(StudyPlan)) == 4
+    active = session.scalars(select(StudyPlan).where(StudyPlan.status == "active")).all()
+    assert {plan.plan_type for plan in active} == {"roadmap", "weekly"}
+
+
+def test_a_completed_topic_is_dropped_from_the_adapted_plan(client: TestClient, goal: dict):
+    created = generate(client, goal).json()["data"]
+    week = next(plan for plan in created["plans"] if plan["plan_type"] == "weekly")
+    done = week["items"][0]
+    assert client.patch(f"{ITEMS}/{done['id']}", json={"status": "completed"}).status_code == 200
+
+    adapted = adapt(client, goal).json()["data"]
+
+    assert adapted["completed_topic_count"] == 1
+    assert adapted["remaining_topic_count"] == 59
+    roadmap = next(plan for plan in adapted["plans"] if plan["plan_type"] == "roadmap")
+    assert roadmap["item_count"] == 59
+    assert done["topic"]["id"] not in {item["topic"]["id"] for item in roadmap["items"]}
+
+
+def test_an_overdue_item_is_stored_postponed(client: TestClient, goal: dict, session: Session):
+    """The first code to write `postponed`, against the real CHECK constraint."""
+    created = generate(client, goal).json()["data"]
+    week = next(plan for plan in created["plans"] if plan["plan_type"] == "weekly")
+    overdue = week["items"][0]
+
+    # The plan was built around today, so nothing is overdue yet; move the stored
+    # date into the past rather than the clock forward, which the running app
+    # cannot do.
+    stored = session.get(PlanItem, uuid.UUID(overdue["id"]))
+    assert stored is not None
+    stored.scheduled_for = date(2020, 1, 1)
+    session.commit()
+
+    adapted = adapt(client, goal).json()["data"]
+
+    assert overdue["id"] in adapted["postponed_plan_item_ids"]
+    session.expire_all()
+    reread = session.get(PlanItem, uuid.UUID(overdue["id"]))
+    assert reread is not None
+    assert reread.status == "postponed"
+
+
+def test_adapting_writes_no_topic_progress(client: TestClient, goal: dict, session: Session):
+    """Rule 4 of the domain model, checked against the database."""
+    created = generate(client, goal).json()["data"]
+    week = next(plan for plan in created["plans"] if plan["plan_type"] == "weekly")
+    client.patch(f"{ITEMS}/{week['items'][0]['id']}", json={"status": "completed"})
+
+    adapt(client, goal)
+
+    progress = client.get("/api/v1/progress/topics").json()
+    assert progress["pagination"]["total"] == 0
+
+
+def test_adapting_a_goal_with_no_active_plan_is_refused(client: TestClient, goal: dict):
+    response = adapt(client, goal)
+
+    assert response.status_code == 409, response.text
+
+
+def test_a_refused_adaptation_writes_nothing(client: TestClient, goal: dict, session: Session):
+    response = client.post(f"{GOALS}/{uuid.uuid4()}/adapt")
+
+    assert response.status_code == 404
+    assert session.scalar(select(func.count()).select_from(StudyPlan)) == 0
+    assert session.scalar(select(func.count()).select_from(PlanItem)) == 0

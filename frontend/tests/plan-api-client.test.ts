@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiError,
+  adaptStudyPlan,
   generateStudyPlan,
   listStudyPlans,
   readStudyPlan,
@@ -288,6 +289,88 @@ describe("updatePlanItemStatus (PLN-004)", () => {
     );
 
     await expect(updatePlanItemStatus(planItem.id, "completed")).rejects.toMatchObject({
+      code: "api_unreachable",
+    });
+  });
+});
+
+describe("adaptStudyPlan (PLN-005)", () => {
+  const adapted = {
+    study_goal_id: roadmap.study_goal_id,
+    adapted_on: "2026-08-09",
+    plans: [roadmap],
+    superseded_plan_ids: ["77777777-7777-4777-8777-777777777777"],
+    postponed_plan_item_ids: ["88888888-8888-4888-8888-888888888888"],
+    completed_topic_count: 3,
+    remaining_topic_count: 57,
+  };
+
+  it("posts to the goal-scoped path and returns what was adapted", async () => {
+    respondWith({ data: adapted });
+
+    const result = await adaptStudyPlan(roadmap.study_goal_id);
+
+    expect(requestUrl()).toMatch(
+      new RegExp(`/api/v1/study-goals/${roadmap.study_goal_id}/adapt$`),
+    );
+    expect(requestInit().method).toBe("POST");
+    expect(result.completed_topic_count).toBe(3);
+    expect(result.remaining_topic_count).toBe(57);
+    expect(result.postponed_plan_item_ids).toHaveLength(1);
+  });
+
+  it("sends an empty body, because everything it acts on is already stored", async () => {
+    respondWith({ data: adapted });
+
+    await adaptStudyPlan(roadmap.study_goal_id);
+
+    expect(JSON.parse(requestInit().body as string)).toEqual({});
+  });
+
+  it("raises a conflict when the goal has no active plan", async () => {
+    respondWith(
+      {
+        error: {
+          code: "conflict",
+          message: "This goal has no active study plan to adapt.",
+          details: [],
+        },
+      },
+      409,
+    );
+
+    await expect(adaptStudyPlan(roadmap.study_goal_id)).rejects.toMatchObject({
+      code: "conflict",
+      status: 409,
+    });
+  });
+
+  it("raises the API's own code when the goal is not stored", async () => {
+    respondWith(
+      { error: { code: "not_found", message: "No study goal is stored.", details: [] } },
+      404,
+    );
+
+    await expect(adaptStudyPlan(roadmap.study_goal_id)).rejects.toMatchObject({
+      code: "not_found",
+    });
+  });
+
+  it("rejects a success body that carries no plans", async () => {
+    respondWith({ data: { study_goal_id: roadmap.study_goal_id, adapted_on: "2026-08-09" } });
+
+    await expect(adaptStudyPlan(roadmap.study_goal_id)).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("reports an unreachable backend distinctly from a backend that answered", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+    );
+
+    await expect(adaptStudyPlan(roadmap.study_goal_id)).rejects.toMatchObject({
       code: "api_unreachable",
     });
   });

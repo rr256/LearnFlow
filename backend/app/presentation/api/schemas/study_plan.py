@@ -1,4 +1,4 @@
-"""Request and response schemas for the study-plan endpoints (PLN-001 to PLN-004).
+"""Request and response schemas for the study-plan endpoints (PLN-001 to PLN-005).
 
 No request accepts a `learner_id`: the effective learner is resolved server-side
 (docs/api/conventions.md). Generation names the *goal* to plan for, because a
@@ -27,6 +27,7 @@ from app.application.dto.study_plan import (
     PLAN_ITEM_STATUSES,
     PLAN_STATUSES,
     PLAN_TYPES,
+    AdaptedStudyPlans,
     GeneratedStudyPlans,
     PlanGenerationRequest,
     PlanItemDetail,
@@ -287,3 +288,58 @@ class PlanItemResponse(BaseModel):
     """
 
     data: PlanItemSchema
+
+
+class AdaptedStudyPlansSchema(BaseModel):
+    """What one adaptation produced."""
+
+    study_goal_id: uuid.UUID
+    adapted_on: date = Field(
+        description=(
+            "The date the adapted plan was built around, in the learner's own timezone "
+            "rather than the server's."
+        )
+    )
+    plans: list[StudyPlanSchema] = Field(
+        description=(
+            "The plans written, each with its items. A roadmap always; a week when one fits."
+        )
+    )
+    superseded_plan_ids: list[uuid.UUID] = Field(
+        description=(
+            "The plans this adaptation set aside. They are kept, not deleted, so what was "
+            "planned before can still be read."
+        )
+    )
+    postponed_plan_item_ids: list[uuid.UUID] = Field(
+        description=(
+            "Items whose day had passed with the work undone. They are marked `postponed` on "
+            "the plan being set aside, and their topics are planned again on the new one."
+        )
+    )
+    completed_topic_count: int = Field(
+        description=(
+            "How many topics have a completed session on this goal and are therefore not "
+            "planned again. A description of the plan, not a score for the learner."
+        )
+    )
+    remaining_topic_count: int = Field(description="How many topics the adapted plan still covers.")
+
+    @classmethod
+    def of(cls, adapted: AdaptedStudyPlans) -> AdaptedStudyPlansSchema:
+        """Build the schema from its application DTO."""
+        return cls(
+            study_goal_id=adapted.study_goal_id,
+            adapted_on=adapted.adapted_on,
+            plans=[StudyPlanSchema.of(plan) for plan in adapted.plans],
+            superseded_plan_ids=list(adapted.superseded_plan_ids),
+            postponed_plan_item_ids=list(adapted.postponed_plan_item_ids),
+            completed_topic_count=adapted.completed_topic_count,
+            remaining_topic_count=adapted.remaining_topic_count,
+        )
+
+
+class AdaptStudyPlanResponse(BaseModel):
+    """An adapted plan, under the documented `data` envelope."""
+
+    data: AdaptedStudyPlansSchema

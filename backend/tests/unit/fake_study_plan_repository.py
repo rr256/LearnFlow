@@ -90,6 +90,16 @@ class FakeStudyPlanRepository:
     def list_plan_items(self, study_plan_id: uuid.UUID) -> tuple[PlanItemRecord, ...]:
         return tuple(item for item in self.items if item.study_plan_id == study_plan_id)
 
+    def list_completed_topic_ids(self, study_goal_id: uuid.UUID) -> frozenset[uuid.UUID]:
+        plan_ids = {plan.id for plan in self.plans if plan.study_goal_id == study_goal_id}
+        return frozenset(
+            item.topic_id
+            for item in self.items
+            if item.study_plan_id in plan_ids
+            and item.status == COMPLETED
+            and item.topic_id is not None
+        )
+
     def find_plan_item(self, plan_item_id: uuid.UUID) -> PlanItemRecord | None:
         return next((item for item in self.items if item.id == plan_item_id), None)
 

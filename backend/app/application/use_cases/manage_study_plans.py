@@ -66,10 +66,12 @@ from app.application.dto.study_plan import (
     PLAN_TYPES,
     PLAN_WEEK_DAYS,
     PLANNED,
+    POSTPONED,
     ROADMAP,
     STUDY,
     SUPERSEDED,
     WEEKLY,
+    AdaptedStudyPlans,
     GeneratedStudyPlans,
     PlanGenerationRequest,
     PlanItemDetail,
@@ -102,6 +104,7 @@ from app.application.ports.topic_progress_repository import TopicProgressReposit
 from app.application.use_cases.examination_window import derive_examination_window
 from app.application.use_cases.local_learner import resolve_local_learner
 from app.domain.study_planning import (
+    DatedItem,
     DayCapacity,
     PlannableTopic,
     PlannedSession,
@@ -110,6 +113,7 @@ from app.domain.study_planning import (
     order_by_prerequisites,
     order_by_syllabus,
     schedule_sessions,
+    select_overdue,
 )
 
 PREREQUISITE = "prerequisite"
@@ -168,6 +172,15 @@ class StudyGoalNotFoundError(StudyPlanManagementError):
 
 class StudyPlanNotFoundError(StudyPlanManagementError):
     """No plan with the requested identifier belongs to the local learner."""
+
+
+class NoActivePlanToAdaptError(StudyPlanManagementError):
+    """The goal has no active plan, so there is nothing to adapt.
+
+    Adaptation rebuilds a plan around what happened to it. With no plan there is
+    no "what happened", and building one from nothing is PLN-001's job — so the
+    learner is pointed at that rather than handed a plan this endpoint invented.
+    """
 
 
 class PlanItemNotFoundError(StudyPlanManagementError):
@@ -306,6 +319,146 @@ class ManageStudyPlans:
             )
 
         today = _today_for(learner, self._clock)
+        inputs = self._compose(learner, goal, today, excluded=frozenset())
+
+        superseded = self._supersede_active_plans(goal.id)
+        written = self._write_pair(
+            learner,
+            goal,
+            inputs,
+            today,
+            roadmap_reason=_roadmap_reason(
+                ordering=inputs.ordering,
+                horizon=inputs.horizon,
+                today=today,
+                session_minutes=inputs.session_minutes,
+                scheduled=len(inputs.sessions),
+                week_holds_time=any(day.available_minutes for day in inputs.week),
+            ),
+            weekly_reason=_weekly_reason(
+                scheduled=len(inputs.sessions),
+                planned=len(inputs.ordering.topics),
+                today=today,
+                until=inputs.week[-1].on,
+                session_minutes=inputs.session_minutes,
+            ),
+        )
+        return GeneratedStudyPlans(
+            study_goal_id=goal.id,
+            generated_on=today,
+            plans=tuple(written),
+            superseded_plan_ids=superseded,
+        )
+
+    def adapt(self, study_goal_id: uuid.UUID) -> AdaptedStudyPlans:
+        """Rebuild the goal's active plans around what has and has not happened.
+
+        The learner asks for this; nothing here runs on its own. That is FR-004's
+        own wording — "the learner can request an updated plan" — and it keeps
+        ADR-021's promise that completing an item re-plans nothing.
+
+        The caller owns the transaction: this method writes through the repository
+        but never commits.
+
+        **What is done is not planned again.** A topic with a completed item
+        anywhere on this goal, including on a plan long superseded, is left out:
+        superseding a plan does not un-complete the work the learner did under it.
+
+        **What was missed is named rather than lost.** An item whose day passed
+        with the work undone is marked `postponed` on the plan being set aside,
+        and its topic is re-placed on the plan that replaces it. That is the
+        answer to "postponed to where?" that ADR-021 could not give, and it is the
+        first code to write the status.
+
+        **Everything else is the plan PLN-001 would build**, from the same
+        curriculum, week, preferences, and horizon, by the same pure rules. The
+        difference is the starting set of topics, not the way they are ordered or
+        placed.
+
+        Raises:
+            LearnerNotSetUpError: No learner exists to own the plan.
+            StudyGoalNotFoundError: No such goal is stored, or it belongs to
+                another learner.
+            NoActivePlanToAdaptError: The goal has no active plan to adapt.
+            StudyPlanIntegrityError: The goal points at a curriculum version that
+                is not stored.
+            AmbiguousLocalLearnerError: More than one learner is stored.
+        """
+        learner = resolve_local_learner(self._learners)
+        if learner is None:
+            raise LearnerNotSetUpError(
+                "No learner profile exists yet. Complete setup before adapting a plan."
+            )
+        goal = self._require_own_goal(study_goal_id, learner)
+        if self._goals.find_curriculum_version(goal.curriculum_version_id) is None:
+            raise StudyPlanIntegrityError(
+                f"Study goal {goal.id} references curriculum version "
+                f"{goal.curriculum_version_id}, which is not stored."
+            )
+
+        active = self._plans.list_active_study_plans(goal.id)
+        if not active:
+            raise NoActivePlanToAdaptError(
+                "This goal has no active study plan to adapt. Generate one first, then adapt "
+                "it once you have worked through some of it."
+            )
+
+        today = _today_for(learner, self._clock)
+        postponed = self._postpone_overdue(active, today)
+        completed_topics = self._plans.list_completed_topic_ids(goal.id)
+        inputs = self._compose(learner, goal, today, excluded=completed_topics)
+
+        superseded = self._supersede_active_plans(goal.id)
+        written = self._write_pair(
+            learner,
+            goal,
+            inputs,
+            today,
+            roadmap_reason=_adapted_roadmap_reason(
+                ordering=inputs.ordering,
+                horizon=inputs.horizon,
+                today=today,
+                session_minutes=inputs.session_minutes,
+                scheduled=len(inputs.sessions),
+                week_holds_time=any(day.available_minutes for day in inputs.week),
+                completed=len(completed_topics),
+                postponed=len(postponed),
+            ),
+            weekly_reason=_adapted_weekly_reason(
+                scheduled=len(inputs.sessions),
+                remaining=len(inputs.ordering.topics),
+                today=today,
+                until=inputs.week[-1].on,
+                session_minutes=inputs.session_minutes,
+                postponed=len(postponed),
+            ),
+        )
+        return AdaptedStudyPlans(
+            study_goal_id=goal.id,
+            adapted_on=today,
+            plans=tuple(written),
+            superseded_plan_ids=superseded,
+            postponed_plan_item_ids=postponed,
+            completed_topic_count=len(completed_topics),
+            remaining_topic_count=len(inputs.ordering.topics),
+        )
+
+    def _compose(
+        self,
+        learner: LearnerRecord,
+        goal: StudyGoalRecord,
+        today: date,
+        *,
+        excluded: frozenset[uuid.UUID],
+    ) -> _PlanInputs:
+        """Read everything a plan is built from, and apply the two pure rules.
+
+        Shared by generation and adaptation so the two cannot drift: the ordering
+        rule, the session placement, the week, and the horizon are identical, and
+        `excluded` is the *only* difference between them. A learner adapting gets
+        the plan they would have been generated had those topics never been in the
+        curriculum.
+        """
         horizon = self._horizon_of(goal)
         subjects = {
             subject.id: subject
@@ -317,6 +470,7 @@ class ManageStudyPlans:
             subjects,
             self._curriculum.list_topic_relationships(goal.curriculum_version_id),
             goal.planning_preferences,
+            excluded=excluded,
         )
         stages = {
             record.topic_id: record.learning_stage
@@ -324,7 +478,6 @@ class ManageStudyPlans:
                 learner_id=learner.id, curriculum_version_id=goal.curriculum_version_id
             )
         }
-
         session_minutes = goal.planning_preferences.preferred_session_minutes
         week = _week_capacities(today, self._goals.list_availability_slots([goal.id]))
         sessions = schedule_sessions(
@@ -332,13 +485,39 @@ class ManageStudyPlans:
             week,
             session_minutes=session_minutes or DEFAULT_SESSION_MINUTES,
         )
-
-        superseded = self._supersede_active_plans(goal.id)
-        reasons = _ItemReasons(
-            ordering=ordering,
+        return _PlanInputs(
+            horizon=horizon,
             subjects=subjects,
-            topics={topic.id: topic for topic in topics},
+            topics=topics,
+            ordering=ordering,
             stages=stages,
+            session_minutes=session_minutes,
+            week=week,
+            sessions=sessions,
+        )
+
+    def _write_pair(
+        self,
+        learner: LearnerRecord,
+        goal: StudyGoalRecord,
+        inputs: _PlanInputs,
+        today: date,
+        *,
+        roadmap_reason: str,
+        weekly_reason: str,
+    ) -> list[StudyPlanDetail]:
+        """Write the roadmap and, when the week has room, the weekly plan.
+
+        A roadmap is always written, even when nothing is left to plan: a learner
+        who has completed every topic is owed a plan that says so rather than an
+        error. The week is written only when a session fits, exactly as
+        generation decides it.
+        """
+        reasons = _ItemReasons(
+            ordering=inputs.ordering,
+            subjects=inputs.subjects,
+            topics={topic.id: topic for topic in inputs.topics},
+            stages=inputs.stages,
             sequencing=goal.planning_preferences.topic_sequencing,
         )
         written = [
@@ -348,22 +527,15 @@ class ManageStudyPlans:
                     study_goal_id=goal.id,
                     plan_type=ROADMAP,
                     period_start=today,
-                    period_end=horizon.ends_on,
-                    generation_reason=_roadmap_reason(
-                        ordering=ordering,
-                        horizon=horizon,
-                        today=today,
-                        session_minutes=session_minutes,
-                        scheduled=len(sessions),
-                        week_holds_time=any(day.available_minutes for day in week),
-                    ),
+                    period_end=inputs.horizon.ends_on,
+                    generation_reason=roadmap_reason,
                 ),
-                _roadmap_items(ordering, session_minutes, reasons),
-                subjects=subjects,
-                topics=topics,
+                _roadmap_items(inputs.ordering, inputs.session_minutes, reasons),
+                subjects=inputs.subjects,
+                topics=inputs.topics,
             )
         ]
-        if sessions:
+        if inputs.sessions:
             written.append(
                 self._write_plan(
                     _NewPlan(
@@ -371,26 +543,63 @@ class ManageStudyPlans:
                         study_goal_id=goal.id,
                         plan_type=WEEKLY,
                         period_start=today,
-                        period_end=week[-1].on,
-                        generation_reason=_weekly_reason(
-                            scheduled=len(sessions),
-                            planned=len(ordering.topics),
-                            today=today,
-                            until=week[-1].on,
-                            session_minutes=session_minutes,
-                        ),
+                        period_end=inputs.week[-1].on,
+                        generation_reason=weekly_reason,
                     ),
-                    _weekly_items(sessions, reasons),
-                    subjects=subjects,
-                    topics=topics,
+                    _weekly_items(inputs.sessions, reasons),
+                    subjects=inputs.subjects,
+                    topics=inputs.topics,
                 )
             )
-        return GeneratedStudyPlans(
-            study_goal_id=goal.id,
-            generated_on=today,
-            plans=tuple(written),
-            superseded_plan_ids=superseded,
-        )
+        return written
+
+    def _postpone_overdue(
+        self, plans: Sequence[StudyPlanRecord], today: date
+    ) -> tuple[uuid.UUID, ...]:
+        """Mark every overdue item on these plans `postponed`, and name them.
+
+        What makes an item overdue is decided in `app.domain.study_planning`, so
+        the boundaries — an item dated today is not overdue, an undated roadmap
+        item is never overdue, and completed work is never overdue however late it
+        was done — are testable without a clock or a database.
+
+        The items are written before their plans are superseded, so the record a
+        learner reads back says both things at once: this plan was replaced, and
+        these are the lines it was replaced over.
+        """
+        postponed: list[uuid.UUID] = []
+        for plan in plans:
+            items = self._plans.list_plan_items(plan.id)
+            by_id = {item.id: item for item in items}
+            overdue = select_overdue(
+                (
+                    DatedItem(
+                        plan_item_id=item.id,
+                        scheduled_for=item.scheduled_for,
+                        is_done=item.status == COMPLETED,
+                    )
+                    for item in sorted(items, key=lambda item: (item.priority, item.id))
+                ),
+                today,
+            )
+            for plan_item_id in overdue:
+                item = by_id[plan_item_id]
+                self._plans.update_plan_item(
+                    PlanItemRecord(
+                        id=item.id,
+                        study_plan_id=item.study_plan_id,
+                        topic_id=item.topic_id,
+                        action_type=item.action_type,
+                        scheduled_for=item.scheduled_for,
+                        estimated_minutes=item.estimated_minutes,
+                        priority=item.priority,
+                        status=POSTPONED,
+                        recommendation_reason=item.recommendation_reason,
+                        completed_at=None,
+                    )
+                )
+                postponed.append(plan_item_id)
+        return tuple(postponed)
 
     def list_study_plans(
         self, *, filters: StudyPlanFilters, limit: int, offset: int
@@ -704,6 +913,24 @@ class ManageStudyPlans:
 
 
 @dataclass(frozen=True, slots=True)
+class _PlanInputs:
+    """Everything a pair of plans is written from, once the rules have run.
+
+    Assembled by `_compose` so generation and adaptation share one path through
+    the reads and the two pure rules. Only the reasons differ afterwards.
+    """
+
+    horizon: Horizon
+    subjects: Mapping[uuid.UUID, SubjectRecord]
+    topics: Sequence[TopicRecord]
+    ordering: TopicOrdering
+    stages: Mapping[uuid.UUID, str]
+    session_minutes: int | None
+    week: tuple[DayCapacity, ...]
+    sessions: Sequence[PlannedSession]
+
+
+@dataclass(frozen=True, slots=True)
 class _NewPlan:
     """A plan about to be written, before it has an identity."""
 
@@ -846,14 +1073,22 @@ def _ordered_topics(
     subjects: Mapping[uuid.UUID, SubjectRecord],
     relationships: Sequence[TopicRelationshipRecord],
     preferences: PlanningPreferences,
+    *,
+    excluded: frozenset[uuid.UUID] = frozenset(),
 ) -> TopicOrdering:
     """Every trackable topic, in the order the learner asked to work through them.
 
     Only trackable topics are planned. A topic that merely groups subtopics is a
     heading rather than work, which is the rule PRG-004 applies when it refuses a
     stage against one.
+
+    `excluded` leaves topics out before any rule runs, which is how adaptation
+    drops work the learner has completed. Excluding first rather than filtering
+    after means the ordering and the session placement see the same curriculum a
+    generation would have seen without those topics — so an adapted plan is a
+    real plan, not a generated one with holes in it.
     """
-    plannable = _plannable(topics, subjects)
+    plannable = _plannable(topics, subjects, excluded)
     if preferences.topic_sequencing != PREREQUISITES_FIRST:
         return order_by_syllabus(plannable)
 
@@ -871,9 +1106,11 @@ def _ordered_topics(
 
 
 def _plannable(
-    topics: Sequence[TopicRecord], subjects: Mapping[uuid.UUID, SubjectRecord]
+    topics: Sequence[TopicRecord],
+    subjects: Mapping[uuid.UUID, SubjectRecord],
+    excluded: frozenset[uuid.UUID] = frozenset(),
 ) -> tuple[PlannableTopic, ...]:
-    """The trackable topics, each carrying where it sits in the syllabus."""
+    """The trackable topics not excluded, each carrying its syllabus position."""
     by_id = {topic.id: topic for topic in topics}
     return tuple(
         PlannableTopic(
@@ -885,7 +1122,7 @@ def _plannable(
             ),
         )
         for topic in topics
-        if topic.is_trackable and topic.subject_id in subjects
+        if topic.is_trackable and topic.subject_id in subjects and topic.id not in excluded
     )
 
 
@@ -992,6 +1229,93 @@ def _weekly_reason(
     return (
         f"The first {scheduled} of {planned} topics on your roadmap, placed on the days you said "
         f"you can study between {today.isoformat()} and {until.isoformat()}. "
+        f"{_session_sentence(session_minutes)}"
+    )
+
+
+def _adapted_roadmap_reason(
+    *,
+    ordering: TopicOrdering,
+    horizon: Horizon,
+    today: date,
+    session_minutes: int | None,
+    scheduled: int,
+    week_holds_time: bool,
+    completed: int,
+    postponed: int,
+) -> str:
+    """The sentence an adapted roadmap gives for itself.
+
+    It says what a generated roadmap says, and then the two things only an
+    adaptation can say: what the learner has already finished, and what was
+    carried over from the plan this one replaced. Both are descriptions of the
+    plan rather than measurements of the learner — the line ADR-020 drew when it
+    let a plan state "60 topics" while refusing to total a day or a week.
+    """
+    remaining = len(ordering.topics)
+    order = SEQUENCING_LABELS[
+        PREREQUISITES_FIRST if ordering.prerequisites_applied else "syllabus_order"
+    ]
+    if remaining == 0:
+        parts = [
+            "Every topic in your curriculum has a completed session, so this plan has no work "
+            "left in it."
+        ]
+    else:
+        parts = [f"{remaining} topics still to work through, in {order}."]
+    if completed:
+        parts.append(f"{completed} topics you have already completed are not planned again.")
+    if postponed:
+        parts.append(
+            f"{postponed} items whose day had passed are marked postponed on the plan this one "
+            "replaces, and their topics are planned again here."
+        )
+    if remaining:
+        if horizon.ends_on is None:
+            parts.append(
+                "This goal has no date to work toward: its examination schedule publishes no "
+                "sitting day and no target date is set, so this roadmap has no end date."
+            )
+        else:
+            parts.append(_horizon_sentence(horizon, today))
+        parts.append(_session_sentence(session_minutes))
+        if not week_holds_time:
+            parts.append(
+                "No study time is saved against this goal, so no day-by-day plan was built. "
+                "Save your study week to get dated work."
+            )
+        elif scheduled == 0:
+            parts.append(
+                "None of the coming seven days holds enough time for a session, so no day-by-day "
+                "plan was built."
+            )
+    if ordering.held_back_by_a_cycle:
+        parts.append(
+            f"{len(ordering.held_back_by_a_cycle)} topics could not be placed by prerequisite "
+            "order, because their prerequisites refer to each other in a loop; they follow the "
+            "syllabus instead."
+        )
+    return " ".join(parts)
+
+
+def _adapted_weekly_reason(
+    *,
+    scheduled: int,
+    remaining: int,
+    today: date,
+    until: date,
+    session_minutes: int | None,
+    postponed: int,
+) -> str:
+    """The sentence an adapted weekly plan gives for itself."""
+    carried = (
+        f" {postponed} of them are topics carried over from days that had passed."
+        if postponed
+        else ""
+    )
+    return (
+        f"The first {scheduled} of the {remaining} topics you have left, placed on the days you "
+        f"said you can study between {today.isoformat()} and {until.isoformat()}.{carried} "
         f"{_session_sentence(session_minutes)}"
     )
 

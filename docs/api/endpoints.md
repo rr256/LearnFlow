@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-08
+last_updated: 2026-08-09
 related:
   - ../00-project-context.md
   - conventions.md
@@ -21,6 +21,7 @@ related:
   - ../adr/ADR-019-study-goal-planning-preferences.md
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
+  - ../adr/ADR-022-plan-adaptation.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -396,14 +397,21 @@ Supports **FR-003 — Study Timeline and Plan** and **FR-004 — Plan Adaptation
 | PLN-002 | `GET /api/v1/study-plans` | List plans, filterable by goal, type, status, and period. | Plan collection. | Implemented |
 | PLN-003 | `GET /api/v1/study-plans/{plan_id}` | Read one plan and its ordered items. | Plan + plan items. | Implemented |
 | PLN-004 | `PATCH /api/v1/plan-items/{plan_item_id}` | Mark a plan item completed, or return it to `planned`. Skipping and postponing are catalogued and not accepted. | Updated plan item. | Implemented |
-| PLN-005 | `POST /api/v1/study-plans/{plan_id}/adapt` | Request an updated plan after missed work or changed availability. | New/superseding plan or accepted operation. | Not implemented |
+| PLN-005 | `POST /api/v1/study-goals/{study_goal_id}/adapt` | Rebuild a goal's active plans around completed and missed work. | New plans; what was superseded, postponed, and left out. | Implemented |
 
 PLN-001 to PLN-003 are implemented, and their contracts are fixed by
-[ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 is implemented and contracted by
-[ADR-021](../adr/ADR-021-plan-item-completion.md). None of them accepts a `learner_id`: the
-effective learner is resolved server-side, per the [identity assumption](#identity-assumption) above.
-All four are synchronous, and all four read and write through the `ManageStudyPlans` application
-use case.
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 by
+[ADR-021](../adr/ADR-021-plan-item-completion.md); and PLN-005 by
+[ADR-022](../adr/ADR-022-plan-adaptation.md). None of them
+accepts a `learner_id`: the effective learner is resolved server-side, per the
+[identity assumption](#identity-assumption) above. All five are synchronous, and all five read and
+write through the `ManageStudyPlans` application use case.
+
+**PLN-005 does not use the path this catalogue first held.** It was listed as
+`POST /api/v1/study-plans/{plan_id}/adapt`; it is implemented as
+`POST /api/v1/study-goals/{study_goal_id}/adapt`, because adaptation supersedes and rewrites every
+active plan of a goal, so a path naming one plan would misdescribe what moves. ADR-022 records the
+departure.
 
 **A plan is deterministic.** The same goal, curriculum, week, preferences, and date produce the same
 plan every time, and no AI provider is involved — which is what
@@ -439,7 +447,9 @@ a silently ignored field.
   each is still readable through PLN-003.
 
 **Generating again supersedes rather than refusing.** The goal's existing `active` plans become
-`superseded` and a new pair is written, so a learner whose availability changed simply asks again.
+`superseded` and a new pair is written. A learner whose availability changed can generate again — but
+once they have completed work, [PLN-005](#pln-005-post-apiv1study-goalsstudy_goal_idadapt) is the
+better path: generation re-plans every topic, adaptation leaves out what is done.
 That is deliberately unlike GOAL-001's refusal of a second active goal: a goal is what a plan is built
 *from* and is expensive to re-enter, while a plan is derived and is preserved rather than destroyed.
 
@@ -521,12 +531,15 @@ Each item carries `id`, `topic`, `action_type`, `scheduled_for`, `estimated_minu
 - `priority` is where the item falls in its plan, counting from 1. **An order, not a score.**
 - `action_type` is `study` on everything generated today. `practice`, `revise`, and `review_mistakes`
   name work the product does not yet model.
-- `status` is `planned` on everything generated. PLN-004 moves it to `completed` and back.
+- `status` is `planned` on everything generated. PLN-004 moves it to `completed` and back, and
+  PLN-005 marks an overdue item `postponed` on the plan it supersedes.
 - `completed_at` is when the learner marked the item completed, and `null` on everything else.
 
-**A superseded plan is readable and reads exactly as it was written**, including the reasons and the
-statuses. That is the point of superseding rather than deleting, and it is why PLN-004 refuses to
-write into one.
+**A superseded plan is readable, and its content and reasons read exactly as they were written.**
+That is the point of superseding rather than deleting, and it is why PLN-004 refuses to write into
+one. The one thing that may move on a superseded plan is an item's `status`: adaptation marks work
+whose day passed `postponed` as it sets the plan aside, which is a statement about what happened
+rather than a rewriting of what was planned.
 
 Errors: `404` `not_found` when no such plan is stored *or it belongs to another learner*; `422`
 `validation_error` when the path segment is not a UUID; `409` `conflict` when more than one learner
@@ -542,9 +555,10 @@ Contracted by [ADR-021](../adr/ADR-021-plan-item-completion.md). It needed **no 
 to write either.
 
 **Two statuses are accepted: `completed` and `planned`.** `skipped` and `postponed` are values the
-column holds and this endpoint refuses, with a `422` saying they are not built yet. Postponing work
-raises the question of what it moves *to*, which is the re-planning PLN-005 does not yet do, so a
-stored status nothing reads would say less than an honest refusal.
+column holds and this endpoint refuses, with a `422`. The refusal stands, but its reason has
+changed: **`postponed` is now written by PLN-005** rather than requested by a learner — adaptation
+marks work whose day passed and re-places it, which is where postponed work goes. Asking for it here
+would set a status with nothing to move the work *to*. `skipped` is still not built at all.
 
 **Completing is reversible.** Sending `planned` puts an item back and clears `completed_at`. Nothing
 here treats finishing work as a verdict, which is the position
@@ -574,12 +588,48 @@ Errors: `404` `not_found` when no such item is stored *or its plan belongs to an
 `conflict` when the item's plan has been superseded, when no learner exists yet, or when more than one
 learner is stored.
 
-### PLN-005 — not implemented
+### PLN-005 — `POST /api/v1/study-goals/{study_goal_id}/adapt`
 
-It belongs to [FR-004](../requirements/functional.md#fr-004-plan-adaptation) and waits on decisions
-no change has yet taken: re-planning after missed work or changed availability needs the trade-off
-reporting FR-004's third criterion asks for. Generating again through PLN-001 is what a learner does
-in the meantime, and it supersedes rather than duplicating.
+`study_goal_id` is a UUID. **No request body**: everything adaptation acts on is already stored, so
+no caller can adapt toward a preference the learner never set. Returns `201` with the adaptation
+under `data`.
+
+Contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md). It needed **no migration**: `plan_items.status` has accepted `postponed` since
+`20260806_03`, and this is the first code to write it.
+
+`data` carries `study_goal_id`, `adapted_on`, `plans`, `superseded_plan_ids`,
+`postponed_plan_item_ids`, `completed_topic_count`, and `remaining_topic_count`. The plans are the
+same shape PLN-003 returns, with their items.
+
+**The learner asks; nothing adapts on its own.** Completing an item re-plans nothing and saving a
+study week re-plans nothing — there is no scheduler and no background job. That keeps PLN-004's
+promise that only the named item moves.
+
+**A topic with a completed session is not planned again**, wherever on the goal it was completed,
+including on a plan long superseded. Superseding a plan does not un-complete the work done under it.
+The exclusion is applied before the ordering and placement rules run, so an adapted plan is a real
+plan over what remains rather than a generated one with holes in it.
+
+**Overdue work is marked `postponed`** on the plan being set aside, and its topic is re-placed on the
+new one. What makes an item overdue is decided in the domain: it is dated before today and its work
+has not happened. An item dated *today* is not overdue, an undated roadmap item is never overdue, and
+completed work is never overdue however late it was done. The word describes the **item**, never the
+learner.
+
+**Adaptation supersedes exactly as PLN-001 does.** The goal's active plans become `superseded`, a new
+`roadmap` and — when the week has room — a new `weekly` plan are written, and nothing is deleted.
+`monthly` and `daily` remain unwritten.
+
+**The two counts describe the plan, not the learner.** They say how much of the curriculum this plan
+covers and why it is shorter than the last one. Nothing is ranked, scored, or congratulated, and no
+total is reported for a day, a week, or a plan.
+
+A goal where every topic is completed receives a roadmap with no items and a reason saying so, rather
+than an error.
+
+Errors: `404` `not_found` when no such goal is stored *or it belongs to another learner*; `422`
+`validation_error` when the path segment is not a UUID; `409` `conflict` when the goal has no active
+plan to adapt, when no learner exists yet, or when more than one learner is stored.
 
 Related entities: [study plan](../domain/entities.md#study-plan) and
 [plan item](../domain/entities.md#plan-item). Related tables:
@@ -778,11 +828,12 @@ Implement in an order that enables one working learner flow:
    [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). PRG-001, PRG-003, ACT-001, and
    ACT-002 wait on the revision and study-activity records described above; PRG-001 also reports the
    current plan, which PLN-001 now generates.
-4. Plan generation/read/update. **Partly done** — PLN-001, PLN-002, and PLN-003 generate a plan and
-   read it back, contracted by [ADR-020](../adr/ADR-020-initial-study-plan-generation.md), and
-   PLN-004 marks one of its items completed, contracted by
-   [ADR-021](../adr/ADR-021-plan-item-completion.md). PLN-005 belongs to FR-004 and waits on plan
-   adaptation, as skipping and postponing an item do.
+4. Plan generation/read/update. **Done** — PLN-001, PLN-002, and PLN-003 generate a plan and read
+   it back, contracted by [ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 marks
+   one of its items completed, contracted by
+   [ADR-021](../adr/ADR-021-plan-item-completion.md); and PLN-005 rebuilds a plan around what
+   happened, contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md). Letting a learner *skip* an
+   item outright is the one part of FR-004's first criterion still unbuilt.
 5. Revision reads/updates.
 6. Resource registration and ingestion status.
 7. Mentor questions and grounded retrieval.
@@ -801,6 +852,7 @@ Implement in an order that enables one working learner flow:
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the `planning_preferences` group GOAL-001 and GOAL-004 accept, and the criterion it completes
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the request and response fields of PLN-001 to PLN-003, and the rules a generated plan follows
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the request and response fields of PLN-004, the two statuses it accepts, and why it refuses the other two
+- [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the request and response fields of PLN-005, the path it departs from, and the first write of `postponed`
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

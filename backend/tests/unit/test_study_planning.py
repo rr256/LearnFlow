@@ -11,12 +11,14 @@ from datetime import date
 import pytest
 
 from app.domain.study_planning import (
+    DatedItem,
     DayCapacity,
     PlannableTopic,
     SyllabusPosition,
     order_by_prerequisites,
     order_by_syllabus,
     schedule_sessions,
+    select_overdue,
 )
 
 MONDAY = date(2026, 8, 10)
@@ -251,3 +253,50 @@ def test_scheduling_the_same_inputs_twice_gives_the_same_plan():
 def test_a_session_must_have_a_positive_length():
     with pytest.raises(ValueError):
         schedule_sessions([uuid.uuid4()], days(60), session_minutes=0)
+
+
+# -- overdue items ----------------------------------------------------------
+
+
+def dated(scheduled_for, is_done=False, item_id=None):
+    return DatedItem(
+        plan_item_id=item_id or uuid.uuid4(), scheduled_for=scheduled_for, is_done=is_done
+    )
+
+
+def test_an_item_dated_before_today_with_work_undone_is_overdue():
+    item = dated(date(2026, 8, 7))
+
+    assert select_overdue([item], date(2026, 8, 9)) == (item.plan_item_id,)
+
+
+def test_an_item_dated_today_is_not_overdue():
+    """The day has not finished. Adapting in the morning must not declare it lost."""
+    assert select_overdue([dated(date(2026, 8, 9))], date(2026, 8, 9)) == ()
+
+
+def test_an_item_dated_after_today_is_not_overdue():
+    assert select_overdue([dated(date(2026, 8, 10))], date(2026, 8, 9)) == ()
+
+
+def test_an_undated_item_is_never_overdue():
+    """A roadmap item says what order to work in, not which day; it cannot be
+    late for a day it never named."""
+    assert select_overdue([dated(None)], date(2026, 8, 9)) == ()
+
+
+def test_completed_work_is_never_overdue_however_late_it_was_done():
+    assert select_overdue([dated(date(2020, 1, 1), is_done=True)], date(2026, 8, 9)) == ()
+
+
+def test_the_order_given_is_the_order_returned():
+    """A caller writing these back does so deterministically."""
+    first, second, third = (dated(date(2026, 8, 1)) for _ in range(3))
+
+    overdue = select_overdue([first, second, third], date(2026, 8, 9))
+
+    assert overdue == (first.plan_item_id, second.plan_item_id, third.plan_item_id)
+
+
+def test_nothing_overdue_is_an_empty_result_rather_than_a_failure():
+    assert select_overdue([], date(2026, 8, 9)) == ()

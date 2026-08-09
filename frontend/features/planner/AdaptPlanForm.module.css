@@ -1,0 +1,53 @@
+.form {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+/*
+ * A secondary button rather than a second accent one. Generating and adapting
+ * are different weights of action: a learner who has never planned needs the
+ * first offered prominently, and a learner mid-plan needs the second available
+ * without it competing for the same attention.
+ */
+.adapt {
+  border: 1px solid var(--colour-accent);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-6);
+  background-color: var(--colour-surface);
+  color: var(--colour-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.adapt:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.hint {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+/*
+ * The two outcome messages differ in wording as well as in border, and each is
+ * announced: meaning never rests on colour alone
+ * (docs/development/coding-standards.md#accessibility).
+ */
+.adapted,
+.error {
+  margin: 0;
+  border: 1px solid var(--colour-border);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--colour-surface-muted);
+}
+
+.error {
+  border-color: var(--colour-notice-border);
+  background-color: var(--colour-notice-surface);
+}

@@ -47,7 +47,7 @@ export const PLAN_ITEM_ACTION_LABELS: Record<PlanItemAction, string> = {
   review_mistakes: "Review mistakes",
 };
 
-/** The states a plan item can be in. Generation writes `planned`. */
+/** The states a plan item can be in. Generation writes `planned`; PLN-005 writes `postponed`. */
 export type PlanItemStatus = "planned" | "completed" | "skipped" | "postponed";
 
 /**
@@ -123,3 +123,21 @@ export type StudyPlanCollectionResponse = CollectionEnvelope<StudyPlan>;
 export type StudyPlanResponse = DataEnvelope<StudyPlan>;
 export type GenerateStudyPlanResponse = DataEnvelope<GeneratedStudyPlans>;
 export type PlanItemResponse = DataEnvelope<PlanItem>;
+
+/** What one adaptation produced (PLN-005). */
+export interface AdaptedStudyPlans {
+  study_goal_id: string;
+  /** The date the adapted plan was built around, in the learner's own timezone. */
+  adapted_on: string;
+  plans: StudyPlan[];
+  /** Plans this adaptation set aside. They are kept, not deleted. */
+  superseded_plan_ids: string[];
+  /** Items whose day had passed with the work undone, now marked `postponed`. */
+  postponed_plan_item_ids: string[];
+  /** Topics with a completed session, which are not planned again. */
+  completed_topic_count: number;
+  /** How many topics the adapted plan still covers. */
+  remaining_topic_count: number;
+}
+
+export type AdaptStudyPlanResponse = DataEnvelope<AdaptedStudyPlans>;

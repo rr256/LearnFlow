@@ -256,3 +256,45 @@ def schedule_sessions(
             left -= minutes
             placed_today += 1
     return tuple(sessions)
+
+
+@dataclass(frozen=True, slots=True)
+class DatedItem:
+    """One plan item reduced to what deciding "behind" needs.
+
+    An identifier, the day the plan asked for the work, and whether the work has
+    happened. Nothing else about an item bears on the question.
+    """
+
+    plan_item_id: uuid.UUID
+    scheduled_for: date | None
+    is_done: bool
+
+
+def select_overdue(items: Iterable[DatedItem], today: date) -> tuple[uuid.UUID, ...]:
+    """The items whose day has passed and whose work has not happened.
+
+    This is the definition of an item being *overdue*, kept here rather than inside the
+    use case because it is a rule about a plan rather than a database read, and
+    because a rule this consequential should be exhaustively testable without a
+    clock (FR-004).
+
+    Three boundaries are decided rather than left to be discovered:
+
+    - **Today is not behind.** An item dated today still has the day to happen in,
+      so it is not overdue until tomorrow. Adapting in the morning must not
+      declare the day already lost.
+    - **An undated item is never behind.** A roadmap item says what order to work
+      in, not which day; it cannot be late for a day it never named.
+    - **Done is never behind**, however late it was completed. The work happened,
+      which is the only question this asks.
+
+    Returns:
+        The identifiers, in the order given, so a caller writing them back does so
+        deterministically.
+    """
+    return tuple(
+        item.plan_item_id
+        for item in items
+        if not item.is_done and item.scheduled_for is not None and item.scheduled_for < today
+    )

@@ -16,6 +16,7 @@ from app.application.dto.study_plan import (
     COMPLETED,
     DEFAULT_SESSION_MINUTES,
     PLANNED,
+    POSTPONED,
     ROADMAP,
     SUPERSEDED,
     WEEKLY,
@@ -28,6 +29,7 @@ from app.application.ports.study_goal_repository import StudyGoalRecord
 from app.application.use_cases.local_learner import AmbiguousLocalLearnerError
 from app.application.use_cases.manage_study_plans import (
     LearnerNotSetUpError,
+    NoActivePlanToAdaptError,
     PlanItemNotFoundError,
     PlanItemNotOnActivePlanError,
     StudyGoalNotFoundError,
@@ -750,3 +752,235 @@ def test_an_unreadable_timezone_falls_back_to_utc_rather_than_failing():
     generated = planning.generate()
 
     assert generated.generated_on == date(2026, 8, 6)
+
+
+# -- adapting a plan --------------------------------------------------------
+
+
+def complete(planning, item_id):
+    """Mark one item completed through the use case, as PLN-004 does."""
+    planning.planner().record_item_status(item_id, PlanItemStatusChange(status=COMPLETED))
+
+
+def test_adapting_supersedes_the_active_plans_and_writes_a_new_pair():
+    planning = Planning(availability={"thursday": 120})
+    first = planning.generate()
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert sorted(adapted.superseded_plan_ids) == sorted(plan.id for plan in first.plans)
+    assert [plan.plan_type for plan in adapted.plans] == [ROADMAP, WEEKLY]
+    assert all(plan.status == ACTIVE for plan in adapted.plans)
+
+
+def test_a_completed_topic_is_not_planned_again():
+    """The whole point: finishing work has to buy the learner something."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    done = weekly(generated).items[0]
+    complete(planning, done.id)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    planned = {item.topic.id for item in roadmap(adapted).items}
+    assert done.topic.id not in planned
+    assert adapted.completed_topic_count == 1
+    assert adapted.remaining_topic_count == 2
+
+
+def test_a_topic_completed_on_a_plan_since_superseded_stays_completed():
+    """Superseding a plan does not un-complete the work done under it."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    done = weekly(generated).items[0]
+    complete(planning, done.id)
+    planning.planner().adapt(planning.goal.id)
+
+    again = planning.planner().adapt(planning.goal.id)
+
+    assert done.topic.id not in {item.topic.id for item in roadmap(again).items}
+    assert again.completed_topic_count == 1
+
+
+def test_an_overdue_item_is_marked_postponed_on_the_plan_being_replaced():
+    """The answer ADR-021 could not give to where postponed work moves to."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    overdue = weekly(generated).items[0]
+    planning.clock.instant = datetime(2026, 8, 10, 9, 0, tzinfo=UTC)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert overdue.id in adapted.postponed_plan_item_ids
+    stored = planning.plans.find_plan_item(overdue.id)
+    assert stored.status == POSTPONED
+    assert stored.completed_at is None
+
+
+def test_a_postponed_topic_is_planned_again():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    overdue = weekly(generated).items[0]
+    planning.clock.instant = datetime(2026, 8, 10, 9, 0, tzinfo=UTC)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert overdue.topic.id in {item.topic.id for item in roadmap(adapted).items}
+
+
+def test_a_completed_item_is_never_postponed_however_late_it_was_done():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    done = weekly(generated).items[0]
+    complete(planning, done.id)
+    planning.clock.instant = datetime(2026, 8, 20, 9, 0, tzinfo=UTC)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert done.id not in adapted.postponed_plan_item_ids
+    assert planning.plans.find_plan_item(done.id).status == COMPLETED
+
+
+def test_an_undated_roadmap_item_is_never_postponed():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    planning.clock.instant = datetime(2027, 1, 1, 9, 0, tzinfo=UTC)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    roadmap_items = {item.id for item in roadmap(generated).items}
+    assert not roadmap_items & set(adapted.postponed_plan_item_ids)
+
+
+def test_adapting_keeps_the_superseded_plan_readable():
+    """Superseding rather than deleting is what makes plan history worth having."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    week = weekly(generated)
+    planner = planning.planner()
+    planner.adapt(planning.goal.id)
+
+    stored = planner.read(week.id)
+
+    assert stored.status == SUPERSEDED
+    assert stored.generation_reason == week.generation_reason
+    assert stored.item_count == week.item_count
+
+
+def test_the_adapted_roadmap_explains_what_changed():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    complete(planning, weekly(generated).items[0].id)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    reason = roadmap(adapted).generation_reason
+    assert "2 topics still to work through" in reason
+    assert "1 topics you have already completed are not planned again" in reason
+
+
+def test_adapting_when_everything_is_completed_says_so_rather_than_failing():
+    planning = Planning(availability={"thursday": 480})
+    generated = planning.generate()
+    for item in weekly(generated).items:
+        complete(planning, item.id)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert adapted.remaining_topic_count == 0
+    assert roadmap(adapted).item_count == 0
+    assert "no work left in it" in roadmap(adapted).generation_reason
+    assert [plan.plan_type for plan in adapted.plans] == [ROADMAP]
+
+
+def test_adapting_writes_no_learning_stage():
+    """A plan item records whether planned work happened, not that a topic is
+    understood -- rule 4 of the domain model, which adaptation must not breach."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    complete(planning, weekly(generated).items[0].id)
+
+    planning.planner().adapt(planning.goal.id)
+
+    assert planning.progress.records == []
+
+
+def test_adapting_uses_the_same_ordering_rule_as_generation():
+    """An adapted plan is a real plan, not a generated one with holes in it."""
+    planning = Planning(availability={"thursday": 120})
+    planning.generate()
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert [item.topic.id for item in roadmap(adapted).items] == [
+        planning.logic.id,
+        planning.sets.id,
+        planning.scheduling.id,
+    ]
+
+
+def test_adapting_reports_no_total_for_a_day_or_a_week():
+    planning = Planning(availability={"thursday": 120})
+    planning.generate()
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    for plan in adapted.plans:
+        assert "total" not in (plan.generation_reason or "").lower()
+
+
+def test_adapting_a_goal_with_no_active_plan_is_refused():
+    """Building a first plan from nothing is PLN-001's work, not this one's."""
+    planning = Planning(availability={"thursday": 120})
+
+    with pytest.raises(NoActivePlanToAdaptError):
+        planning.planner().adapt(planning.goal.id)
+
+
+def test_adapting_a_goal_that_is_not_stored_is_refused():
+    with pytest.raises(StudyGoalNotFoundError):
+        Planning().planner().adapt(uuid.uuid4())
+
+
+def test_adapting_another_learners_goal_reports_it_as_missing():
+    planning = Planning(availability={"thursday": 120})
+    planning.generate()
+    planning.learners.learners = [learner(display_name="Someone else")]
+
+    with pytest.raises(StudyGoalNotFoundError):
+        planning.planner().adapt(planning.goal.id)
+
+
+def test_adapting_with_no_learner_stored_is_refused():
+    planning = Planning(availability={"thursday": 120})
+    planning.generate()
+    planning.learners.learners = []
+
+    with pytest.raises(LearnerNotSetUpError):
+        planning.planner().adapt(planning.goal.id)
+
+
+def test_adapting_with_more_than_one_learner_stored_is_refused():
+    planning = Planning(availability={"thursday": 120})
+    planning.generate()
+    planning.learners.add_learner(learner(display_name="Second"))
+
+    with pytest.raises(AmbiguousLocalLearnerError):
+        planning.planner().adapt(planning.goal.id)
+
+
+def test_adapting_is_deterministic():
+    """The same inputs produce the same adapted plan, as generation does."""
+
+    def build():
+        planning = Planning(availability={"thursday": 120})
+        generated = planning.generate()
+        complete(planning, weekly(generated).items[0].id)
+        return planning.planner().adapt(planning.goal.id)
+
+    first, second = build(), build()
+
+    assert first.remaining_topic_count == second.remaining_topic_count
+    assert [plan.generation_reason for plan in first.plans] == [
+        plan.generation_reason for plan in second.plans
+    ]

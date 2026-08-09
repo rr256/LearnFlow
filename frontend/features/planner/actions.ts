@@ -1,7 +1,8 @@
 "use server";
 
 /**
- * The write paths for generating a study plan and completing its items.
+ * The write paths for generating a study plan, completing its items, and
+ * adapting it around what happened.
  *
  * A server action runs on the Next.js server, so the browser still makes no
  * request to the backend: the form posts to this process, which calls the API
@@ -23,12 +24,19 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  readAdaptSubmission,
   readPlanItemSubmission,
   readPlanSubmission,
+  type AdaptState,
   type PlanItemState,
   type PlanState,
 } from "@/features/planner/submission";
-import { ApiError, generateStudyPlan, updatePlanItemStatus } from "@/lib/api-client";
+import {
+  ApiError,
+  adaptStudyPlan,
+  generateStudyPlan,
+  updatePlanItemStatus,
+} from "@/lib/api-client";
 
 /**
  * Generate a study plan for the learner's goal.
@@ -144,5 +152,68 @@ export async function savePlanItemStatus(
     status: "saved",
     message:
       item.status === "completed" ? "Marked completed." : "Returned to your plan.",
+  };
+}
+
+
+/**
+ * Adapt the learner's active plan around what has and has not happened.
+ *
+ * The learner asks for this; nothing adapts on its own. Topics they have
+ * completed are not planned again, and work whose day passed is carried forward.
+ *
+ * A conflict means the goal has no active plan yet, so the message points at
+ * generating one rather than repeating the backend's wording.
+ */
+export async function adaptPlan(_previous: AdaptState, form: FormData): Promise<AdaptState> {
+  const read = readAdaptSubmission(form);
+  if ("problem" in read) {
+    return { status: "error", message: read.problem };
+  }
+
+  let adapted;
+  try {
+    adapted = await adaptStudyPlan(read.studyGoalId);
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    if (error.isUnreachable) {
+      return {
+        status: "error",
+        message:
+          "The LearnFlow API could not be reached, so nothing was adapted. Check that the backend is running, then try again.",
+      };
+    }
+    if (error.isConflict) {
+      return {
+        status: "error",
+        message: "There is no plan to adapt yet. Generate one first, then come back to this.",
+      };
+    }
+    if (error.isNotFound) {
+      return {
+        status: "error",
+        message: "That study goal is no longer stored. Set your goal again, then generate a plan.",
+      };
+    }
+    return { status: "error", message: error.message };
+  }
+
+  // The panels are rendered from the plan, so the page has to be re-read for the
+  // adapted one to appear rather than the one it replaced.
+  revalidatePath("/plan");
+
+  const carried =
+    adapted.postponed_plan_item_ids.length > 0
+      ? ` ${adapted.postponed_plan_item_ids.length} items whose day had passed were carried forward.`
+      : "";
+  const done =
+    adapted.completed_topic_count > 0
+      ? ` ${adapted.completed_topic_count} topics you have completed are not planned again.`
+      : "";
+  return {
+    status: "adapted",
+    message: `Your plan has been rebuilt around where you are.${done}${carried} The previous one is kept, not deleted.`,
   };
 }

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import styles from "@/app/plan/page.module.css";
 import { Notice } from "@/components/Notice";
+import { AdaptPlanForm } from "@/features/planner/AdaptPlanForm";
 import { GeneratePlanForm } from "@/features/planner/GeneratePlanForm";
 import { PlanWeek } from "@/features/planner/PlanWeek";
 import { StudyRoadmap } from "@/features/planner/StudyRoadmap";
@@ -115,6 +116,12 @@ async function StudyPlanSection() {
         </Notice>
       ) : (
         <>
+          {/*
+            Offered only once a plan exists: adaptation rebuilds a plan around
+            what happened to it, and with no plan there is no "what happened".
+            The backend refuses the same case with a 409.
+          */}
+          <AdaptPlanForm studyGoalId={data.goal.id} />
           <PlanWeek plan={data.week} />
           <StudyRoadmap plan={data.roadmap} />
         </>
@@ -124,7 +131,7 @@ async function StudyPlanSection() {
 }
 
 /**
- * The plan screen: PLN-001, PLN-002, and PLN-003.
+ * The plan screen: PLN-001 to PLN-005.
  *
  * The plan is deterministic and explains itself. Nothing here decides what is in
  * it — this screen asks for one, then renders what came back, in the order it
@@ -140,8 +147,8 @@ export default function PlanPage() {
       <p className={styles.lead}>
         Built from your curriculum, the date you are working toward, the study time you saved, and
         how you said you want to study. Mark each item completed as you go, and change your mind
-        whenever you like — nothing is re-planned around it. Monthly and daily views, and re-planning
-        after a missed week, are not built yet.
+        whenever you like. When you are ready, update the plan to rebuild it around where you have
+        got to — nothing moves until you ask. Monthly and daily views are not built yet.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading your study plan…</p>}>

@@ -136,6 +136,19 @@ class StudyPlanRepository(Protocol):
         """
         ...
 
+    def list_completed_topic_ids(self, study_goal_id: uuid.UUID) -> frozenset[uuid.UUID]:
+        """Every topic this goal has a `completed` plan item for, on any plan.
+
+        Read across the goal's whole plan history rather than its active plans
+        alone: superseding a plan does not un-complete the work the learner did
+        under it, so a topic finished last week must not be offered again by the
+        plan that replaces it (PLN-005).
+
+        A set rather than a page. It is asked once per adaptation and answers a
+        membership question, so there is nothing to order and nothing to window.
+        """
+        ...
+
     def find_plan_item(self, plan_item_id: uuid.UUID) -> PlanItemRecord | None:
         """The item with this identifier, or None.
 
