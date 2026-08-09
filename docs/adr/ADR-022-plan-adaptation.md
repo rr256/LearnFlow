@@ -1,6 +1,6 @@
 ---
 title: "ADR-022: Adapt a Study Plan by Rebuilding It Around What Happened"
-status: proposed
+status: accepted
 owner: architecture-and-data
 last_updated: 2026-08-09
 related:
@@ -29,7 +29,13 @@ related:
 
 ## Status
 
-Proposed — 2026-08-09.
+Accepted — 2026-08-09. Proposed 2026-08-09.
+
+Accepted once the decision below was verified rather than merely argued: the PostgreSQL integration
+tests ran locally against a disposable database and again in CI, and the whole check set is green. One
+verification named under [Implementation notes](#implementation-notes) stays open and is recorded
+there — this change has not been exercised against the production standalone frontend with a stub API
+and JavaScript disabled, as ADR-015 through ADR-021 each were.
 
 This delivers [FR-004](../requirements/functional.md#fr-004-plan-adaptation)'s **second** acceptance
 criterion in full — "when work is missed or availability changes, the learner can request an updated

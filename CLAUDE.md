@@ -83,8 +83,7 @@ study-plan generation by
 [`docs/adr/ADR-020-initial-study-plan-generation.md`](docs/adr/ADR-020-initial-study-plan-generation.md),
 plan-item completion by
 [`docs/adr/ADR-021-plan-item-completion.md`](docs/adr/ADR-021-plan-item-completion.md), and plan
-adaptation by [`docs/adr/ADR-022-plan-adaptation.md`](docs/adr/ADR-022-plan-adaptation.md), which is
-**proposed rather than accepted**.
+adaptation by [`docs/adr/ADR-022-plan-adaptation.md`](docs/adr/ADR-022-plan-adaptation.md).
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,

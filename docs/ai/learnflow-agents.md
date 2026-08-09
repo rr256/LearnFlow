@@ -91,7 +91,7 @@ The planner is partly implemented, by
 [ADR-020](../adr/ADR-020-initial-study-plan-generation.md) and PLN-001 to PLN-003, together with
 PLN-004, which records that a plan item was completed —
 [ADR-021](../adr/ADR-021-plan-item-completion.md) — and PLN-005, which rebuilds a plan around what
-happened, [ADR-022](../adr/ADR-022-plan-adaptation.md), proposed rather than accepted. See
+happened, [ADR-022](../adr/ADR-022-plan-adaptation.md). See
 [planning endpoints](../api/endpoints.md#planning-endpoints).
 
 Of the inputs above, four are read: the active study goal and its horizon, the availability slots and

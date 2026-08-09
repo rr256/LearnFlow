@@ -262,8 +262,8 @@ horizon, and revision.
   anywhere on the goal is not planned again; work whose day passed with the task undone is marked
   `postponed` on the plan being set aside and re-placed on the new one. The learner asks — nothing
   adapts on its own. It supersedes as generation does, uses the same ordering and placement rules,
-  and needed **no migration**. Contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md), which is
-  proposed and awaiting acceptance. What FR-004's third criterion asks for — reporting that the
+  and needed **no migration**. Contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md).
+  What FR-004's third criterion asks for — reporting that the
   learner's week cannot reach their horizon — is still not built, and is the item below.
 - [ ] Revision records are generated, listed, and updateable by learner action. `revision_records`
   does not exist; nothing is built.

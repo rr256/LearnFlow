@@ -402,7 +402,7 @@ Supports **FR-003 — Study Timeline and Plan** and **FR-004 — Plan Adaptation
 PLN-001 to PLN-003 are implemented, and their contracts are fixed by
 [ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 by
 [ADR-021](../adr/ADR-021-plan-item-completion.md); and PLN-005 by
-[ADR-022](../adr/ADR-022-plan-adaptation.md), which is **proposed rather than accepted**. None of them
+[ADR-022](../adr/ADR-022-plan-adaptation.md). None of them
 accepts a `learner_id`: the effective learner is resolved server-side, per the
 [identity assumption](#identity-assumption) above. All five are synchronous, and all five read and
 write through the `ManageStudyPlans` application use case.
@@ -594,8 +594,7 @@ learner is stored.
 no caller can adapt toward a preference the learner never set. Returns `201` with the adaptation
 under `data`.
 
-Contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md), which is proposed and awaiting
-acceptance. It needed **no migration**: `plan_items.status` has accepted `postponed` since
+Contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md). It needed **no migration**: `plan_items.status` has accepted `postponed` since
 `20260806_03`, and this is the first code to write it.
 
 `data` carries `study_goal_id`, `adapted_on`, `plans`, `superseded_plan_ids`,

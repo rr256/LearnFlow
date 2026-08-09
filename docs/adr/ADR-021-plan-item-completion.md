@@ -49,8 +49,7 @@ left open by name has been answered, and that its worst consequence is discharge
 **Postponing work now has somewhere to go.** PLN-005 rebuilds a goal's active plans around what
 happened: it leaves out topics with completed work, marks items whose day passed `postponed` on the
 plan it supersedes, and re-places them on the new one. Contracted by
-[ADR-022](ADR-022-plan-adaptation.md), which is **proposed rather than accepted**. It needed **no
-migration**.
+[ADR-022](ADR-022-plan-adaptation.md). It needed **no migration**.
 
 **Seven statements above are overtaken.** None of them was wrong when written; each described a state
 of the product that has since moved.

@@ -117,7 +117,7 @@ named as its own worst consequence now has a remedy.*
 
 **A weekly plan can now be rebuilt around what happened to it.** PLN-005 supersedes a goal's active
 plans and writes a new pair from the topics that remain, contracted by
-[ADR-022](ADR-022-plan-adaptation.md), which is **proposed rather than accepted**. It reuses this
+[ADR-022](ADR-022-plan-adaptation.md). It reuses this
 record's rules exactly — the same ordering, the same session placement, the same horizon and session
 length — differing only in which topics go in. It needed **no migration**.
 
