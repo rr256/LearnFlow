@@ -11,6 +11,7 @@ related:
   - ADR-018-weekly-availability-slots.md
   - ADR-020-initial-study-plan-generation.md
   - ADR-021-plan-item-completion.md
+  - ADR-023-daily-study-view.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -329,6 +330,7 @@ client sends changes what the plan is built from — a property ADR-020 chose de
 - [ADR-018: Store weekly availability as named days replaced a week at a time](ADR-018-weekly-availability-slots.md) — the week an adapted plan is placed into
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](ADR-020-initial-study-plan-generation.md) — the plan this rebuilds, the rules it reuses, and the stale-week problem it names
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](ADR-021-plan-item-completion.md) — the completions this consumes, and the `postponed` question it left open
+- [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](ADR-023-daily-study-view.md) — the screen that mirrors this record's overdue boundaries for display and links to adaptation rather than performing it
 - [API conventions](../api/conventions.md) — the envelope, the error codes, and the `snake_case` rule
 - [API endpoint catalog](../api/endpoints.md) — the contract this record decides, and the catalogued path it departs from
 - [API versioning](../api/versioning.md) — what makes a change to it breaking

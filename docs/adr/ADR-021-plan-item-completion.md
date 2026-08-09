@@ -11,6 +11,7 @@ related:
   - ADR-017-topic-progress-api-and-schema.md
   - ADR-020-initial-study-plan-generation.md
   - ADR-022-plan-adaptation.md
+  - ADR-023-daily-study-view.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -389,4 +390,5 @@ would each need their own path later.
 - [Repository and folder structure](../development/folder-structure.md) — where the route and the planner feature live
 - [Delivery milestones](../roadmap/milestones.md) — the Milestone 3 item this partly closes
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](ADR-022-plan-adaptation.md) — the re-planning that answers what postponing moves work to, and the first write of `postponed`
+- [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](ADR-023-daily-study-view.md) — the third screen to carry this control, unchanged
 - [Architecture decision register](../architecture/decisions.md) — DEC-033

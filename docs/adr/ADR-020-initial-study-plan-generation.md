@@ -15,6 +15,7 @@ related:
   - ADR-019-study-goal-planning-preferences.md
   - ADR-021-plan-item-completion.md
   - ADR-022-plan-adaptation.md
+  - ADR-023-daily-study-view.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -579,4 +580,5 @@ calculations". Creating the folder when its first file needs it is that document
 - [Delivery milestones](../roadmap/milestones.md) — the Milestone 2 criterion this completes and the Milestone 3 work it starts
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](ADR-021-plan-item-completion.md) — the first code to write the `status` and `completed_at` columns this record created
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](ADR-022-plan-adaptation.md) — the re-planning that answers the stale-week consequence above, reusing these rules
+- [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](ADR-023-daily-study-view.md) — why the daily screen it adds is not the `daily` plan type this record left ungenerated
 - [Architecture decision register](../architecture/decisions.md) — DEC-032

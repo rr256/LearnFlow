@@ -23,6 +23,7 @@ related:
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
+  - ../adr/ADR-023-daily-study-view.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -228,19 +229,26 @@ so PLN-001 to PLN-003, `study_plans`, `plan_items`, and the deterministic planni
 delivered in Milestone 2's closing change. They are checked below with their evidence. The first half
 of plan adaptation has since followed, and then the second: PLN-004 lets a learner mark an item
 completed, and PLN-005 rebuilds the plan around what they have and have not done — leaving out what is
-finished and carrying forward what was missed.
+finished and carrying forward what was missed. A **daily study view** has joined them at
+`/plan/today`, built by reading the weekly plan rather than by generating a `daily` one, so it needed
+no endpoint and no migration.
 What remains is letting a learner *skip* an item outright, saying whether their week can reach their
-horizon, and revision.
+horizon, a monthly view, and revision.
 
 ### Definition of Done
 
 - [ ] Learner can generate roadmap, monthly, weekly, and daily plan views. **Roadmap and weekly are
   done**: PLN-001 generates both from the learner's curriculum, horizon, saved week, planning
   preferences, and recorded stages, PLN-002 and PLN-003 read them back, and `/plan` shows them.
-  Monthly and daily remain — both are accepted `plan_type` values that nothing writes, so each is a
-  use-case change rather than a migration. Contracted by
-  [ADR-020](../adr/ADR-020-initial-study-plan-generation.md), with migration `20260806_03` creating
-  the two tables.
+  Contracted by [ADR-020](../adr/ADR-020-initial-study-plan-generation.md), with migration
+  `20260806_03` creating the two tables. **A daily view is now done too, as a reading rather than a
+  plan**: `/plan/today` shows the work the active weekly plan placed on the learner's own calendar
+  date — taken from `learners.timezone`, never the server's — with the reason for each item and the
+  same completion control the other panels carry, alongside work whose day has passed, which it shows
+  and deliberately does not move. It needed **no endpoint and no migration**: it filters what PLN-003
+  already returns. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md). **Monthly remains**, and so does a `daily` *plan*: both are accepted
+  `plan_type` values that nothing writes, and what a daily plan contains is deliberately still
+  undecided, so each is a use-case change rather than a migration.
 - [x] Plan items link to topics and supported actions. Every generated item names a trackable topic
   and carries `action_type = 'study'`; `practice`, `revise`, and `review_mistakes` are constrained and
   unwritten, each waiting on the work it names — checkpoint quizzes, revision records, and mistake
@@ -289,7 +297,18 @@ horizon, and revision.
   covering a no-JavaScript completion reaching PLN-004 exactly once, the undo, the `409` for an item
   on a superseded plan, that only the item acted on moved, and that no API address appeared in any
   served page or client script. **Adaptation is covered on the same
-  levels**, with a pure domain test for what makes an item overdue added beside them.
+  levels**, with a pure domain test for what makes an item overdue added beside them. **The daily
+  study view is covered at the frontend level only**, which is where all of it lives: unit tests over
+  the date conversion at a fixed instant across four timezones and its UTC fallback, over the three
+  overdue boundaries it mirrors from the domain, and a component test asserting that every item shows
+  its reason and its control, that a completed item keeps its place, that nothing is counted, and that
+  no copy on the screen describes the learner rather than an item. No backend test changed, because no
+  backend code did. It was also exercised end to end against the production standalone frontend with
+  a contract-shaped stub API and **JavaScript disabled**: **50 checks passed**, covering the
+  learner-timezone date selection against a server running in UTC, the today and earlier-days
+  grouping, a no-JavaScript completion reaching PLN-004 exactly once, the undo, that only the item
+  acted on moved, all four empty states and the unreachable-API panel, the navigation in both
+  directions, and that no API address appeared in any served page or client script.
 
   **The PostgreSQL integration tests have now been run locally**, for the first time in this
   repository's history — the verification ADR-021 recorded as outstanding is discharged. Docker
@@ -387,4 +406,5 @@ horizon, and revision.
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the contracts, the migration, and the planning rules behind the Milestone 3 items delivered early
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the contract behind the completion half of the plan-item item above, and why skipping and postponing wait
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the contract behind the adaptation item above, and the first write of `postponed`
+- [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the daily half of the plan-views item above, and why a `daily` plan type stays unwritten
 - [Deferred ideas](future-ideas.md)

@@ -82,8 +82,10 @@ the topic-progress endpoints by
 study-plan generation by
 [`docs/adr/ADR-020-initial-study-plan-generation.md`](docs/adr/ADR-020-initial-study-plan-generation.md),
 plan-item completion by
-[`docs/adr/ADR-021-plan-item-completion.md`](docs/adr/ADR-021-plan-item-completion.md), and plan
-adaptation by [`docs/adr/ADR-022-plan-adaptation.md`](docs/adr/ADR-022-plan-adaptation.md).
+[`docs/adr/ADR-021-plan-item-completion.md`](docs/adr/ADR-021-plan-item-completion.md), plan
+adaptation by [`docs/adr/ADR-022-plan-adaptation.md`](docs/adr/ADR-022-plan-adaptation.md), and the
+daily study view by
+[`docs/adr/ADR-023-daily-study-view.md`](docs/adr/ADR-023-daily-study-view.md).
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -143,6 +145,17 @@ undated roadmap item is never behind, and completed work is never behind. It tak
 body**, refuses a goal with no active plan with `409`, and needed **no migration**. `skipped` stays
 unwritten.
 
+**The daily study view is a reading of the weekly plan, not a `daily` plan** — `/plan/today`, which
+adds **no endpoint, no column, and no migration**. It filters what PLN-003 already returns to one
+date and completes items through PLN-004; a `daily` `plan_type` is still never written, and what one
+*contains* is deliberately still undecided. **"Today" is the learner's own calendar date**, resolved
+on the Next.js server from `learners.timezone` with the same UTC fallback the backend applies — never
+the server's own zone. Work the plan placed on days that have **passed** with the task undone is
+shown under its own heading and **nothing moves it**: no status is written and no adaptation is
+triggered, so the learner still asks. The three overdue boundaries are mirrored from `select_overdue`
+for display only; that domain rule stays authoritative for what adaptation writes. Say an **item** is
+overdue, never that the learner is behind. Nothing is counted, totalled, ranked, or scored.
+
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
 keeps that name. See [`docs/domain/terminology.md`](docs/domain/terminology.md).
@@ -161,8 +174,10 @@ server action, so the browser never reaches the backend, no CORS configuration e
 `API_BASE_URL` is server-side only. Today it serves a curriculum view over CUR-001 to CUR-003 that
 also reads the learner's recorded stages over PRG-002 and writes one over PRG-004, a `/setup` screen
 over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-005, a home screen at `/` that reads the
-saved setup back over LRN-001, GOAL-002, and EXM-001, and a `/plan` screen that reads the current plan
-over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed over PLN-004, and adapts the plan over PLN-005. A goal response carries the saved study week
+saved setup back over LRN-001, GOAL-002, and EXM-001, a `/plan` screen that reads the current plan
+over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed over PLN-004, and adapts the plan over PLN-005, and a `/plan/today` daily study view that reads the same weekly plan over
+PLN-002 and PLN-003, takes the learner's date from LRN-001, and completes items over PLN-004 —
+generating and adapting stay on `/plan`, where the learner asks for them. A goal response carries the saved study week
 and the saved planning preferences, so neither setup nor home calls anything extra to show them.
 
 The frontend serves its own static `/health` for the container health check, distinct from the
