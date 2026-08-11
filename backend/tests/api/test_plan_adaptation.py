@@ -32,6 +32,10 @@ def complete(client, plan_item_id):
     return client.patch(f"{ITEMS}/{plan_item_id}", json={"status": "completed"})
 
 
+def skip(client, plan_item_id):
+    return client.patch(f"{ITEMS}/{plan_item_id}", json={"status": "skipped"})
+
+
 # -- adapting ---------------------------------------------------------------
 
 
@@ -85,6 +89,40 @@ def test_an_overdue_item_is_reported_and_stored_as_postponed(planning_client, pl
     stored = planning_client.get(f"{PLANS}/{superseded_id}").json()["data"]
     line = next(item for item in stored["items"] if item["id"] == overdue["id"])
     assert line["status"] == "postponed"
+
+
+def test_a_skipped_item_stays_skipped_and_is_never_postponed(planning_client, planning):
+    """The learner said what became of the work. Adaptation must not replace that
+    with an inference about a day that passed."""
+    from datetime import UTC, datetime
+
+    created = generate(planning_client, planning.goal.id).json()
+    set_aside = plan_of_type(created, "weekly")["items"][0]
+    skip(planning_client, set_aside["id"])
+    planning.clock.instant = datetime(2026, 8, 10, 9, 0, tzinfo=UTC)
+
+    adapted = adapt(planning_client, planning.goal.id).json()["data"]
+
+    assert set_aside["id"] not in adapted["postponed_plan_item_ids"]
+    superseded_id = plan_of_type(created, "weekly")["id"]
+    stored = planning_client.get(f"{PLANS}/{superseded_id}").json()["data"]
+    line = next(item for item in stored["items"] if item["id"] == set_aside["id"])
+    assert line["status"] == "skipped"
+
+
+def test_a_skipped_topic_is_planned_again(planning_client, planning):
+    """Skipping settles the item, not the topic — unlike completing, which takes
+    the topic out of the plans that follow."""
+    created = generate(planning_client, planning.goal.id).json()
+    set_aside = plan_of_type(created, "weekly")["items"][0]
+    skip(planning_client, set_aside["id"])
+
+    adapted = adapt(planning_client, planning.goal.id).json()["data"]
+
+    roadmap = next(plan for plan in adapted["plans"] if plan["plan_type"] == "roadmap")
+    assert set_aside["topic"]["id"] in {item["topic"]["id"] for item in roadmap["items"]}
+    assert adapted["completed_topic_count"] == 0
+    assert adapted["remaining_topic_count"] == 3
 
 
 def test_the_superseded_plan_still_reads_back(planning_client, planning):

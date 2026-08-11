@@ -1,6 +1,6 @@
 import styles from "@/features/planner/StudyRoadmap.module.css";
 import { PlanItemStatusControl } from "@/features/planner/PlanItemStatusControl";
-import { describeEstimate, itemClassName } from "@/features/planner/plan";
+import { describeEstimate, describeSettledStatus, itemClassName } from "@/features/planner/plan";
 import type { StudyPlan } from "@/types/study-plan";
 
 interface StudyRoadmapProps {
@@ -23,10 +23,11 @@ interface StudyRoadmapProps {
  * Nothing here is a score. `priority` is a position in a list, and a topic
  * further down is later, not worse, and nothing counts how many are done.
  *
- * Each item carries the control that marks it completed, as the week's items do:
- * a plan item is a plan item, and a learner working ahead of their week should not
- * have to wait for it to appear there. Completing one moves that item alone —
- * the same topic on the week's plan is a separate item and stays as it was.
+ * Each item carries the control that says what became of it, as the week's items
+ * do: a plan item is a plan item, and a learner working ahead of their week — or
+ * setting a topic aside before it reaches one — should not have to wait for it to
+ * appear there. Moving one moves that item alone: the same topic on the week's
+ * plan is a separate item and stays as it was.
  */
 export function StudyRoadmap({ plan }: StudyRoadmapProps) {
   if (!plan) {
@@ -62,8 +63,8 @@ export function StudyRoadmap({ plan }: StudyRoadmapProps) {
                 {item.topic ? `${item.topic.subject_name} · ` : ""}
                 {describeEstimate(item.estimated_minutes)}
               </p>
-              {item.status === "completed" ? (
-                <p className={styles.completedLabel}>Marked completed</p>
+              {describeSettledStatus(item.status) ? (
+                <p className={styles.settledLabel}>{describeSettledStatus(item.status)}</p>
               ) : null}
               {item.recommendation_reason ? (
                 <p className={styles.why}>{item.recommendation_reason}</p>

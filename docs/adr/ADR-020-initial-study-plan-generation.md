@@ -2,7 +2,7 @@
 title: "ADR-020: Generate the Initial Study Plan Deterministically as a Roadmap and a Week"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-09
+last_updated: 2026-08-10
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -16,6 +16,7 @@ related:
   - ADR-021-plan-item-completion.md
   - ADR-022-plan-adaptation.md
   - ADR-023-daily-study-view.md
+  - ADR-024-plan-item-skipping.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -143,6 +144,32 @@ endpoints rather than one with a flag.
 **Nothing in the decision changed.** The plan shape, the two pure rules, the supersede lifecycle, the
 contracts of PLN-001 to PLN-003, and both table shapes are all as accepted. The domain module gained a
 third rule beside the two this record placed there.
+
+## Implementation status — 2026-08-10
+
+*Note added 2026-08-10. This record created `plan_items.status` and has tracked which of its four
+values are written; that count is now complete.*
+
+**`skipped` is written**, by PLN-004, per [ADR-024](ADR-024-plan-item-skipping.md). It needed **no
+migration**, which is the third time this record's argument for creating the column ahead of its
+writers has paid off — and the last, because the `CHECK` now has no unwritten value left.
+
+**Two statements above are overtaken.**
+
+- The [2026-08-09 note](#implementation-status-2026-08-09) — "**`skipped` remains unwritten.**" It is
+  not.
+- Under [Consequences](#neutral) — "`skipped` and `postponed` are constrained and unwritten", together
+  with the reasoning that "each arrives with the code that writes it". The reasoning held exactly;
+  both have now arrived that way.
+
+**`monthly` and `daily` are untouched**, as are `practice`, `revise`, and `review_mistakes`. What a
+`daily` plan *contains* remains undecided, and the `/plan/today` screen ADR-023 added is still not
+one.
+
+**Nothing in the decision changed.** The plan shape, the pure rules, the supersede lifecycle, and the
+contracts of PLN-001 to PLN-003 are all as accepted. `select_overdue` — the third domain rule, added
+by ADR-022 rather than by this record — now decides *behind* from whether the learner has **settled**
+an item rather than from whether it is done; generation neither reads it nor is affected by it.
 
 ## Context
 
@@ -581,4 +608,5 @@ calculations". Creating the folder when its first file needs it is that document
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](ADR-021-plan-item-completion.md) — the first code to write the `status` and `completed_at` columns this record created
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](ADR-022-plan-adaptation.md) — the re-planning that answers the stale-week consequence above, reusing these rules
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](ADR-023-daily-study-view.md) — why the daily screen it adds is not the `daily` plan type this record left ungenerated
+- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](ADR-024-plan-item-skipping.md) — the last of `plan_items.status`'s four values to be written, and the third change to need no migration because this record created the column early
 - [Architecture decision register](../architecture/decisions.md) — DEC-032

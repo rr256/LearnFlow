@@ -49,23 +49,30 @@ the constraint holds them ready.
 PLAN_ITEM_STATUSES: tuple[str, ...] = ("planned", "completed", "skipped", "postponed")
 """The statuses `plan_items.status` accepts.
 
-Every item is written `planned`. PLN-004 moves one to `completed` and back again.
-**PLN-005 writes `postponed`**: when adaptation supersedes a plan, the items whose
-day has passed with the work undone are marked postponed, and their topics are
-re-placed on the plan that replaces it — which is the answer to what postponing
-moves work *to* that ADR-021 could not give. `skipped` remains approved and
-unwritten: nothing yet lets a learner abandon a topic outright. The constraint
-carries all four, so adding one is a use-case change rather than a migration.
+Every item is written `planned`. **PLN-004 moves one to `completed` or `skipped`,
+and back again**: all three are things the learner says about their own work, and
+each is reversible while the plan is active. **PLN-005 writes `postponed`**: when
+adaptation supersedes a plan, the items whose day has passed with the work
+neither done nor skipped are marked postponed, and their topics are re-placed on
+the plan that replaces it — which is the answer to what postponing moves work
+*to* that ADR-021 could not give. All four are now written; the constraint has
+carried all four since `20260806_03`, so each arrived as a use-case change rather
+than a migration.
 """
 
-PLAN_ITEM_STATUS_CHANGES: tuple[str, ...] = ("planned", "completed")
+PLAN_ITEM_STATUS_CHANGES: tuple[str, ...] = ("planned", "completed", "skipped")
 """The statuses PLN-004 accepts as a target.
 
 A subset of `PLAN_ITEM_STATUSES` rather than the whole of it: this is what a
 learner may *ask for*, while the column holds what a plan item may *be*. Naming
-the two separately is what lets the endpoint refuse `skipped` and `postponed`
-with a message saying they are not built yet, rather than storing a status
-nothing produces and nothing reads.
+the two separately is what lets the endpoint refuse `postponed` — which
+adaptation writes as it sets a plan aside, so asking for it here would set a
+status with nothing to move the work *to*.
+
+A learner may move an item to any of these three from any of them, including
+backwards, which is the position ADR-017 takes on a learning stage and ADR-021
+took on completion: nothing in LearnFlow treats a statement about work as a
+verdict, and a control a mis-tap makes permanent would be one.
 """
 
 ROADMAP = "roadmap"
@@ -74,8 +81,21 @@ ACTIVE = "active"
 SUPERSEDED = "superseded"
 PLANNED = "planned"
 COMPLETED = "completed"
+SKIPPED = "skipped"
 POSTPONED = "postponed"
 STUDY = "study"
+
+SETTLED_STATUSES: frozenset[str] = frozenset({COMPLETED, SKIPPED})
+"""The statuses in which the learner has said what became of an item's work.
+
+Either it happened, or they decided it would not. Adaptation reads this to decide
+what is *not* overdue: an item the learner has settled must not be carried
+forward as `postponed`, because that would overwrite their own statement with an
+inference about a day that passed.
+
+`planned` is not here — nothing has been said about it — and neither is
+`postponed`, which is what adaptation writes about an item nobody settled.
+"""
 
 DEFAULT_SESSION_MINUTES = 60
 """The session length the planner uses when the learner has set none.
@@ -124,9 +144,15 @@ class PlanItemDetail:
 
     `status` and `completed_at` are the one part of an item a learner moves, and
     they travel together: an item is `completed` at an instant or it is not
-    completed at all. Completing an item says its planned work happened; it says
-    nothing about how well the learner understands the topic, which is rule 4 of
-    the domain model and the reason nothing here touches their learning stage.
+    completed at all, so a `skipped` or `planned` item never carries one.
+    Completing an item says its planned work happened and skipping it says the
+    learner decided it would not; neither says anything about how well they
+    understand the topic, which is rule 4 of the domain model and the reason
+    nothing here touches their learning stage.
+
+    There is deliberately no `skipped_at`. Nothing records *when* an item was
+    skipped, as nothing records when one was postponed — the question a plan
+    answers is what became of the work, not at what hour the learner said so.
     """
 
     id: uuid.UUID
@@ -208,7 +234,7 @@ class PlanGenerationRequest:
 
 @dataclass(frozen=True, slots=True)
 class PlanItemStatusChange:
-    """A learner moving one plan item's status (PLN-004).
+    """A learner marking one plan item completed, skipped, or planned (PLN-004).
 
     The item is named in the path rather than here, and no learner is named at
     all: the effective learner is resolved server-side, and whether the item is
@@ -216,7 +242,9 @@ class PlanItemStatusChange:
 
     Only the status is carried. `completed_at` is the server's record of *when*
     the learner said so, so accepting one from a client would let a caller
-    backdate work; the use case reads it from the clock instead.
+    backdate work; the use case reads it from the clock instead. Skipping carries
+    no reason either — asking a learner why they skipped an item would invite the
+    product to form a view about the answer.
     """
 
     status: str

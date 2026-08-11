@@ -92,6 +92,17 @@ describe("selectDailyWork", () => {
     expect(work.today.map((entry) => entry.id)).toEqual(["first", "second"]);
   });
 
+  it("keeps a skipped item on today rather than hiding it", () => {
+    /* A learner who set today's work aside must still be able to take it back
+     * without leaving the screen they are working on. */
+    const work = selectDailyWork(
+      plan({ items: [item({ id: "set-aside", scheduled_for: today, status: "skipped" })] }),
+      today,
+    );
+
+    expect(work.today.map((entry) => entry.id)).toEqual(["set-aside"]);
+  });
+
   it("keeps a completed item on today rather than hiding it", () => {
     /* The plan is the record of what the day held; hiding finished work would
      * leave the day looking undone (ADR-021). */
@@ -119,29 +130,36 @@ describe("selectDailyWork", () => {
     expect(work.earlier[0]?.items.map((entry) => entry.id)).toEqual(["friday"]);
   });
 
-  it("leaves completed work out of the days that have passed", () => {
-    /* Mirrors the backend rule: done is never behind, however late it was done. */
-    const work = selectDailyWork(
-      plan({
-        items: [
-          item({ id: "done", scheduled_for: "2026-08-07", status: "completed" }),
-          item({ id: "undone", priority: 2, scheduled_for: "2026-08-07" }),
-        ],
-      }),
-      today,
-    );
+  it.each(["completed", "skipped"])(
+    "leaves %s work out of the days that have passed",
+    (status) => {
+      /* Mirrors the backend rule: an item the learner has settled is never
+       * behind, whether the work happened or they said it would not. */
+      const work = selectDailyWork(
+        plan({
+          items: [
+            item({ id: "settled", scheduled_for: "2026-08-07", status }),
+            item({ id: "undone", priority: 2, scheduled_for: "2026-08-07" }),
+          ],
+        }),
+        today,
+      );
 
-    expect(work.earlier[0]?.items.map((entry) => entry.id)).toEqual(["undone"]);
-  });
+      expect(work.earlier[0]?.items.map((entry) => entry.id)).toEqual(["undone"]);
+    },
+  );
 
-  it("drops a passed day entirely once nothing on it is outstanding", () => {
-    const work = selectDailyWork(
-      plan({ items: [item({ scheduled_for: "2026-08-07", status: "completed" })] }),
-      today,
-    );
+  it.each(["completed", "skipped"])(
+    "drops a passed day entirely once its only item is %s",
+    (status) => {
+      const work = selectDailyWork(
+        plan({ items: [item({ scheduled_for: "2026-08-07", status })] }),
+        today,
+      );
 
-    expect(work.earlier).toEqual([]);
-  });
+      expect(work.earlier).toEqual([]);
+    },
+  );
 
   it("treats an item dated today as due rather than as behind", () => {
     /* The day has not finished, so opening this screen in the morning must not

@@ -83,9 +83,10 @@ study-plan generation by
 [`docs/adr/ADR-020-initial-study-plan-generation.md`](docs/adr/ADR-020-initial-study-plan-generation.md),
 plan-item completion by
 [`docs/adr/ADR-021-plan-item-completion.md`](docs/adr/ADR-021-plan-item-completion.md), plan
-adaptation by [`docs/adr/ADR-022-plan-adaptation.md`](docs/adr/ADR-022-plan-adaptation.md), and the
+adaptation by [`docs/adr/ADR-022-plan-adaptation.md`](docs/adr/ADR-022-plan-adaptation.md), the
 daily study view by
-[`docs/adr/ADR-023-daily-study-view.md`](docs/adr/ADR-023-daily-study-view.md).
+[`docs/adr/ADR-023-daily-study-view.md`](docs/adr/ADR-023-daily-study-view.md), and plan-item skipping
+by [`docs/adr/ADR-024-plan-item-skipping.md`](docs/adr/ADR-024-plan-item-skipping.md).
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -123,36 +124,50 @@ one; `priority` is an order, not a score; and nothing totals a day, a week, or a
 `prerequisites_first` currently yields syllabus order, because the curated curriculum stores no
 prerequisite link, and the plan says so.
 
-**PLN-004 marks one plan item completed and returns it to `planned`** — the first delivery against
-FR-004. It accepts
-`completed` and `planned` only, refusing `skipped` and `postponed` with a `422`. That refusal stands, but
-`postponed` is now written by PLN-005 rather than requested by a learner. Completing is reversible and clears
-`completed_at`, which is read from the server's clock rather than accepted from a caller. **Only the
-named item moves**: no plan, no other item — including a roadmap item naming the same topic — and no
-learning stage, because a plan item records whether planned work happened, not that a topic is
-understood. Nothing is counted and nothing is re-planned. An item on a superseded plan is refused with
-`409`. It needed **no migration**: `plan_items.status` and `completed_at` were created ahead of it.
+**PLN-004 records what became of one plan item** — `completed`, `skipped`, or `planned`, in any
+direction. `postponed` is the one status it refuses, with a `422`, because adaptation writes that as
+it sets a plan aside. So a learner can explicitly mark an item **completed** or **skipped** and take
+either back, and **cannot mark one postponed**: FR-004's first acceptance criterion is **partly**
+met, not met in full. Do not write that all three are learner actions. **Nothing is
+one-way.** `completed_at` is read from the server's clock rather than accepted from a caller and is
+cleared by any move off `completed`; there is deliberately **no `skipped_at`** and no reason field.
+**Only the named item moves**: no plan, no other item — including a roadmap item naming the same
+topic — and no learning stage, because a plan item records whether planned work happened, not that a
+topic is understood. Nothing is counted and nothing is re-planned. An item on a superseded plan is
+refused with `409`, whatever status is asked for. It needed **no migration** either time:
+`plan_items.status` and `completed_at` were created ahead of it, and `skipped` was the last of that
+`CHECK`'s four values to be written.
+
+**Skipping settles the item, not the topic.** A skipped item is never *overdue*, so adaptation leaves
+it exactly as the learner left it rather than overwriting their statement with `postponed` — and its
+**topic is planned again**, unlike a completed one, which is excluded from every plan that follows.
+That difference is deliberate: a skip lives on the plan it was made on, so retiring the topic would
+make a skip irreversible the moment the learner adapted. A skipped item **stays in place** on both
+`/plan` panels and in the daily view, marked in words, and is **left out of *From earlier days***.
+Say a *skipped item*, never that a learner abandoned or gave up a topic, and never record or ask why.
+Contracted by [`docs/adr/ADR-024-plan-item-skipping.md`](docs/adr/ADR-024-plan-item-skipping.md).
 
 **PLN-005 rebuilds a plan around what happened** — `POST /api/v1/study-goals/{study_goal_id}/adapt`,
 which **departs from the catalogued** `/study-plans/{plan_id}/adapt` because adaptation supersedes and
 rewrites every active plan of a goal. **The learner asks; nothing adapts on its own** — completing an
 item re-plans nothing and saving a study week re-plans nothing. A topic with a completed session
 anywhere on the goal is **not planned again**, the exclusion applied before the ordering and placement
-rules run. Work whose day passed with the task undone is marked **`postponed`** on the plan being set
+rules run. Work whose day passed with the task unsettled is marked **`postponed`** on the plan being set
 aside and re-placed on the new one, which is the first write of that status and the answer to what
-postponing moves work *to*. What counts as behind is a pure domain rule: today is not behind, an
-undated roadmap item is never behind, and completed work is never behind. It takes **no request
-body**, refuses a goal with no active plan with `409`, and needed **no migration**. `skipped` stays
-unwritten.
+postponing moves work *to*. What counts as behind is a pure domain rule (`select_overdue`, over
+`DatedItem.is_settled`): today is not behind, an undated roadmap item is never behind, and an item the
+learner has **settled** — completed or skipped — is never behind. It takes **no request
+body**, refuses a goal with no active plan with `409`, and needed **no migration**.
 
 **The daily study view is a reading of the weekly plan, not a `daily` plan** — `/plan/today`, which
 adds **no endpoint, no column, and no migration**. It filters what PLN-003 already returns to one
-date and completes items through PLN-004; a `daily` `plan_type` is still never written, and what one
+date and moves items through PLN-004; a `daily` `plan_type` is still never written, and what one
 *contains* is deliberately still undecided. **"Today" is the learner's own calendar date**, resolved
 on the Next.js server from `learners.timezone` with the same UTC fallback the backend applies — never
-the server's own zone. Work the plan placed on days that have **passed** with the task undone is
-shown under its own heading and **nothing moves it**: no status is written and no adaptation is
-triggered, so the learner still asks. The three overdue boundaries are mirrored from `select_overdue`
+the server's own zone. Work the plan placed on days that have **passed** and which the learner has
+not settled is shown under its own heading and **nothing moves it**: no status is written and no
+adaptation is triggered, so the learner still asks. A **skipped** item is settled, so it never appears
+there. The overdue boundaries are mirrored from `select_overdue`
 for display only; that domain rule stays authoritative for what adaptation writes. Say an **item** is
 overdue, never that the learner is behind. Nothing is counted, totalled, ranked, or scored.
 
@@ -175,8 +190,8 @@ server action, so the browser never reaches the backend, no CORS configuration e
 also reads the learner's recorded stages over PRG-002 and writes one over PRG-004, a `/setup` screen
 over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-005, a home screen at `/` that reads the
 saved setup back over LRN-001, GOAL-002, and EXM-001, a `/plan` screen that reads the current plan
-over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed over PLN-004, and adapts the plan over PLN-005, and a `/plan/today` daily study view that reads the same weekly plan over
-PLN-002 and PLN-003, takes the learner's date from LRN-001, and completes items over PLN-004 —
+over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed or skipped over PLN-004, and adapts the plan over PLN-005, and a `/plan/today` daily study view that reads the same weekly plan over
+PLN-002 and PLN-003, takes the learner's date from LRN-001, and moves items over PLN-004 —
 generating and adapting stay on `/plan`, where the learner asks for them. A goal response carries the saved study week
 and the saved planning preferences, so neither setup nor home calls anything extra to show them.
 

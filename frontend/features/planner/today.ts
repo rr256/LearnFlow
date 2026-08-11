@@ -14,8 +14,8 @@
  * `backend/app/domain/study_planning.py` is the authoritative rule, and it is
  * what *adaptation* acts on. The partition below groups the same items for
  * display and acts on nothing, so the two agree on the boundaries: an item dated
- * today is not overdue, an undated roadmap item never is, and completed work
- * never is however late it was done.
+ * today is not overdue, an undated roadmap item never is, and an item the learner
+ * has settled never is -- completed however late it was done, or skipped.
  *
  * Dates stay ISO `YYYY-MM-DD` strings throughout and are compared as strings,
  * which orders them correctly and avoids the `new Date("2026-08-09")` trap
@@ -34,14 +34,15 @@ export interface DailyWork {
   /**
    * The items the plan placed on the learner's own date, in plan order.
    *
-   * Completed items are included and keep their place: the plan is the record of
-   * what the day held, and hiding finished work would leave the day looking
-   * undone (ADR-021).
+   * Settled items are included and keep their place: the plan is the record of
+   * what the day held, so hiding finished work would leave the day looking undone
+   * (ADR-021) and hiding skipped work would hide a decision the learner may want
+   * to take back.
    */
   today: PlanItem[];
   /**
-   * Work the plan placed on days that have passed and which has not happened,
-   * grouped by the day it was placed on, earliest first.
+   * Work the plan placed on days that have passed and which the learner has not
+   * settled, grouped by the day it was placed on, earliest first.
    *
    * Nothing here moves it. Carrying work forward is adaptation, which the learner
    * asks for on the plan screen (ADR-022).
@@ -119,13 +120,15 @@ export function selectDailyWork(plan: StudyPlan | null, today: string): DailyWor
 /**
  * Whether a plan item's work is still outstanding.
  *
- * Anything but `completed`, which mirrors `select_overdue`'s `is_done`: the
- * question is whether the work happened, not which of the other statuses it
- * holds. Today only `planned` can appear on an active plan, and an item in some
- * other state is shown as it is rather than hidden.
+ * Anything the learner has not settled, which mirrors `select_overdue`'s
+ * `is_settled`: the question is whether they have said what became of the work,
+ * and both `completed` and `skipped` answer it. A skipped item is left out of
+ * *From earlier days* for the same reason adaptation will not postpone it — the
+ * learner has already said it is not going to fill that day, and showing it back
+ * to them as outstanding would ask again.
  */
 function isOutstanding(item: PlanItem): boolean {
-  return item.status !== "completed";
+  return item.status !== "completed" && item.status !== "skipped";
 }
 
 /**

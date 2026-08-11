@@ -2,7 +2,7 @@
 title: "ADR-023: Show Today's Work as a Reading of the Weekly Plan, Not a Daily Plan"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-09
+last_updated: 2026-08-10
 related:
   - ../00-project-context.md
   - ADR-013-examination-schedule-and-study-goal.md
@@ -11,6 +11,7 @@ related:
   - ADR-020-initial-study-plan-generation.md
   - ADR-021-plan-item-completion.md
   - ADR-022-plan-adaptation.md
+  - ADR-024-plan-item-skipping.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../database/schema.md
@@ -39,6 +40,34 @@ This delivers part of
 [FR-003](../requirements/functional.md#fr-003-study-timeline-and-plan)'s second acceptance criterion
 — "the learner can view monthly, weekly, and daily recommendations" — for the **daily** half only.
 Monthly is untouched. It adds no endpoint, no column, no table, and **no migration**.
+
+## Implementation status — 2026-08-10
+
+*Note added 2026-08-10. The decision below is unchanged; this records the one statement it made that
+has since moved, and the cost it predicted being paid.*
+
+**Two statements above are overtaken.**
+
+- Under [Consequences](#neutral) — "`monthly`, `daily`, `practice`, `revise`, `review_mistakes`, and
+  `skipped` all remain constrained and unwritten." **`skipped` is now written**, by PLN-004, per
+  [ADR-024](ADR-024-plan-item-skipping.md). The other five remain exactly as this record left them,
+  and no `daily` plan is written.
+- Under [Decision](#the-classification-is-mirrored-for-display-the-domain-rule-stays-authoritative) —
+  "The frontend restates its **three** boundaries — an item dated today is not overdue, an undated
+  item never is, and completed work never is." There are now **four**, the fourth being that skipped
+  work never is; `select_overdue` and the display partition both state it.
+
+**The duplication this record recorded as a cost has now been paid once.** It said under *Negative*
+that "the overdue rule now exists in two places … Changing the boundaries means changing both".
+ADR-024 changed the boundaries, and both moved together: `select_overdue`'s `is_done` became
+`is_settled` in the domain, and `isOutstanding` in `features/planner/today.ts` gained the matching
+clause. The prediction held, and so did the mitigation — each has its own test.
+
+**A skipped item behaves on this screen as the decision above implies.** It keeps its place in
+today's list with the controls to take the skip back, because "the plan is the record of what the day
+held"; and it does **not** appear under *From earlier days*, because that heading is for work still
+outstanding and a skip is the learner having answered. Nothing on this screen writes a status the
+learner did not ask for, and nothing still adapts on its own.
 
 ## Context
 
@@ -325,6 +354,7 @@ beside two buttons that rebuild the plan, on the screen a learner opens to tick 
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](ADR-020-initial-study-plan-generation.md) — the weekly plan this view reads, and the `daily` plan type it leaves unwritten
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](ADR-021-plan-item-completion.md) — the control this screen reuses unchanged
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](ADR-022-plan-adaptation.md) — the overdue rule this view mirrors for display, and the adaptation it links to rather than performing
+- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](ADR-024-plan-item-skipping.md) — the status this screen's control gained, and the boundary change both halves of the mirrored rule absorbed
 - [API endpoint catalog](../api/endpoints.md) — the five contracts this screen consumes, none of which changes
 - [Database schema](../database/schema.md) — `study_plans.plan_type`, whose `daily` value stays unwritten
 - [Domain model](../domain/domain-model.md) — the four plan levels, of which a daily *plan* is still one this view is not

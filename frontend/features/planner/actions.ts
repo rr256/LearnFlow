@@ -95,11 +95,11 @@ export async function createStudyPlan(_previous: PlanState, form: FormData): Pro
 }
 
 /**
- * Mark one plan item completed, or return it to planned.
+ * Mark one plan item completed or skipped, or return it to planned.
  *
  * Safe to repeat: sending the status an item already holds changes nothing. The
- * rest of the plan is untouched, and nothing is re-planned around what was
- * completed — that is FR-004's work and does not exist yet.
+ * rest of the plan is untouched, and nothing is re-planned around what the
+ * learner said — rebuilding the plan is `adaptPlan` below, which they ask for.
  *
  * A conflict means the item's plan has been superseded, which happens to a
  * learner who rebuilt their plan in another tab. The message says to use the
@@ -148,12 +148,25 @@ export async function savePlanItemStatus(
   // item to show its new status rather than the one it had.
   revalidatePath("/plan");
 
-  return {
-    status: "saved",
-    message:
-      item.status === "completed" ? "Marked completed." : "Returned to your plan.",
-  };
+  return { status: "saved", message: SAVED_MESSAGES[item.status] ?? "Saved." };
 }
+
+/**
+ * What the control says once the API has confirmed the move.
+ *
+ * Keyed by the status the API sent back rather than the one the form asked for,
+ * so the message reports what was stored. A status this build does not recognise
+ * falls back to a plain acknowledgement rather than claiming something untrue.
+ *
+ * The skip message says the topic comes back, because a learner who reads
+ * "skipped" without it could reasonably think they have dropped the topic for
+ * good — which is not what PLN-004 does.
+ */
+const SAVED_MESSAGES: Readonly<Record<string, string>> = {
+  completed: "Marked completed.",
+  planned: "Returned to your plan.",
+  skipped: "Marked skipped. This topic is planned again when you update your plan.",
+};
 
 
 /**

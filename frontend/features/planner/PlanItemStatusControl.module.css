@@ -6,12 +6,24 @@
 }
 
 /*
- * Both buttons are ordinary buttons rather than one accent and one warning.
- * Putting an item back is a correction, not a failure, and styling it as a
- * danger would make undoing a mis-tap feel like a consequence.
+ * The two moves an item offers sit side by side and wrap on a narrow screen,
+ * rather than one being hidden behind a menu: skipping is as ordinary an answer
+ * as finishing, and burying it would make it read as an admission.
  */
-.complete,
-.undo {
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * Every button is an ordinary button rather than one accent and two warnings.
+ * Putting an item back is a correction and skipping one is a decision; styling
+ * either as a danger would make an ordinary answer feel like a consequence.
+ */
+.completed,
+.planned,
+.skipped {
   border: 1px solid var(--colour-border);
   border-radius: var(--radius);
   padding: var(--space-1) var(--space-3);
@@ -22,14 +34,16 @@
   cursor: pointer;
 }
 
-.complete {
+/* Only completing is emphasised: it is the answer a plan is built to invite. */
+.completed {
   border-color: var(--colour-accent);
   background-color: var(--colour-accent);
   color: var(--colour-accent-contrast);
 }
 
-.complete:disabled,
-.undo:disabled {
+.completed:disabled,
+.planned:disabled,
+.skipped:disabled {
   cursor: progress;
   opacity: 0.7;
 }

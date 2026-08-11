@@ -49,15 +49,23 @@
 }
 
 /*
- * A completed item stays where it is, as it does on the week and the roadmap.
- * The change is a border, never struck-through text: "Marked completed" beside it
- * carries the meaning in words, so nothing depends on the colour being seen.
+ * A settled item stays where it is, as it does on the week and the roadmap. The
+ * change is a border, never struck-through text: the label beside it carries the
+ * meaning in words, so nothing depends on the colour being seen.
  */
 .completed {
   border-left-color: var(--colour-accent);
 }
 
-.completedLabel {
+/*
+ * Skipping is muted rather than accented. It is an ordinary answer, and giving
+ * it the same emphasis as finishing would read as a second kind of achievement.
+ */
+.skipped {
+  border-left-color: var(--colour-text-muted);
+}
+
+.settledLabel {
   margin: var(--space-1) 0 0;
   font-size: 0.875rem;
   font-weight: 600;

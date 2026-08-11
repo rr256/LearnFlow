@@ -2,7 +2,7 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-09
+last_updated: 2026-08-10
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -16,6 +16,7 @@ related:
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
   - ../adr/ADR-023-daily-study-view.md
+  - ../adr/ADR-024-plan-item-skipping.md
   - ../development/coding-standards.md
 ---
 
@@ -60,8 +61,10 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Study plan** | A roadmap, monthly plan, weekly plan, or daily plan of recommended work. | Generated against a study goal and current evidence, by deterministic rules rather than by an AI provider. A roadmap and a weekly plan are generated today; see [ADR-020](../adr/ADR-020-initial-study-plan-generation.md). |
 | **Superseded plan** | A plan a later generation **or adaptation** replaced. | Kept and readable, never deleted: plan history is what makes a change of direction explainable. Its content and reasons keep the wording they were generated with. The one thing that may move on a superseded plan is an item's status, when adaptation marks overdue work *postponed* as it sets the plan aside — a statement about what happened, not a rewriting of what was planned. See [ADR-022](../adr/ADR-022-plan-adaptation.md). |
 | **Plan item** | One actionable recommendation in a study plan. | Examples: study, practise, revise, or review mistakes. Its position in the plan is an order, never a score. Its *plan item status* records what became of the work it names. |
-| **Plan item status** | What became of the work one plan item names: `planned`, `completed`, `postponed`, or `skipped`. | Stored and sent as the `snake_case` value. It records whether planned **work happened**, never how well a topic is understood — that is a *learning stage*, and nothing derives one from the other. |
-| **Postponed** | A plan item whose day passed with the work undone, carried forward onto the plan that replaced it. | Written by *adaptation* as it supersedes a plan, never requested by a learner: postponing means the work moved to the new plan, so there is nowhere to postpone to without one. It is a statement about a day that passed, **not** about the learner's effort or ability. Distinct from *skipped*, which is modelled and unused — nothing yet lets a learner abandon a topic outright. See [ADR-022](../adr/ADR-022-plan-adaptation.md). |
+| **Plan item status** | What became of the work one plan item names: `planned`, `completed`, `postponed`, or `skipped`. | Stored and sent as the `snake_case` value. It records whether planned **work happened**, never how well a topic is understood — that is a *learning stage*, and nothing derives one from the other. All four are now written. |
+| **Settled item** | A plan item the learner has said what became of: *completed* or *skipped*. | The distinction *adaptation* acts on. A settled item is never *overdue* and is never carried forward as *postponed*, because doing so would replace what the learner said with an inference about a date. A `planned` item is unsettled; `postponed` is what adaptation writes about one nobody settled. |
+| **Postponed** | A plan item whose day passed with the work unsettled, carried forward onto the plan that replaced it. | Written by *adaptation* as it supersedes a plan, never requested by a learner: postponing means the work moved to the new plan, so there is nowhere to postpone to without one. It is a statement about a day that passed, **not** about the learner's effort or ability. Distinct from *skipped*, which the learner writes and which adaptation leaves alone. See [ADR-022](../adr/ADR-022-plan-adaptation.md). |
+| **Skipped** | A plan item the learner has said will not happen. | Written by the learner through PLN-004, and reversible while the plan is active. A statement about **that item**, not about the topic: adaptation leaves a skipped item as it is and **plans its topic again**, where a *completed* topic is not planned again. So skipping means "not this time", never "abandon this topic" — the earlier reading, before the lifecycle was designed. Nothing records when an item was skipped or why, and nothing counts skips. See [ADR-024](../adr/ADR-024-plan-item-skipping.md). |
 | **Adaptation** | Rebuilding a goal's active plans around what the learner has and has not done. | The learner asks for it; nothing adapts on its own. It supersedes as a generation does, leaves out topics with completed work, and carries forward what was *postponed*. Deterministic, with no AI provider. Not a re-scoring of the learner and not a judgement about why a day passed. |
 | **Plan coverage count** | A count describing how much of the curriculum a plan covers — how many topics it holds, how many remain, how many are not planned again. | A description of the **plan**, never a measurement of the learner. Permitted because a plan must be able to explain what it covers and why it is shorter than the one before it. It is never a score, a percentage, a streak, or a total of the learner's time or effort; see the rule below the avoid list. |
 | **Daily study view** | The screen showing the work a learner's active weekly plan placed on their own calendar date, alongside work whose day has passed. | A **reading** of the weekly plan, not a plan of its own: no `daily` plan record is written or read, and that plan type stays unwritten. It changes nothing — completing an item is the only write it offers, and rebuilding the plan stays on the plan screen, where the learner asks for it. "Today" is the learner's date from `learners.timezone`, never the server's. See [ADR-023](../adr/ADR-023-daily-study-view.md). |
@@ -101,6 +104,8 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Mastered | Strong understanding | Mastery is difficult to prove and should not be inferred from one signal. |
 | Complete | Material completed; plan item completed | Clarify whether material or a planned task was completed. A count of topics with completed planned work is a *plan coverage count*, not a claim that the topics themselves are complete. |
 | A learner who is behind; falling behind; an overdue learner | An **overdue item**; work whose day has passed; postponed work | A day passing is a fact about a date, not a verdict on a person. Say an *item* is overdue, never that the learner is behind: LearnFlow marks the item postponed and carries the work forward, and forms no view about why the day passed. *Overdue* is correct of an item and wrong of a learner. |
+| Abandoned topic; dropped topic; giving up on a topic | A **skipped item** | Skipping settles one plan item, not a topic, and that item's topic is planned again. Wording that says the learner gave something up overstates what was stored and forms a view about why. Say the item was skipped. |
+| Skip reason; why an item was skipped | Nothing — it is not recorded | No reason is collected or stored. Asking would invite the product to form a view about the answer, which [FR-005](../requirements/functional.md#fr-005-topic-progress-and-learning-evidence) refuses. |
 | Progress percentage; completion rate; topics done out of total; streak | A plan coverage count, stated as a count | See the rule below. A plan may say how many topics it covers and how many are not planned again; nothing converts that into a rate, a percentage, or a running score. |
 | Exam date; examination date | Examination window; examination period | A body that publishes several sitting days has not named the learner's day. A single date presents a guess as a deadline. |
 | Exam; GATE date | Examination cycle; examination schedule | Keeps platform-core language reusable across learning programs. |
@@ -187,6 +192,7 @@ ratio has a denominator and a denominator invites the comparison the third test 
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the wording a completed plan item uses, and why it is a statement about work rather than about the learner
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the plan a learner has rebuilt around what happened, and the `postponed` state adaptation writes
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the *daily study view* above, and the screen where an item is overdue and a learner never is
+- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — *skipped* and *settled item* above, and why skipping an item does not abandon a topic
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)

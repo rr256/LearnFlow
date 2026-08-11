@@ -2,7 +2,7 @@
 title: "ADR-021: Mark a Plan Item Completed as a Reversible Statement About Work, Not About the Learner"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-09
+last_updated: 2026-08-10
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -12,6 +12,7 @@ related:
   - ADR-020-initial-study-plan-generation.md
   - ADR-022-plan-adaptation.md
   - ADR-023-daily-study-view.md
+  - ADR-024-plan-item-skipping.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -91,6 +92,53 @@ its refusal to touch anything but the named item, and its `409` for an item on a
 all as accepted. ADR-022 inherits that last rule rather than renegotiating it: adaptation writes
 `postponed` while superseding a plan, which is a different act from a learner writing into one already
 superseded.
+
+## Implementation status — 2026-08-10
+
+*Note added 2026-08-10. The decision below is unchanged in everything but the set of statuses PLN-004
+accepts; this records what has been overtaken and by what.*
+
+**Skipping is built.** [ADR-024](ADR-024-plan-item-skipping.md) extends PLN-004 to accept `skipped`
+as a third status, and a learner may now move an item between `planned`, `completed`, and `skipped` in
+any direction. It needed **no migration** either, for the same reason this record gives.
+
+**Seven statements above are overtaken.** None was wrong when written.
+
+- In the [Status](#status) section — "Skipping and postponing are deliberately not implemented", and
+  "it delivers **one third** of its first acceptance criterion". Skipping is implemented, so this
+  record and ADR-024 between them deliver **two** of the criterion's three verbs as learner actions.
+  Postponing is still not one: adaptation writes it, and PLN-004 refuses it. The criterion is **not**
+  met in full.
+- Under [Decision](#two-statuses-completed-and-planned-to-undo-it) — "`planned` and `completed` are
+  accepted. `skipped` and `postponed` are refused." **`skipped` is now accepted.** `postponed` is
+  still refused, and its reason is unchanged: adaptation writes it as it sets a plan aside.
+- Under [Decision](#the-write-goes-through-a-nextjs-server-action-and-the-backend-gains-no-cors) — "An
+  item in a status the API does not accept — `skipped` or `postponed`, which nothing writes — is shown
+  as the API sent it with no control." That now describes `postponed` alone. A `skipped` item is shown
+  in place with the controls to complete it or put it back.
+- Under [Consequences](#negative) — "**FR-004's first criterion is only a third met.**" Two thirds
+  of it are now met, as above; the remaining third is postponing, which stays outside a learner's
+  reach.
+- The same section's "**`skipped` remains unwritten**, so a learner who wants to abandon a topic still
+  cannot say so." They can now say a plan **item** will not happen. The wording *abandon a topic* is
+  the one thing ADR-024 declines: skipping settles the item and its topic is planned again, because a
+  skip lives on the plan it was made on and this record's own `409` would otherwise make it permanent.
+  [Terminology](../domain/terminology.md) now names that wording as one to avoid.
+- Under [Consequences](#neutral) — "`skipped` and `postponed` remain constrained and unwritten." Both
+  are written; `plan_items.status` has no unwritten value left.
+- In the **2026-08-09 note above**, the entry marked "**Still true**" of `skipped` was true when
+  written and is no longer. It is superseded by this note rather than edited.
+
+**Everything else in this record stands**, and ADR-024 inherits rather than renegotiates it: the
+`PATCH` contract and its response shape, `completed_at` read from the server's clock and never from a
+caller, the refusal to touch any other item or a learning stage, the refusal to count anything, the
+`409` for an item on a superseded plan — which applies to `skipped` **without exception** — and the
+reversibility argument, which ADR-024 applies to a third status for the reason given here.
+
+One alternative this record rejected has aged into the decision. Under
+[Alternatives](#accept-all-four-statuses-now) it reasoned that "a plan that knows work was skipped and
+does nothing about it is not obviously better than one that does not know". The adapting plan ADR-022
+built is what does something about it.
 
 ## Context
 
@@ -391,4 +439,5 @@ would each need their own path later.
 - [Delivery milestones](../roadmap/milestones.md) — the Milestone 3 item this partly closes
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](ADR-022-plan-adaptation.md) — the re-planning that answers what postponing moves work to, and the first write of `postponed`
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](ADR-023-daily-study-view.md) — the third screen to carry this control, unchanged
+- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](ADR-024-plan-item-skipping.md) — the third status this endpoint accepts, and the reversibility argument here applied to it
 - [Architecture decision register](../architecture/decisions.md) — DEC-033
