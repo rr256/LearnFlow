@@ -2,7 +2,7 @@
 title: LearnFlow Project Context
 status: approved
 owner: project-governance
-last_updated: 2026-08-10
+last_updated: 2026-08-11
 audience: all-contributors-and-ai-assistants
 read_before: any-design-or-implementation-task
 related:
@@ -91,9 +91,6 @@ Accepted ADRs:
 - [ADR-021 — Mark a plan item completed as a reversible statement about work, not about the learner](adr/ADR-021-plan-item-completion.md)
 - [ADR-022 — Adapt a study plan by rebuilding it around what happened](adr/ADR-022-plan-adaptation.md)
 - [ADR-023 — Show today's work as a reading of the weekly plan, not a daily plan](adr/ADR-023-daily-study-view.md)
-
-Proposed ADRs, drafted and awaiting acceptance:
-
 - [ADR-024 — Let a learner skip a plan item, settling the item without retiring the topic](adr/ADR-024-plan-item-skipping.md)
 
 ### Design and implementation

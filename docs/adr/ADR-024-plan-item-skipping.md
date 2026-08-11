@@ -1,8 +1,8 @@
 ---
 title: "ADR-024: Let a Learner Skip a Plan Item, Settling the Item Without Retiring the Topic"
-status: proposed
+status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-10
+last_updated: 2026-08-11
 related:
   - ../00-project-context.md
   - ADR-014-api-response-contract.md
@@ -29,13 +29,18 @@ related:
 
 ## Status
 
-Proposed — 2026-08-10.
+Accepted — 2026-08-11. Proposed 2026-08-10.
+
+Accepted once the decision below was verified rather than merely argued, and once CI had run the same
+checks against an ephemeral database. **Nothing in the decision changed on acceptance.**
 
 **What has been verified.** The whole canonical check set is green: the backend suite with warnings as
 errors, Ruff lint and format, the frontend lint, type check, 384 tests, and production build, the
 `scripts/` checks, and the documentation validator. The **PostgreSQL integration tests were run
 locally** against a disposable `learnflow_test` database — 224 passed — so `skipped` is confirmed to
-pass the real `CHECK` on `plan_items.status`. No learner data was touched.
+pass the real `CHECK` on `plan_items.status`. No learner data was touched. **CI then ran all five
+jobs green** on pull request #25, its `database` job reporting the same 224 passed against a
+`postgres:18-alpine` service container.
 
 **This change has been exercised against the production standalone frontend with a contract-shaped
 stub API, with JavaScript disabled**, as ADR-015 through ADR-021 and ADR-023 each were. **Fifty-nine
