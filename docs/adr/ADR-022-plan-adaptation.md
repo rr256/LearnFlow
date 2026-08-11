@@ -2,7 +2,7 @@
 title: "ADR-022: Adapt a Study Plan by Rebuilding It Around What Happened"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-09
+last_updated: 2026-08-10
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -12,6 +12,7 @@ related:
   - ADR-020-initial-study-plan-generation.md
   - ADR-021-plan-item-completion.md
   - ADR-023-daily-study-view.md
+  - ADR-024-plan-item-skipping.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -43,6 +44,49 @@ criterion in full — "when work is missed or availability changes, the learner 
 plan" — and takes the **first** further than [ADR-021](ADR-021-plan-item-completion.md) did:
 completing and postponing are both now reachable, and only *skipping* remains unbuilt. The **third** criterion, highlighting trade-offs when time is insufficient, is **not** delivered;
 see *Consequences*.
+
+## Implementation status — 2026-08-10
+
+*Note added 2026-08-10. The decision below is unchanged except where this says otherwise; it records
+the open question that has been answered and the domain rule that moved with it.*
+
+**The open question is answered.** This record listed "when `skipped` arrives and what it means for
+adaptation" among the things it deliberately did not settle.
+[ADR-024](ADR-024-plan-item-skipping.md) settles both: PLN-004 accepts `skipped`, and **adaptation
+leaves a skipped item exactly as it is while planning its topic again.**
+
+**Four statements above are overtaken.**
+
+- In the [Status](#status) section — "only *skipping* remains unbuilt". It is built. Note that
+  "completing and postponing are both now reachable" describes the **statuses**, not what a learner
+  may ask for: a learner can mark an item completed or skipped, and postponing stays something
+  adaptation does. FR-004's first criterion is therefore two thirds met rather than complete.
+- Under [Decision](#overdue-work-is-marked-postponed-and-its-topic-is-planned-again) — "`skipped`
+  stays unwritten. Nothing yet lets a learner **abandon a topic** outright." It is written, by PLN-004
+  rather than by adaptation — and what it lets a learner abandon is a plan **item**, not a topic,
+  whose work is planned again. [Terminology](../domain/terminology.md) now names *abandon a topic* as
+  wording to avoid, so the phrase here and under *Negative* is superseded rather than merely dated.
+- The same section's third boundary, "**Completed work is never overdue**, however late it was
+  completed", is now one of two: an item the learner has **settled** is never overdue, which means
+  completed or skipped. `DatedItem.is_done` is accordingly renamed `is_settled`, and `select_overdue`
+  states four boundaries rather than three. The rule is otherwise unchanged and still pure.
+- Under [Consequences](#negative) — "**`skipped` remains unwritten**, so a learner who wants to
+  abandon a topic still cannot say so." As above, on both counts.
+
+**That change is what makes a skip durable.** Left as it was, the first adaptation after a skipped
+item's day had passed would have written `postponed` over it — replacing the learner's own statement
+with an inference about a date, on the plan being set aside, which PLN-004 then refuses to let them
+edit.
+
+**A skipped topic is planned again, unlike a completed one.** The exclusion this record decided reads
+`plan_items.status = 'completed'` alone and is unchanged: a completed topic is finished with, while a
+skipped one is only not happening now. `completed_topic_count` and `remaining_topic_count` are
+unchanged, and a skipped topic counts toward the second.
+
+**Everything else stands.** The learner still asks and nothing adapts on its own; adaptation still
+supersedes; `_compose` is still shared with generation; the goal-scoped path, the empty request body,
+and the `409` for a goal with no active plan are all as accepted. ADR-024 needed **no migration**
+either.
 
 ## Context
 
@@ -331,6 +375,7 @@ client sends changes what the plan is built from — a property ADR-020 chose de
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](ADR-020-initial-study-plan-generation.md) — the plan this rebuilds, the rules it reuses, and the stale-week problem it names
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](ADR-021-plan-item-completion.md) — the completions this consumes, and the `postponed` question it left open
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](ADR-023-daily-study-view.md) — the screen that mirrors this record's overdue boundaries for display and links to adaptation rather than performing it
+- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](ADR-024-plan-item-skipping.md) — the fourth overdue boundary, and why a skipped item survives an adaptation while a completed topic never returns to one
 - [API conventions](../api/conventions.md) — the envelope, the error codes, and the `snake_case` rule
 - [API endpoint catalog](../api/endpoints.md) — the contract this record decides, and the catalogued path it departs from
 - [API versioning](../api/versioning.md) — what makes a change to it breaking

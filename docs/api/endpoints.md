@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-09
+last_updated: 2026-08-10
 related:
   - ../00-project-context.md
   - conventions.md
@@ -23,6 +23,7 @@ related:
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
   - ../adr/ADR-023-daily-study-view.md
+  - ../adr/ADR-024-plan-item-skipping.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -397,12 +398,13 @@ Supports **FR-003 — Study Timeline and Plan** and **FR-004 — Plan Adaptation
 | PLN-001 | `POST /api/v1/study-plans/generate` | Generate a goal's study plan: a `roadmap` always, and a `weekly` plan when the saved week has room for a session. | The plans written, the reason for each, and what was superseded. | Implemented |
 | PLN-002 | `GET /api/v1/study-plans` | List plans, filterable by goal, type, status, and period. | Plan collection. | Implemented |
 | PLN-003 | `GET /api/v1/study-plans/{plan_id}` | Read one plan and its ordered items. | Plan + plan items. | Implemented |
-| PLN-004 | `PATCH /api/v1/plan-items/{plan_item_id}` | Mark a plan item completed, or return it to `planned`. Skipping and postponing are catalogued and not accepted. | Updated plan item. | Implemented |
+| PLN-004 | `PATCH /api/v1/plan-items/{plan_item_id}` | Mark a plan item completed or skipped, or return it to `planned`. Postponing is written by PLN-005 and not accepted here. | Updated plan item. | Implemented |
 | PLN-005 | `POST /api/v1/study-goals/{study_goal_id}/adapt` | Rebuild a goal's active plans around completed and missed work. | New plans; what was superseded, postponed, and left out. | Implemented |
 
 PLN-001 to PLN-003 are implemented, and their contracts are fixed by
 [ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 by
-[ADR-021](../adr/ADR-021-plan-item-completion.md); and PLN-005 by
+[ADR-021](../adr/ADR-021-plan-item-completion.md), extended to accept `skipped` by
+[ADR-024](../adr/ADR-024-plan-item-skipping.md); and PLN-005 by
 [ADR-022](../adr/ADR-022-plan-adaptation.md). None of them
 accepts a `learner_id`: the effective learner is resolved server-side, per the
 [identity assumption](#identity-assumption) above. All five are synchronous, and all five read and
@@ -542,15 +544,17 @@ Each item carries `id`, `topic`, `action_type`, `scheduled_for`, `estimated_minu
 - `priority` is where the item falls in its plan, counting from 1. **An order, not a score.**
 - `action_type` is `study` on everything generated today. `practice`, `revise`, and `review_mistakes`
   name work the product does not yet model.
-- `status` is `planned` on everything generated. PLN-004 moves it to `completed` and back, and
-  PLN-005 marks an overdue item `postponed` on the plan it supersedes.
-- `completed_at` is when the learner marked the item completed, and `null` on everything else.
+- `status` is `planned` on everything generated. PLN-004 moves it between `planned`, `completed`, and
+  `skipped`, and PLN-005 marks an overdue item `postponed` on the plan it supersedes.
+- `completed_at` is when the learner marked the item completed, and `null` on everything else,
+  including a skipped item.
 
 **A superseded plan is readable, and its content and reasons read exactly as they were written.**
 That is the point of superseding rather than deleting, and it is why PLN-004 refuses to write into
-one. The one thing that may move on a superseded plan is an item's `status`: adaptation marks work
-whose day passed `postponed` as it sets the plan aside, which is a statement about what happened
-rather than a rewriting of what was planned.
+one — for every status, including taking a skip back. The one thing that may move on a superseded plan
+is an item's `status`, and only adaptation may move it: it marks work whose day passed `postponed` as
+it sets the plan aside, which is a statement about what happened rather than a rewriting of what was
+planned.
 
 Errors: `404` `not_found` when no such plan is stored *or it belongs to another learner*; `422`
 `validation_error` when the path segment is not a UUID; `409` `conflict` when more than one learner
@@ -561,40 +565,54 @@ is stored.
 `plan_item_id` is a UUID. Request body: `status`. It is required, and an unknown field is rejected.
 Returns `200` with the whole updated item under `data`, in the shape PLN-003 returns per item.
 
-Contracted by [ADR-021](../adr/ADR-021-plan-item-completion.md). It needed **no migration**:
-`plan_items.status` and `completed_at` have existed since `20260806_03`, and this is the first code
-to write either.
+Contracted by [ADR-021](../adr/ADR-021-plan-item-completion.md) and extended by
+[ADR-024](../adr/ADR-024-plan-item-skipping.md). It needed **no migration** either time:
+`plan_items.status` and `completed_at` have existed since `20260806_03`, and PLN-004 is the only code
+that writes `completed` or `skipped`.
 
-**Two statuses are accepted: `completed` and `planned`.** `skipped` and `postponed` are values the
-column holds and this endpoint refuses, with a `422`. The refusal stands, but its reason has
-changed: **`postponed` is now written by PLN-005** rather than requested by a learner — adaptation
-marks work whose day passed and re-places it, which is where postponed work goes. Asking for it here
-would set a status with nothing to move the work *to*. `skipped` is still not built at all.
+**Three statuses are accepted: `completed`, `skipped`, and `planned`.** A learner may move an item to
+any of them from any of them. `postponed` is the fourth value the column holds and the one this
+endpoint refuses, with a `422`: **it is written by PLN-005** rather than requested by a learner —
+adaptation marks work whose day passed and re-places it, which is where postponed work goes. Asking
+for it here would set a status with nothing to move the work *to*.
 
-**Completing is reversible.** Sending `planned` puts an item back and clears `completed_at`. Nothing
-here treats finishing work as a verdict, which is the position
+- **`completed`** says the item's planned work happened.
+- **`skipped`** says the learner decided it will not happen. It is a statement about **this item**,
+  not about the topic: adaptation leaves a skipped item alone and **plans its topic again**, which is
+  what distinguishes it from a completed one. See
+  [PLN-005](#pln-005-post-apiv1study-goalsstudy_goal_idadapt).
+- **`planned`** takes either statement back.
+
+**Nothing here is one-way.** Sending `planned` puts an item back, a completed item may be skipped and
+a skipped one completed. Nothing treats a statement about work as a verdict, which is the position
 [PRG-004](#prg-004-patch-apiv1progresstopicstopic_id) takes on a learning stage.
 
 **Sending the status an item already holds is accepted and writes nothing**, so a repeated form
 submission does not fail on its second attempt.
 
 **`completed_at` is not accepted from a client.** It is the server's record of when the learner said
-so, read from the same clock a plan's dates come from, so no caller can backdate work.
+so, read from the same clock a plan's dates come from, so no caller can backdate work. It is set only
+while an item is `completed` and cleared by a move to `skipped` or `planned`. **There is no
+`skipped_at`**: nothing records when an item was skipped, as nothing records when one was
+postponed. Skipping carries no reason field either — nothing stores one, and asking would invite a
+view about the answer.
 
 **Only the named item moves.** No plan changes, no other item changes — including a roadmap item
-naming the same topic as a completed weekly one, which stays `planned` because nothing links the two
-but the topic. No learning stage is written: a plan item records whether planned work happened, not
-that the topic is understood, which is rule 4 of the
+naming the same topic as a completed or skipped weekly one, which stays `planned` because nothing
+links the two but the topic. No learning stage is written: a plan item records whether planned work
+happened, not that the topic is understood, which is rule 4 of the
 [domain model](../domain/domain-model.md#domain-rules-and-invariants). Nothing is re-planned, and **nothing
-is counted** — no completion total is reported for a day, a week, or a plan.
+is counted** — no completion or skip total is reported for a day, a week, or a plan.
 
 **Only an item on an `active` plan may be moved**, which is refused otherwise with `409` `conflict`.
-A superseded plan is kept because it reads exactly as it was written; `draft` and `archived` are
-constrained and unused, so today that refusal only ever means superseded.
+A superseded plan is kept because it reads exactly as it was written, and that refusal covers every
+status: there is no exception for taking a skip back. The learner is not stranded by it, because a
+skipped topic is planned again on the plan that replaced the one they skipped it on. `draft` and
+`archived` are constrained and unused, so today that refusal only ever means superseded.
 
 Errors: `404` `not_found` when no such item is stored *or its plan belongs to another learner*; `422`
 `validation_error` when the path segment is not a UUID, when the body names an unknown field or omits
-`status`, or when `status` is not `completed` or `planned` — the `details` entry names
+`status`, or when `status` is not `completed`, `skipped`, or `planned` — the `details` entry names
 `body.status` with type `unknown_plan_item_status` and never echoes the rejected value; `409`
 `conflict` when the item's plan has been superseded, when no learner exists yet, or when more than one
 learner is stored.
@@ -622,10 +640,18 @@ The exclusion is applied before the ordering and placement rules run, so an adap
 plan over what remains rather than a generated one with holes in it.
 
 **Overdue work is marked `postponed`** on the plan being set aside, and its topic is re-placed on the
-new one. What makes an item overdue is decided in the domain: it is dated before today and its work
-has not happened. An item dated *today* is not overdue, an undated roadmap item is never overdue, and
-completed work is never overdue however late it was done. The word describes the **item**, never the
-learner.
+new one. What makes an item overdue is decided in the domain: it is dated before today and the learner
+has not said what became of it. An item dated *today* is not overdue, an undated roadmap item is never
+overdue, and an item the learner has **settled** is never overdue — `completed` however late the work
+was done, or `skipped`. The word describes the **item**, never the learner.
+
+**A skipped item is left exactly as the learner left it, and its topic is planned again.** That is the
+difference between skipping and completing: a completed topic is finished with, while a skipped one is
+only not happening now. Nothing overwrites a skip with `postponed`, which would replace the learner's
+own statement with an inference about a date — on a plan they can no longer write to. A skipped topic
+therefore counts toward `remaining_topic_count`, not `completed_topic_count`, and a learner who still
+does not want it skips it again on the new plan. See
+[ADR-024](../adr/ADR-024-plan-item-skipping.md).
 
 **Adaptation supersedes exactly as PLN-001 does.** The goal's active plans become `superseded`, a new
 `roadmap` and — when the week has room — a new `weekly` plan are written, and nothing is deleted.
@@ -842,9 +868,14 @@ Implement in an order that enables one working learner flow:
 4. Plan generation/read/update. **Done** — PLN-001, PLN-002, and PLN-003 generate a plan and read
    it back, contracted by [ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 marks
    one of its items completed, contracted by
-   [ADR-021](../adr/ADR-021-plan-item-completion.md); and PLN-005 rebuilds a plan around what
-   happened, contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md). Letting a learner *skip* an
-   item outright is the one part of FR-004's first criterion still unbuilt.
+   [ADR-021](../adr/ADR-021-plan-item-completion.md) and extended to accept `skipped` by
+   [ADR-024](../adr/ADR-024-plan-item-skipping.md); and PLN-005 rebuilds a plan around what
+   happened, contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md). Of FR-004's first
+   criterion, **a learner can explicitly mark an item `completed` or `skipped`**; they cannot mark
+   one `postponed` — adaptation writes that for items whose day passed with the work still
+   `planned` — so the criterion is **not met in full**. `plan_items.status` has no unwritten value
+   left, which is a fact about the column rather than the criterion. Reporting that a learner's week
+   cannot reach their horizon — FR-004's third criterion — is not built at all.
 5. Revision reads/updates.
 6. Resource registration and ingestion status.
 7. Mentor questions and grounded retrieval.
@@ -862,9 +893,10 @@ Implement in an order that enables one working learner flow:
 - [ADR-018: Store weekly availability as named days replaced a week at a time](../adr/ADR-018-weekly-availability-slots.md) — the request and response fields of GOAL-005, and the `availability` object every goal response carries
 - [ADR-019: Store planning preferences as typed columns replaced as a group](../adr/ADR-019-study-goal-planning-preferences.md) — the `planning_preferences` group GOAL-001 and GOAL-004 accept, and the criterion it completes
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the request and response fields of PLN-001 to PLN-003, and the rules a generated plan follows
-- [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the request and response fields of PLN-004, the two statuses it accepts, and why it refuses the other two
+- [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the request and response fields of PLN-004, and the reversibility every status it accepts inherits
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the request and response fields of PLN-005, the path it departs from, and the first write of `postponed`
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the daily study view that consumes five of these contracts and adds none
+- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the third status PLN-004 accepts, why `postponed` is still refused, and what a skip does to a later adaptation
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

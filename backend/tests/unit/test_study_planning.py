@@ -258,9 +258,9 @@ def test_a_session_must_have_a_positive_length():
 # -- overdue items ----------------------------------------------------------
 
 
-def dated(scheduled_for, is_done=False, item_id=None):
+def dated(scheduled_for, is_settled=False, item_id=None):
     return DatedItem(
-        plan_item_id=item_id or uuid.uuid4(), scheduled_for=scheduled_for, is_done=is_done
+        plan_item_id=item_id or uuid.uuid4(), scheduled_for=scheduled_for, is_settled=is_settled
     )
 
 
@@ -285,8 +285,18 @@ def test_an_undated_item_is_never_overdue():
     assert select_overdue([dated(None)], date(2026, 8, 9)) == ()
 
 
-def test_completed_work_is_never_overdue_however_late_it_was_done():
-    assert select_overdue([dated(date(2020, 1, 1), is_done=True)], date(2026, 8, 9)) == ()
+def test_settled_work_is_never_overdue_however_late_the_day_it_was_placed_on():
+    """Completed and skipped work alike. The learner has said what became of it,
+    so nothing carries it forward on their behalf."""
+    assert select_overdue([dated(date(2020, 1, 1), is_settled=True)], date(2026, 8, 9)) == ()
+
+
+def test_an_unsettled_item_among_settled_ones_is_the_only_one_overdue():
+    """The boundary is per item, so a day holding both does not settle as a whole."""
+    settled = dated(date(2026, 8, 1), is_settled=True)
+    outstanding = dated(date(2026, 8, 1))
+
+    assert select_overdue([settled, outstanding], date(2026, 8, 9)) == (outstanding.plan_item_id,)
 
 
 def test_the_order_given_is_the_order_returned():

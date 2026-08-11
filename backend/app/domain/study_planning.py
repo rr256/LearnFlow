@@ -262,17 +262,18 @@ def schedule_sessions(
 class DatedItem:
     """One plan item reduced to what deciding "behind" needs.
 
-    An identifier, the day the plan asked for the work, and whether the work has
-    happened. Nothing else about an item bears on the question.
+    An identifier, the day the plan asked for the work, and whether the learner
+    has already said what became of it. Nothing else about an item bears on the
+    question.
     """
 
     plan_item_id: uuid.UUID
     scheduled_for: date | None
-    is_done: bool
+    is_settled: bool
 
 
 def select_overdue(items: Iterable[DatedItem], today: date) -> tuple[uuid.UUID, ...]:
-    """The items whose day has passed and whose work has not happened.
+    """The items whose day has passed and which the learner has not settled.
 
     This is the definition of an item being *overdue*, kept here rather than inside the
     use case because it is a rule about a plan rather than a database read, and
@@ -286,8 +287,15 @@ def select_overdue(items: Iterable[DatedItem], today: date) -> tuple[uuid.UUID, 
       declare the day already lost.
     - **An undated item is never behind.** A roadmap item says what order to work
       in, not which day; it cannot be late for a day it never named.
-    - **Done is never behind**, however late it was completed. The work happened,
-      which is the only question this asks.
+    - **A settled item is never behind.** Work that happened is not late, however
+      late it was completed; and work the learner chose to *skip* is not late
+      either, because they have already said it is not going to fill that day.
+
+    That last boundary is why the field is `is_settled` rather than `is_done`. A
+    skipped item and a completed one are different statements about different
+    things, but they answer this question the same way: the learner has said what
+    became of the work, so nothing should carry it forward on their behalf and
+    overwrite what they said.
 
     Returns:
         The identifiers, in the order given, so a caller writing them back does so
@@ -296,5 +304,5 @@ def select_overdue(items: Iterable[DatedItem], today: date) -> tuple[uuid.UUID, 
     return tuple(
         item.plan_item_id
         for item in items
-        if not item.is_done and item.scheduled_for is not None and item.scheduled_for < today
+        if not item.is_settled and item.scheduled_for is not None and item.scheduled_for < today
     )

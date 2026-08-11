@@ -47,16 +47,24 @@
 }
 
 /*
- * A completed item keeps its place. The plan says what order to work in, and
- * moving or hiding finished work would rewrite the record of what was planned.
- * The change is a border, never struck-through text: the topic name still has to
- * be readable, and "Marked completed" beside it carries the meaning in words.
+ * A settled item keeps its place. The plan says what order to work in, and moving
+ * or hiding finished work would rewrite the record of what was planned. The
+ * change is a border, never struck-through text: the topic name still has to be
+ * readable, and the label beside it carries the meaning in words.
  */
 .completed {
   border-left-color: var(--colour-accent);
 }
 
-.completedLabel {
+/*
+ * Skipping is muted rather than accented. It is an ordinary answer, and giving
+ * it the same emphasis as finishing would read as a second kind of achievement.
+ */
+.skipped {
+  border-left-color: var(--colour-text-muted);
+}
+
+.settledLabel {
   margin: var(--space-1) 0 0;
   font-size: 0.875rem;
   font-weight: 600;

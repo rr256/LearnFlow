@@ -13,8 +13,8 @@
  * Greenwich, which on a plan would be the wrong day's work.
  */
 
-import type { PlanItem, StudyPlan } from "@/types/study-plan";
-import { PLAN_ITEM_ACTION_LABELS } from "@/types/study-plan";
+import type { PlanItem, PlanItemStatus, StudyPlan } from "@/types/study-plan";
+import { PLAN_ITEM_ACTION_LABELS, PLAN_ITEM_SETTLED_LABELS } from "@/types/study-plan";
 
 /** One day of a weekly plan, with the work placed on it. */
 export interface PlannedDay {
@@ -93,21 +93,37 @@ export function planOfType(plans: StudyPlan[], planType: string): StudyPlan | nu
 }
 
 /**
- * The classes both panels give one item, marked when the learner has done it.
+ * The classes the panels give one item, marked once the learner has settled it.
  *
  * `styles` is a CSS Module, whose generated type is an index signature rather
  * than a named shape, so each class is read by key and falls back to nothing.
  * A missing class is a stylesheet that no longer defines it, which should leave
  * the item unstyled rather than render the word `undefined` into an attribute.
  *
- * Only `completed` is marked. `skipped` and `postponed` are stored values
- * nothing writes, and styling a state the product cannot reach would be a claim
- * about what the plan holds.
+ * `completed` and `skipped` are marked, because a learner writes both. The mark
+ * never carries the meaning on its own: `describeSettledStatus` puts it in words
+ * beside the item (docs/development/coding-standards.md). `postponed` is not
+ * marked — it appears only on a superseded plan, which no screen renders.
  */
 export function itemClassName(item: PlanItem, styles: Readonly<Record<string, string>>): string {
   const base = styles.item ?? "";
-  if (item.status !== "completed") {
+  if (item.status !== "completed" && item.status !== "skipped") {
     return base;
   }
-  return `${base} ${styles.completed ?? ""}`.trim();
+  return `${base} ${styles[item.status] ?? ""}`.trim();
+}
+
+/**
+ * What a panel says beside an item the learner has settled, or null.
+ *
+ * A settled item keeps its place on every panel rather than moving or
+ * disappearing: the plan is the record of what was planned, and hiding a line
+ * would leave a roadmap short of a topic and a day looking undone. So each panel
+ * says what became of it instead.
+ *
+ * Null for `planned`, which needs no announcement, and for any status this build
+ * does not recognise, which is shown by the control rather than labelled here.
+ */
+export function describeSettledStatus(status: string): string | null {
+  return PLAN_ITEM_SETTLED_LABELS[status as PlanItemStatus] ?? null;
 }

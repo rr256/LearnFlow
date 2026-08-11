@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeAction,
   describeEstimate,
+  describeSettledStatus,
   groupByDay,
   itemClassName,
   planOfType,
@@ -129,17 +130,46 @@ describe("planOfType", () => {
 });
 
 describe("itemClassName", () => {
-  const styles = { item: "item", completed: "completed" };
+  const styles = { item: "item", completed: "completed", skipped: "skipped" };
 
   it("marks a completed item without dropping its base class", () => {
     expect(itemClassName(item({ status: "completed" }), styles)).toBe("item completed");
+  });
+
+  it("marks a skipped item without dropping its base class", () => {
+    expect(itemClassName(item({ status: "skipped" }), styles)).toBe("item skipped");
   });
 
   it("leaves a planned item unmarked", () => {
     expect(itemClassName(item(), styles)).toBe("item");
   });
 
-  it("leaves a status this build offers no control for unmarked", () => {
-    expect(itemClassName(item({ status: "skipped" }), styles)).toBe("item");
+  it("leaves a status only a superseded plan can hold unmarked", () => {
+    expect(itemClassName(item({ status: "postponed" }), styles)).toBe("item");
+  });
+});
+
+describe("describeSettledStatus", () => {
+  it("names the two statuses a learner writes", () => {
+    expect(describeSettledStatus("completed")).toBe("Marked completed");
+    expect(describeSettledStatus("skipped")).toBe("Marked skipped");
+  });
+
+  it("says nothing about an item nobody has settled", () => {
+    expect(describeSettledStatus("planned")).toBeNull();
+  });
+
+  it("says nothing about a status this build does not recognise", () => {
+    /* The control reports it verbatim; a label here would invent wording for a
+     * state the product cannot reach. */
+    expect(describeSettledStatus("postponed")).toBeNull();
+    expect(describeSettledStatus("invented")).toBeNull();
+  });
+
+  it("never describes the learner", () => {
+    /* docs/domain/terminology.md: a status is a fact about an item. */
+    for (const status of ["completed", "skipped", "planned", "postponed"]) {
+      expect(describeSettledStatus(status) ?? "").not.toMatch(/\byou\b|\byour\b|behind/i);
+    }
   });
 });

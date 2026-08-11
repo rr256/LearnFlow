@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-09
+last_updated: 2026-08-10
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -22,6 +22,7 @@ related:
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
   - ../adr/ADR-023-daily-study-view.md
+  - ../adr/ADR-024-plan-item-skipping.md
   - ../domain/terminology.md
 ---
 
@@ -335,16 +336,16 @@ onboarded — and it writes nothing.
 | `onboarding/availability.ts` | Reads the availability form into the request it makes, owns that form's state shape, and writes a saved week the way a learner reads it. Plain functions, for the same reason. |
 | `onboarding/preferences.ts` | Writes a saved planning preference the way a learner reads it. Presentation only — the reading half lives in `submission.ts`, because preferences ride on the goal write that form already makes. Plain functions, for the same reason, and used by the home panel as well as the setup screen. |
 | `onboarding/actions.ts` | The `"use server"` module holding both write paths. |
-| `planner/StudyRoadmap.tsx` | The order the plan works through the curriculum, with its CSS Module. Every item shows the reason it is where it is, which is what FR-003 asks a recommendation to carry, and carries the control that marks it completed. It reorders nothing: ordering is a planning rule, and a completed item keeps its place. |
-| `planner/PlanWeek.tsx` | The work the plan places on each of the coming days, with its CSS Module, each item carrying the control that marks it completed. A day with no work is absent rather than shown empty; no day or week is totalled, and nothing counts how much of one is done. |
+| `planner/StudyRoadmap.tsx` | The order the plan works through the curriculum, with its CSS Module. Every item shows the reason it is where it is, which is what FR-003 asks a recommendation to carry, and carries the control that says what became of it — completed, skipped, or back to planned. It reorders nothing: ordering is a planning rule, and a settled item keeps its place. |
+| `planner/PlanWeek.tsx` | The work the plan places on each of the coming days, with its CSS Module, each item carrying the control that says what became of it. A day with no work is absent rather than shown empty; no day or week is totalled, and nothing counts how much of one is done. |
 | `planner/GeneratePlanForm.tsx` | The button that asks for a plan, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says plainly that rebuilding keeps the previous plan. |
-| `planner/PlanItemStatusControl.tsx` | The control beside one plan item that marks it completed or returns it to `planned`, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. An item in a status PLN-004 does not accept is shown with no control rather than as something a learner can move. |
-| `planner/DailyStudyView.tsx` | The daily study view's two panels — the work the weekly plan placed on the learner's own date, and work whose day has passed — with its CSS Module. Each item shows its reason and carries the same completion control the other panels carry. It writes no plan and asks for none: rebuilding stays on `/plan`, where the learner asks for it. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md). |
+| `planner/PlanItemStatusControl.tsx` | The control beside one plan item that records what became of its work, with its CSS Module. It offers the **two statuses the item is not already in** — `completed`, `skipped`, and `planned` in any direction — as one form each, so the status travels in a hidden field and a scriptless submission carries it exactly as a hydrated one does. A client component only so it can report the last submission's result; it calls no API itself. An item in a status PLN-004 does not accept as a target — `postponed`, which only a superseded plan holds — is shown with no control rather than as something a learner can move. Contracted by [ADR-024](../adr/ADR-024-plan-item-skipping.md). |
+| `planner/DailyStudyView.tsx` | The daily study view's two panels — the work the weekly plan placed on the learner's own date, and work whose day has passed — with its CSS Module. Each item shows its reason and carries the same status control the other panels carry. It writes no plan and asks for none: rebuilding stays on `/plan`, where the learner asks for it. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md). |
 | `planner/today.ts` | Resolving the learner's own calendar date from their stored timezone, and splitting a weekly plan into today's work and work whose day has passed. Plain functions taking the instant as an argument, so they are testable at a fixed moment across zones without a running server. The overdue boundaries are mirrored from the domain rule `select_overdue`, which stays authoritative for what adaptation writes; nothing here writes anything. |
-| `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. It also decides the classes an item carries, so every panel marks a completed one the same way. |
-| `planner/submission.ts` | Reads the planner's three forms into the requests they make, and owns their state shapes. It reads no preference and no completion time: a plan is built from what the learner stored, and *when* they marked an item completed is the server's record, never what a client sends. |
+| `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. It also decides the classes an item carries and the words beside it, so every panel marks a settled one — completed or skipped — the same way. |
+| `planner/submission.ts` | Reads the planner's three forms into the requests they make, and owns their state shapes. It reads no preference and no completion time: a plan is built from what the learner stored, and *when* they marked an item completed is the server's record, never what a client sends. Nothing records when an item was skipped, or why. |
 | `planner/AdaptPlanForm.tsx` | The button that asks for the plan to be rebuilt around what happened, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says what adapting will do — what is dropped, what is carried forward, and that the old plan is kept — before it is pressed, and it is rendered only when a plan exists. |
-| `planner/actions.ts` | The `"use server"` module holding the generate, mark-completed, and adapt paths. |
+| `planner/actions.ts` | The `"use server"` module holding the generate, plan-item status, and adapt paths. |
 | `progress/TopicStageControl.tsx` | The learning-stage control beside one trackable topic, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. |
 | `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
 | `progress/submission.ts` | Reads the stage form into the request it makes, and owns the control's state shape. |

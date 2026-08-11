@@ -90,10 +90,16 @@ describe("readPlanItemSubmission", () => {
     expect(read).toHaveProperty("problem");
   });
 
-  it.each(["skipped", "postponed"])("refuses %s, which the API does not accept", (status) => {
+  it("reads a skip", () => {
+    const read = readPlanItemSubmission(form({ plan_item_id: "item-1", status: "skipped" }));
+
+    expect(read).toEqual({ submission: { planItemId: "item-1", status: "skipped" } });
+  });
+
+  it.each(["postponed", "finished"])("refuses %s, which the API does not accept", (status) => {
     /*
-     * Both are stored values PLN-004 does not yet take. Sending one would earn a
-     * 422 the learner cannot act on, so it is caught before the round trip.
+     * `postponed` is a stored value only adaptation writes. Sending it would earn
+     * a 422 the learner cannot act on, so it is caught before the round trip.
      */
     const read = readPlanItemSubmission(form({ plan_item_id: "item-1", status }));
 

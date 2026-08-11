@@ -1,6 +1,12 @@
 import styles from "@/features/planner/PlanWeek.module.css";
 import { PlanItemStatusControl } from "@/features/planner/PlanItemStatusControl";
-import { describeAction, describeEstimate, groupByDay, itemClassName } from "@/features/planner/plan";
+import {
+  describeAction,
+  describeEstimate,
+  describeSettledStatus,
+  groupByDay,
+  itemClassName,
+} from "@/features/planner/plan";
 import type { StudyPlan } from "@/types/study-plan";
 
 interface PlanWeekProps {
@@ -26,10 +32,11 @@ interface PlanWeekProps {
  * learner's time or their progress, formed here rather than by the planner that
  * has the trade-offs in view.
  *
- * Each item carries the control that marks it completed, which is the panel a
- * learner acts on daily. A completed item stays where it is rather than moving or
- * disappearing: the plan says what the day held, and hiding what was finished
- * would leave the day looking undone.
+ * Each item carries the control that says what became of it — completed, skipped,
+ * or back to planned — which is the panel a learner acts on daily. A settled item
+ * stays where it is rather than moving or disappearing: the plan says what the day
+ * held, and hiding what was finished would leave the day looking undone, while
+ * hiding what was skipped would hide a decision the learner may want to take back.
  */
 export function PlanWeek({ plan }: PlanWeekProps) {
   const days = groupByDay(plan);
@@ -64,8 +71,8 @@ export function PlanWeek({ plan }: PlanWeekProps) {
                     {item.topic ? `${item.topic.subject_name} · ` : ""}
                     {describeEstimate(item.estimated_minutes)}
                   </p>
-                  {item.status === "completed" ? (
-                    <p className={styles.completedLabel}>Marked completed</p>
+                  {describeSettledStatus(item.status) ? (
+                    <p className={styles.settledLabel}>{describeSettledStatus(item.status)}</p>
                   ) : null}
                   {item.recommendation_reason ? (
                     <p className={styles.why}>{item.recommendation_reason}</p>

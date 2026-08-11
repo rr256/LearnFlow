@@ -26,11 +26,18 @@ roadmap answers "in what order", the week answers "what now". Monthly and daily
 plans, and re-planning after missed work, are FR-003 and FR-004 work that
 Milestone 3 continues.
 
-**Completing a plan item moves that item and nothing else.** PLN-004 writes an item's
+**Moving a plan item moves that item and nothing else.** PLN-004 writes an item's
 `status` and `completed_at`, and touches no plan, no other item, and no topic
-progress. Completing planned work is a statement that it happened, not a claim
-about how well the learner understands the topic — rule 4 of the domain model —
-and re-planning around what was completed is FR-004's work, which this is not.
+progress. Completing planned work is a statement that it happened and skipping it
+is a statement that it will not; neither is a claim about how well the learner
+understands the topic — rule 4 of the domain model — and neither re-plans
+anything. Re-planning is what the learner asks for through `adapt`.
+
+**Skipping settles an item; it does not retire a topic.** A skipped item is never
+overdue, so adaptation leaves it as the learner left it rather than carrying it
+forward as `postponed`. Its topic is planned again, because skipping says the
+work is not happening *now* — unlike completing, which says the work is done and
+takes the topic out of the plans that follow.
 
 **Generating again supersedes rather than refuses.** The goal's active plans
 become `superseded` and a new pair is written, so the learner's plan history stays
@@ -68,6 +75,7 @@ from app.application.dto.study_plan import (
     PLANNED,
     POSTPONED,
     ROADMAP,
+    SETTLED_STATUSES,
     STUDY,
     SUPERSEDED,
     WEEKLY,
@@ -188,7 +196,12 @@ class PlanItemNotFoundError(StudyPlanManagementError):
 
 
 class UnknownPlanItemStatusError(StudyPlanManagementError):
-    """A learner asked to move an item to a status PLN-004 does not accept."""
+    """A learner asked to move an item to a status PLN-004 does not accept.
+
+    Today that means `postponed`, which adaptation writes as it sets a plan
+    aside. Asking for it here would set a status with nothing to move the work
+    *to*, so the refusal names what adaptation is instead of implying a typo.
+    """
 
 
 class PlanItemNotOnActivePlanError(StudyPlanManagementError):
@@ -560,8 +573,13 @@ class ManageStudyPlans:
 
         What makes an item overdue is decided in `app.domain.study_planning`, so
         the boundaries — an item dated today is not overdue, an undated roadmap
-        item is never overdue, and completed work is never overdue however late it
-        was done — are testable without a clock or a database.
+        item is never overdue, and an item the learner has settled is never
+        overdue — are testable without a clock or a database.
+
+        An item is settled when the learner has said what became of its work:
+        `completed`, however late it was done, or `skipped`. Writing `postponed`
+        over a skip would replace what the learner said with an inference about a
+        day that passed, which is the one thing this must not do.
 
         The items are written before their plans are superseded, so the record a
         learner reads back says both things at once: this plan was replaced, and
@@ -576,7 +594,7 @@ class ManageStudyPlans:
                     DatedItem(
                         plan_item_id=item.id,
                         scheduled_for=item.scheduled_for,
-                        is_done=item.status == COMPLETED,
+                        is_settled=item.status in SETTLED_STATUSES,
                     )
                     for item in sorted(items, key=lambda item: (item.priority, item.id))
                 ),
@@ -669,7 +687,7 @@ class ManageStudyPlans:
     def record_item_status(
         self, plan_item_id: uuid.UUID, change: PlanItemStatusChange
     ) -> PlanItemDetail:
-        """Mark one of the learner's plan items completed, or return it to planned.
+        """Mark one of the learner's plan items completed or skipped, or plan it again.
 
         The caller owns the transaction: this method writes through the
         repository but never commits.
@@ -677,14 +695,19 @@ class ManageStudyPlans:
         **Only the item moves.** Its `status` and `completed_at` are written and
         nothing else is: not the plan, not another item naming the same topic,
         and not the learner's topic progress. A completed item records that
-        planned work happened, which is not a claim that the topic is understood
-        (rule 4 of the domain model), and nothing re-plans around it — that is
-        PLN-005 and does not exist.
+        planned work happened and a skipped one that the learner decided it would
+        not; neither is a claim that the topic is understood (rule 4 of the domain
+        model), and neither re-plans anything — re-planning is what `adapt` does,
+        when the learner asks for it.
 
-        **Completing is reversible.** A learner who marked the wrong line can put
-        it back to `planned`, which clears the timestamp. Nothing here treats
-        completion as a verdict, and a mis-tap that could not be undone would be
-        one.
+        **Every move is reversible.** A learner who marked the wrong line can put
+        it back to `planned`, which clears the timestamp, and may go directly
+        between `completed` and `skipped`. Nothing here treats a statement about
+        work as a verdict, and a mis-tap that could not be undone would be one.
+
+        **Skipping is a statement about this item, not about the topic.** The
+        topic is planned again the next time the learner adapts, because skipping
+        says the work is not happening now rather than that it is finished with.
 
         **Recording the status an item already holds is accepted and writes
         nothing**, as PRG-004 does: a repeated form submission must not fail on
@@ -702,13 +725,12 @@ class ManageStudyPlans:
         if change.status not in PLAN_ITEM_STATUS_CHANGES:
             # The rejected value is deliberately not repeated back, which
             # docs/api/conventions.md keeps out of the error envelope. Naming
-            # what is accepted is what a caller needs, and saying that skipping
-            # and postponing are not built yet keeps a client from reading their
-            # absence as a typo.
+            # what is accepted is what a caller needs, and saying where
+            # `postponed` comes from keeps a client from reading its absence as a
+            # typo or as work the product cannot express.
             raise UnknownPlanItemStatusError(
-                "A plan item can be marked "
-                f"{' or '.join(PLAN_ITEM_STATUS_CHANGES)}. Skipping and postponing work are "
-                "not built yet."
+                f"A plan item can be marked {_listed(PLAN_ITEM_STATUS_CHANGES)}. Work is "
+                "postponed when you ask for your plan to be adapted, not here."
             )
 
         learner = resolve_local_learner(self._learners)
@@ -750,8 +772,9 @@ class ManageStudyPlans:
                 status=change.status,
                 recommendation_reason=item.recommendation_reason,
                 # Read from the clock rather than accepted from the caller, so
-                # nobody can backdate work, and cleared on the way back so a
-                # `planned` item never carries a completion instant.
+                # nobody can backdate work, and cleared on every other move so
+                # neither a `planned` nor a `skipped` item carries a completion
+                # instant from a status it no longer holds.
                 completed_at=self._clock.now() if change.status == COMPLETED else None,
             )
             self._plans.update_plan_item(item)
@@ -1362,6 +1385,19 @@ def _session_sentence(session_minutes: int | None) -> str:
             "have not set a preferred session length."
         )
     return f"Sessions of {session_minutes} minutes, the length you prefer."
+
+
+def _listed(values: Sequence[str]) -> str:
+    """The values as a learner reads a list of them: "a, b or c".
+
+    A plain `", ".join` reads as a machine's list and `" or ".join` produces
+    "a or b or c", which is why this exists rather than either. The wording is
+    learner-facing prose in an error a form shows, so it is written the way the
+    rest of the product's copy is.
+    """
+    if len(values) < 2:
+        return "".join(values)
+    return f"{', '.join(values[:-1])} or {values[-1]}"
 
 
 def _validate(filters: StudyPlanFilters) -> None:

@@ -18,6 +18,7 @@ from app.application.dto.study_plan import (
     PLANNED,
     POSTPONED,
     ROADMAP,
+    SKIPPED,
     SUPERSEDED,
     WEEKLY,
     PlanGenerationRequest,
@@ -516,10 +517,10 @@ def test_recording_the_status_an_item_already_holds_writes_nothing():
     assert again.completed_at == first.completed_at
 
 
-@pytest.mark.parametrize("status", ["skipped", "postponed", "finished", ""])
+@pytest.mark.parametrize("status", ["postponed", "finished", ""])
 def test_a_status_this_endpoint_does_not_accept_is_refused(status):
-    """`skipped` and `postponed` are approved statuses that nothing writes yet;
-    they are refused here rather than stored where nothing reads them."""
+    """`postponed` is written by adaptation as it sets a plan aside, so asking
+    for it here would set a status with nothing to move the work to."""
     planning = Planning(availability={"thursday": 120})
     generated = planning.generate()
     item = weekly(generated).items[0]
@@ -657,8 +658,134 @@ def test_a_status_is_validated_before_the_item_is_looked_up():
     named -- the order `record_stage` applies to an unknown learning stage."""
     with pytest.raises(UnknownPlanItemStatusError):
         Planning().planner().record_item_status(
-            uuid.uuid4(), PlanItemStatusChange(status="skipped")
+            uuid.uuid4(), PlanItemStatusChange(status="postponed")
         )
+
+
+# -- skipping a plan item ---------------------------------------------------
+
+
+def test_skipping_an_item_records_the_status_and_no_completion_time():
+    """Skipping says the work is not happening. `completed_at` is a completion
+    instant, and nothing records when a topic was set aside."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+
+    updated = planning.planner().record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
+
+    assert updated.status == SKIPPED
+    assert updated.completed_at is None
+
+
+def test_skipping_an_item_can_be_undone():
+    """A learner who skipped the wrong line must be able to put it back."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+    planner.record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
+
+    reverted = planner.record_item_status(item.id, PlanItemStatusChange(status=PLANNED))
+
+    assert reverted.status == PLANNED
+
+
+def test_skipping_a_completed_item_clears_the_completion_time():
+    """The two travel together: only a `completed` item carries an instant."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+    planner.record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    skipped = planner.record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
+
+    assert skipped.status == SKIPPED
+    assert skipped.completed_at is None
+
+
+def test_completing_a_skipped_item_records_the_time():
+    """A learner may move directly between the two statements about their work."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+    planner.record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
+
+    done = planner.record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    assert done.status == COMPLETED
+    assert done.completed_at == DEFAULT_INSTANT
+
+
+def test_skipping_the_same_item_twice_writes_nothing_the_second_time():
+    """A repeated form submission must not fail on its second attempt."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+    planner.record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
+
+    again = planner.record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
+
+    assert again.status == SKIPPED
+
+
+def test_skipping_one_item_moves_no_other_item():
+    """The same topic sits on the roadmap and in the week. Skipping the week's
+    session says that session is not happening, and decides nothing else."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    session = weekly(generated).items[0]
+    planner = planning.planner()
+
+    planner.record_item_status(session.id, PlanItemStatusChange(status=SKIPPED))
+
+    roadmap_items = planner.read(roadmap(generated).id).items
+    assert [item.status for item in roadmap_items] == [PLANNED, PLANNED, PLANNED]
+
+
+def test_skipping_an_item_records_no_learning_stage():
+    """Rule 4 of the domain model, read the other way round: setting work aside
+    says nothing about how well the learner understands the topic."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+
+    planning.planner().record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
+
+    assert planning.progress.records == []
+
+
+def test_skipping_an_item_leaves_the_plan_and_its_reason_alone():
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    week = weekly(generated)
+    item = week.items[0]
+    planner = planning.planner()
+
+    planner.record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
+
+    stored = planner.read(week.id)
+    assert stored.status == ACTIVE
+    assert stored.generation_reason == week.generation_reason
+    skipped = next(line for line in stored.items if line.id == item.id)
+    assert skipped.recommendation_reason == item.recommendation_reason
+    assert skipped.priority == item.priority
+    assert skipped.scheduled_for == item.scheduled_for
+
+
+def test_skipping_an_item_on_a_superseded_plan_is_refused():
+    """The rule is the plan's status, not the status asked for: a superseded
+    plan is kept because it reads exactly as it was written."""
+    planning = Planning(availability={"thursday": 120})
+    first = planning.generate()
+    item = weekly(first).items[0]
+    planning.generate()
+
+    with pytest.raises(PlanItemNotOnActivePlanError):
+        planning.planner().record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
 
 
 # -- refusals ---------------------------------------------------------------
@@ -762,6 +889,11 @@ def complete(planning, item_id):
     planning.planner().record_item_status(item_id, PlanItemStatusChange(status=COMPLETED))
 
 
+def skip(planning, item_id):
+    """Mark one item skipped through the use case, as PLN-004 does."""
+    planning.planner().record_item_status(item_id, PlanItemStatusChange(status=SKIPPED))
+
+
 def test_adapting_supersedes_the_active_plans_and_writes_a_new_pair():
     planning = Planning(availability={"thursday": 120})
     first = planning.generate()
@@ -839,6 +971,36 @@ def test_a_completed_item_is_never_postponed_however_late_it_was_done():
 
     assert done.id not in adapted.postponed_plan_item_ids
     assert planning.plans.find_plan_item(done.id).status == COMPLETED
+
+
+def test_a_skipped_item_is_never_postponed_however_long_its_day_has_passed():
+    """The learner has already said what became of the work. Writing `postponed`
+    over that would replace their statement with an inference about a date."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    set_aside = weekly(generated).items[0]
+    skip(planning, set_aside.id)
+    planning.clock.instant = datetime(2026, 8, 20, 9, 0, tzinfo=UTC)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert set_aside.id not in adapted.postponed_plan_item_ids
+    assert planning.plans.find_plan_item(set_aside.id).status == SKIPPED
+
+
+def test_a_skipped_topic_is_planned_again():
+    """Skipping settles the item, not the topic. Unlike completed work, which is
+    done, skipped work is only not happening now."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    set_aside = weekly(generated).items[0]
+    skip(planning, set_aside.id)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert set_aside.topic.id in {item.topic.id for item in roadmap(adapted).items}
+    assert adapted.completed_topic_count == 0
+    assert adapted.remaining_topic_count == len(roadmap(generated).items)
 
 
 def test_an_undated_roadmap_item_is_never_postponed():

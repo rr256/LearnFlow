@@ -53,13 +53,42 @@ export type PlanItemStatus = "planned" | "completed" | "skipped" | "postponed";
 /**
  * The statuses PLN-004 accepts as a target.
  *
- * A subset of the statuses the column holds: `skipped` and `postponed` are
- * approved and the API does not yet accept them, so offering either would be a
- * control that always fails.
+ * A subset of the statuses the column holds: `postponed` is written by
+ * adaptation as it sets a plan aside, so offering it here would be a control
+ * that always fails.
+ *
+ * A learner may move an item to any of these three from any of them. Nothing
+ * here is one-way, which is why the control offers the other two rather than a
+ * single next step.
  */
-export const PLAN_ITEM_STATUS_CHANGES = ["planned", "completed"] as const;
+export const PLAN_ITEM_STATUS_CHANGES = ["completed", "planned", "skipped"] as const;
 
 export type PlanItemStatusChange = (typeof PLAN_ITEM_STATUS_CHANGES)[number];
+
+/**
+ * What each button says, naming the state it moves the item *to*.
+ *
+ * A learner returning to the page a week later reads what the button will do,
+ * rather than an "undo" whose subject has been forgotten. The wording describes
+ * the item and never the learner (docs/domain/terminology.md).
+ */
+export const PLAN_ITEM_STATUS_CHANGE_LABELS: Record<PlanItemStatusChange, string> = {
+  completed: "Mark completed",
+  planned: "Return to planned",
+  skipped: "Skip this item",
+};
+
+/**
+ * What a learner reads beside an item the API sent in a settled status.
+ *
+ * `planned` has no label: an item nobody has said anything about needs no
+ * announcement. `postponed` has none either — it appears only on a superseded
+ * plan, which no screen renders.
+ */
+export const PLAN_ITEM_SETTLED_LABELS: Partial<Record<PlanItemStatus, string>> = {
+  completed: "Marked completed",
+  skipped: "Marked skipped",
+};
 
 /** True when a string is one of the plan types this build knows. */
 export function isPlanType(value: string): value is PlanType {

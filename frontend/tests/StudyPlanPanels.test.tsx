@@ -217,7 +217,7 @@ describe("every panel that shows an item shows its reason", () => {
  * rewrite of the other drop the control silently -- which is exactly how the
  * missing reason on `PlanWeek` reached CI.
  */
-describe("every panel that shows an item lets the learner complete it", () => {
+describe("every panel that shows an item lets the learner say what became of it", () => {
   const panels: [string, typeof StudyRoadmap][] = [
     ["StudyRoadmap", StudyRoadmap],
     ["PlanWeek", PlanWeek],
@@ -234,6 +234,14 @@ describe("every panel that shows an item lets the learner complete it", () => {
     render(<Panel plan={withStatus("planned")} />);
 
     expect(screen.getByRole("button", { name: /Mark completed.*CPU scheduling/ })).toBeDefined();
+  });
+
+  it.each(panels)("%s offers a way to skip a planned item", (_name, Panel) => {
+    /* FR-004's first criterion: a learner may say a planned task is not
+     * happening, not only that it is done. */
+    render(<Panel plan={withStatus("planned")} />);
+
+    expect(screen.getByRole("button", { name: /Skip this item.*CPU scheduling/ })).toBeDefined();
   });
 
   it.each(panels)("%s says in words that an item is completed", (_name, Panel) => {
@@ -261,13 +269,38 @@ describe("every panel that shows an item lets the learner complete it", () => {
     expect(screen.getByText(/Topic 1 of 60 in syllabus order/)).toBeDefined();
   });
 
-  it.each(panels)("%s shows no control for a status the API will not accept", (_name, Panel) => {
-    /* `skipped` and `postponed` are stored values PLN-004 does not accept, so a
-     * button offering either would be one that always fails. */
+  it.each(panels)("%s says in words that an item is skipped", (_name, Panel) => {
+    /* Never colour alone: the meaning has to survive a monochrome screen. */
     render(<Panel plan={withStatus("skipped")} />);
 
+    expect(screen.getByText("Marked skipped")).toBeDefined();
+  });
+
+  it.each(panels)("%s offers a way to take a skip back", (_name, Panel) => {
+    /* Nothing in LearnFlow treats a statement about work as a verdict, so
+     * skipping is no more one-way than completing is. */
+    render(<Panel plan={withStatus("skipped")} />);
+
+    expect(screen.getByRole("button", { name: /Return to planned.*CPU scheduling/ })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Mark completed.*CPU scheduling/ })).toBeDefined();
+  });
+
+  it.each(panels)("%s keeps a skipped item in place rather than hiding it", (_name, Panel) => {
+    /* Hiding a skip would hide a decision the learner may want to take back, and
+     * would leave the plan reading as though the item had never been there. */
+    render(<Panel plan={withStatus("skipped")} />);
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.getByText(/Topic 1 of 60 in syllabus order/)).toBeDefined();
+  });
+
+  it.each(panels)("%s shows no control for a status the API will not accept", (_name, Panel) => {
+    /* `postponed` is written by adaptation onto the plan it supersedes, so a
+     * button offering it would be one that always fails. */
+    render(<Panel plan={withStatus("postponed")} />);
+
     expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.getByText(/Status: skipped/)).toBeDefined();
+    expect(screen.getByText(/Status: postponed/)).toBeDefined();
   });
 
   it.each(panels)("%s counts nothing about what is done", (_name, Panel) => {

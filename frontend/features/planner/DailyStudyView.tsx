@@ -2,7 +2,12 @@ import Link from "next/link";
 
 import styles from "@/features/planner/DailyStudyView.module.css";
 import { PlanItemStatusControl } from "@/features/planner/PlanItemStatusControl";
-import { describeAction, describeEstimate, itemClassName } from "@/features/planner/plan";
+import {
+  describeAction,
+  describeEstimate,
+  describeSettledStatus,
+  itemClassName,
+} from "@/features/planner/plan";
 import { selectDailyWork, weekHasPassed } from "@/features/planner/today";
 import type { PlanItem, StudyPlan } from "@/types/study-plan";
 
@@ -23,14 +28,18 @@ interface DailyStudyViewProps {
  *
  * Every item shows the reason the plan gave for it, which is FR-003's fourth
  * acceptance criterion, and carries the same PLN-004 control the week and the
- * roadmap carry. A plan item is a plan item whichever screen shows it, and
- * completing one still moves that item alone.
+ * roadmap carry — completed, skipped, or back to planned. A plan item is a plan
+ * item whichever screen shows it, and moving one still moves that item alone.
  *
  * **Work whose day has passed is shown, and nothing moves it.** It sits under its
  * own heading rather than mixed into today, because the plan did not ask for it
  * today and this screen must not say it did. Carrying it forward is adaptation,
  * which the learner asks for on the plan screen — a list that rearranged itself
  * under a hand ticking it would be the surprise ADR-022 refused.
+ *
+ * Work the learner has **settled** does not appear under that heading: a skipped
+ * item is not outstanding, so showing it back to them as work still owed would
+ * ask a question they have already answered.
  *
  * The wording describes **items**, never the learner: an item is overdue, and a
  * day that passed is a fact about a date rather than a verdict on a person
@@ -105,8 +114,8 @@ function PlanItemLine({ item }: { item: PlanItem }) {
         {item.topic ? `${item.topic.subject_name} · ` : ""}
         {describeEstimate(item.estimated_minutes)}
       </p>
-      {item.status === "completed" ? (
-        <p className={styles.completedLabel}>Marked completed</p>
+      {describeSettledStatus(item.status) ? (
+        <p className={styles.settledLabel}>{describeSettledStatus(item.status)}</p>
       ) : null}
       {item.recommendation_reason ? <p className={styles.why}>{item.recommendation_reason}</p> : null}
       <PlanItemStatusControl

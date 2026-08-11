@@ -83,6 +83,22 @@ describe("DailyStudyView", () => {
     expect(screen.getByRole("button", { name: /Mark completed.*CPU scheduling/ })).toBeDefined();
   });
 
+  it("offers the skip control beside today's work", () => {
+    /* A learner deciding today's session is not happening says so here, on the
+     * screen they are working from. */
+    render(<DailyStudyView plan={week()} today={TODAY} />);
+
+    expect(screen.getByRole("button", { name: /Skip this item.*CPU scheduling/ })).toBeDefined();
+  });
+
+  it("lets a learner take a skip back, and keeps the item in place", () => {
+    render(<DailyStudyView plan={week({ items: [item({ status: "skipped" })] })} today={TODAY} />);
+
+    expect(screen.getByText("Marked skipped")).toBeDefined();
+    expect(screen.getByRole("button", { name: /Return to planned.*CPU scheduling/ })).toBeDefined();
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+  });
+
   it("lets a learner undo a completion, and keeps the item in place", () => {
     render(
       <DailyStudyView plan={week({ items: [item({ status: "completed" })] })} today={TODAY} />,
@@ -161,6 +177,26 @@ describe("DailyStudyView and work whose day has passed", () => {
     render(<DailyStudyView plan={missed} today={TODAY} />);
 
     expect(screen.getAllByRole("button", { name: /Mark completed/ })).toHaveLength(2);
+  });
+
+  it("leaves out work whose day passed once the learner has skipped it", () => {
+    /* They have already said it is not going to fill that day. Showing it back
+     * under 'From earlier days' would ask a question they answered. */
+    render(
+      <DailyStudyView
+        plan={week({
+          item_count: 2,
+          items: [
+            item({ id: "friday", scheduled_for: "2026-08-07", status: "skipped" }),
+            item({ id: "today", priority: 2 }),
+          ],
+        })}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.queryByRole("heading", { name: "From earlier days" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "2026-08-07" })).toBeNull();
   });
 
   it("describes the item, never the learner", () => {

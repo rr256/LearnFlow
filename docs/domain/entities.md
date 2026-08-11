@@ -2,7 +2,7 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-09
+last_updated: 2026-08-10
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -14,6 +14,7 @@ related:
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
+  - ../adr/ADR-024-plan-item-skipping.md
   - ../database/schema.md
 ---
 
@@ -168,9 +169,13 @@ Represents one recommended action in a study plan.
 **Key relationships:** belongs to a study plan; usually links to a topic and may result in a study activity or revision record.
 
 An item's status records what became of the work it names: `planned` while it stands, `completed`
-when the learner says the work happened, and `postponed` when adaptation finds its day has passed with
-the work undone and re-places the topic on the plan that replaces it. `skipped` is modelled and
-unused. An item's position within its plan is an order, not a ranking: nothing scores a topic, and a topic
+when the learner says the work happened, `skipped` when they say it will not, and `postponed` when
+adaptation finds its day has passed with the work unsettled and re-places the topic on the plan that
+replaces it. All four are written. The learner writes the first three, in any direction, and only
+adaptation writes the fourth; the status set and its rules live in
+[endpoints.md](../api/endpoints.md#pln-004-patch-apiv1plan-itemsplan_item_id) rather than here.
+Skipping settles the **item**, not the topic — a skipped item's topic is planned again, where a
+completed one's is not. An item's position within its plan is an order, not a ranking: nothing scores a topic, and a topic
 later in a plan is not one the learner is worse at. Its reason is a statement about the plan's
 reasoning rather than about the learner, and it is not rewritten, so a superseded plan still explains
 itself.

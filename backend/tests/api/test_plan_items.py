@@ -30,8 +30,16 @@ def first_weekly_item(client, study_goal_id):
     return week["items"][0]
 
 
-def complete(client, plan_item_id, status="completed"):
+def move(client, plan_item_id, status):
     return client.patch(f"{ITEMS}/{plan_item_id}", json={"status": status})
+
+
+def complete(client, plan_item_id, status="completed"):
+    return move(client, plan_item_id, status)
+
+
+def skip(client, plan_item_id):
+    return move(client, plan_item_id, "skipped")
 
 
 # -- completing a plan item -------------------------------------------------
@@ -113,13 +121,110 @@ def test_completing_one_item_leaves_the_roadmap_alone(planning_client, planning)
     assert all(item["status"] == "planned" for item in roadmap["items"])
 
 
+# -- skipping a plan item ---------------------------------------------------
+
+
+def test_skipping_an_item_returns_200_with_the_whole_item(planning_client, planning):
+    item = first_weekly_item(planning_client, planning.goal.id)
+
+    response = skip(planning_client, item["id"])
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["data"]["id"] == item["id"]
+    assert payload["data"]["status"] == "skipped"
+    assert payload["data"]["completed_at"] is None
+
+
+def test_a_skipped_item_still_names_its_topic_and_its_reason(planning_client, planning):
+    """A skipped item keeps its place in the plan and everything that explains
+    it, so a screen can render the line it changed without re-reading the plan."""
+    item = first_weekly_item(planning_client, planning.goal.id)
+
+    updated = skip(planning_client, item["id"]).json()["data"]
+
+    assert updated["topic"] == item["topic"]
+    assert updated["recommendation_reason"] == item["recommendation_reason"]
+    assert updated["priority"] == item["priority"]
+    assert updated["scheduled_for"] == item["scheduled_for"]
+
+
+def test_skipping_an_item_can_be_undone(planning_client, planning):
+    item = first_weekly_item(planning_client, planning.goal.id)
+    skip(planning_client, item["id"])
+
+    response = move(planning_client, item["id"], "planned")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "planned"
+
+
+def test_skipping_a_completed_item_clears_the_completion_time(planning_client, planning):
+    """Only a `completed` item carries an instant, so moving off it clears one."""
+    item = first_weekly_item(planning_client, planning.goal.id)
+    complete(planning_client, item["id"])
+
+    response = skip(planning_client, item["id"])
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "skipped"
+    assert response.json()["data"]["completed_at"] is None
+
+
+def test_skipping_an_item_twice_is_accepted(planning_client, planning):
+    """A repeated form submission must not fail on its second attempt."""
+    item = first_weekly_item(planning_client, planning.goal.id)
+    skip(planning_client, item["id"])
+
+    assert skip(planning_client, item["id"]).status_code == 200
+
+
+def test_a_skip_reads_back_through_the_plan(planning_client, planning):
+    """The sequence the plan screen performs: skip an item, then re-read the plan
+    the panel is rendered from."""
+    payload = generate(planning_client, planning.goal.id).json()
+    week = next(plan for plan in payload["data"]["plans"] if plan["plan_type"] == "weekly")
+    item = week["items"][0]
+    skip(planning_client, item["id"])
+
+    reread = planning_client.get(f"{PLANS}/{week['id']}").json()["data"]
+
+    skipped = next(line for line in reread["items"] if line["id"] == item["id"])
+    assert skipped["status"] == "skipped"
+    assert skipped["completed_at"] is None
+
+
+def test_skipping_one_item_leaves_the_roadmap_alone(planning_client, planning):
+    """Skipping a session says that session is not happening. It decides nothing
+    about the roadmap item naming the same topic."""
+    payload = generate(planning_client, planning.goal.id).json()
+    plans = {plan["plan_type"]: plan for plan in payload["data"]["plans"]}
+    skip(planning_client, plans["weekly"]["items"][0]["id"])
+
+    roadmap = planning_client.get(f"{PLANS}/{plans['roadmap']['id']}").json()["data"]
+
+    assert all(item["status"] == "planned" for item in roadmap["items"])
+
+
+def test_skipping_an_item_on_a_superseded_plan_is_409(planning_client, planning):
+    item = first_weekly_item(planning_client, planning.goal.id)
+    generate(planning_client, planning.goal.id)
+
+    response = skip(planning_client, item["id"])
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+
+
 # -- refusals ---------------------------------------------------------------
 
 
-def test_a_status_this_endpoint_does_not_accept_is_422(planning_client, planning):
+def test_postponed_is_not_a_status_this_endpoint_accepts(planning_client, planning):
+    """Adaptation writes it as it sets a plan aside, so asking for it here would
+    set a status with nothing to move the work to."""
     item = first_weekly_item(planning_client, planning.goal.id)
 
-    response = complete(planning_client, item["id"], status="skipped")
+    response = move(planning_client, item["id"], "postponed")
 
     assert response.status_code == 422
     error = response.json()["error"]
