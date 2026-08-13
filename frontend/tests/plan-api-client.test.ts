@@ -5,6 +5,7 @@ import {
   adaptStudyPlan,
   generateStudyPlan,
   listStudyPlans,
+  readPlanFeasibility,
   readStudyPlan,
   updatePlanItemStatus,
 } from "@/lib/api-client";
@@ -371,6 +372,100 @@ describe("adaptStudyPlan (PLN-005)", () => {
     );
 
     await expect(adaptStudyPlan(roadmap.study_goal_id)).rejects.toMatchObject({
+      code: "api_unreachable",
+    });
+  });
+});
+
+
+describe("readPlanFeasibility (PLN-006)", () => {
+  const goalId = "33333333-3333-4333-8333-333333333333";
+
+  const answered = {
+    study_goal_id: goalId,
+    assessed_on: "2026-08-14",
+    verdict: "insufficient",
+    reason: "Across the 177 days to 2027-02-06, the week you saved offers 30 hours.",
+    unknown_reason: null,
+    horizon_ends_on: "2027-02-06",
+    remaining_topic_count: 60,
+    session_minutes: 60,
+    session_minutes_chosen_by_planner: true,
+    study_days: 177,
+    available_minutes: 1800,
+    required_minutes: 3600,
+    shortfall_minutes: 1800,
+    coverable_topic_count: 30,
+  };
+
+  it("reads the goal-scoped feasibility path", async () => {
+    respondWith({ data: answered });
+
+    await readPlanFeasibility(goalId);
+
+    expect(requestUrl()).toContain(`/api/v1/study-goals/${goalId}/plan-feasibility`);
+  });
+
+  it("issues a GET and sends no body, because it writes nothing", async () => {
+    respondWith({ data: answered });
+
+    await readPlanFeasibility(goalId);
+
+    const init = requestInit();
+    expect(init?.method ?? "GET").toBe("GET");
+    expect(init?.body).toBeUndefined();
+  });
+
+  it("returns the reading under the data envelope", async () => {
+    respondWith({ data: answered });
+
+    const reading = await readPlanFeasibility(goalId);
+
+    expect(reading.verdict).toBe("insufficient");
+    expect(reading.shortfall_minutes).toBe(1800);
+    expect(reading.coverable_topic_count).toBe(30);
+  });
+
+  it("carries an unknown verdict and its reason through unchanged", async () => {
+    respondWith({
+      data: {
+        ...answered,
+        verdict: "unknown",
+        unknown_reason: "no_availability_saved",
+        horizon_ends_on: null,
+      },
+    });
+
+    const reading = await readPlanFeasibility(goalId);
+
+    expect(reading.verdict).toBe("unknown");
+    expect(reading.unknown_reason).toBe("no_availability_saved");
+  });
+
+  it("reports a goal that is not the learner's as not found", async () => {
+    respondWith(
+      { error: { code: "not_found", message: "No such goal.", details: null } },
+      404,
+    );
+
+    await expect(readPlanFeasibility(goalId)).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("rejects a success body that carries no verdict", async () => {
+    respondWith({ data: { study_goal_id: goalId, assessed_on: "2026-08-14" } });
+
+    await expect(readPlanFeasibility(goalId)).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("reports an unreachable backend distinctly from a backend that answered", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+    );
+
+    await expect(readPlanFeasibility(goalId)).rejects.toMatchObject({
       code: "api_unreachable",
     });
   });

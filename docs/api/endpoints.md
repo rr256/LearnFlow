@@ -26,6 +26,7 @@ related:
   - ../adr/ADR-024-plan-item-skipping.md
   - ../adr/ADR-025-learner-postponement.md
   - ../adr/ADR-026-monthly-study-view.md
+  - ../adr/ADR-027-plan-feasibility.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -336,8 +337,9 @@ is why the stored constraint is `>= 0` rather than `> 0`.
 [terminology](../domain/terminology.md) calls it "not a measure of commitment or ability"; turning a
 week into an hours figure is planning work. PLN-001 now performs the part of that work a plan needs —
 it places sessions on the days a week names — and deliberately reports no total either. Whether a
-week can reach a goal's horizon is a trade-off judgement that waits on
-[FR-004](../requirements/functional.md#fr-004-plan-adaptation).
+week can reach a goal's horizon is a trade-off judgement, and
+[PLN-006](#pln-006-get-apiv1study-goalsstudy_goal_idplan-feasibility) is what makes it — never this
+response, which reports the days the learner saved and nothing derived from them.
 
 The response is an object rather than a bare array, per
 [ADR-014](../adr/ADR-014-api-response-contract.md), and carries **no `pagination` block**: a week
@@ -402,16 +404,18 @@ Supports **FR-003 — Study Timeline and Plan** and **FR-004 — Plan Adaptation
 | PLN-003 | `GET /api/v1/study-plans/{plan_id}` | Read one plan and its ordered items. | Plan + plan items. | Implemented |
 | PLN-004 | `PATCH /api/v1/plan-items/{plan_item_id}` | Mark a plan item completed, skipped, or postponed, or return it to `planned`. | Updated plan item. | Implemented |
 | PLN-005 | `POST /api/v1/study-goals/{study_goal_id}/adapt` | Rebuild a goal's active plans around completed and missed work. | New plans; what was superseded, postponed, and left out. | Implemented |
+| PLN-006 | `GET /api/v1/study-goals/{study_goal_id}/plan-feasibility` | Report whether the saved study week covers the work left before the goal's horizon. | A verdict, the counts and durations behind it, and the reason. | Implemented |
 
 PLN-001 to PLN-003 are implemented, and their contracts are fixed by
 [ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 by
 [ADR-021](../adr/ADR-021-plan-item-completion.md), extended to accept `skipped` by
 [ADR-024](../adr/ADR-024-plan-item-skipping.md) and `postponed` by
 [ADR-025](../adr/ADR-025-learner-postponement.md); and PLN-005 by
-[ADR-022](../adr/ADR-022-plan-adaptation.md). None of them
+[ADR-022](../adr/ADR-022-plan-adaptation.md); and PLN-006 by
+[ADR-027](../adr/ADR-027-plan-feasibility.md). None of them
 accepts a `learner_id`: the effective learner is resolved server-side, per the
-[identity assumption](#identity-assumption) above. All five are synchronous, and all five read and
-write through the `ManageStudyPlans` application use case.
+[identity assumption](#identity-assumption) above. All six are synchronous and all six go through the `ManageStudyPlans` application use case —
+**except that PLN-006 only reads**; it writes nothing at all.
 
 **PLN-005 does not use the path this catalogue first held.** It was listed as
 `POST /api/v1/study-plans/{plan_id}/adapt`; it is implemented as
@@ -428,7 +432,10 @@ when the plan was generated and never rewritten, which is
 
 **Nothing here judges a learner.** A recorded learning stage appears in an item's reason and changes
 neither the order nor the time allowed; `priority` is a position in a list, not a score; and no total
-is reported for a day, a week, or a plan.
+is reported for a day, a week, or a plan. The one exception is
+[PLN-006](#pln-006-get-apiv1study-goalsstudy_goal_idplan-feasibility), which totals the saved week
+across the horizon precisely because judging whether it is enough is the planner's work rather than a
+screen's — and which describes the plan and the time, never the learner.
 
 **The daily study view adds no endpoint.** The `/plan/today` screen showing what a learner should
 study today is a *reading* of the goal's active `weekly` plan: it filters PLN-003's items to the
@@ -687,8 +694,9 @@ who still does not want a topic marks it again on the new plan. See
 `monthly` and `daily` remain unwritten.
 
 **The two counts describe the plan, not the learner.** They say how much of the curriculum this plan
-covers and why it is shorter than the last one. Nothing is ranked, scored, or congratulated, and no
-total is reported for a day, a week, or a plan.
+covers and why it is shorter than the last one. Nothing is ranked, scored, or congratulated, and this
+response reports no total for a day, a week, or a plan — the horizon total belongs to
+[PLN-006](#pln-006-get-apiv1study-goalsstudy_goal_idplan-feasibility) alone.
 
 A goal where every topic is completed receives a roadmap with no items and a reason saying so, rather
 than an error.
@@ -701,6 +709,60 @@ Related entities: [study plan](../domain/entities.md#study-plan) and
 [plan item](../domain/entities.md#plan-item). Related tables:
 [`study_plans`](../database/schema.md#study_plans) and
 [`plan_items`](../database/schema.md#plan_items).
+
+### PLN-006 — `GET /api/v1/study-goals/{study_goal_id}/plan-feasibility`
+
+`study_goal_id` is a UUID. Takes no request body and no query parameter: everything it reads is
+already stored, so no caller can ask about a week the learner never saved. Returns `200` with the
+assessment under `data`.
+
+**It writes nothing.** No plan, no availability slot, no planning preference, and no plan item status
+moves because this was asked, and nothing adapts. It is the only planning endpoint that is purely a
+read, and a learner may ask as often as they like — which is what keeps the answer current as they
+edit their week, where a sentence frozen into `generation_reason` would go stale.
+
+`data` carries `study_goal_id`, `assessed_on`, `verdict`, `reason`, `unknown_reason`,
+`horizon_ends_on`, `remaining_topic_count`, `session_minutes`, `session_minutes_chosen_by_planner`,
+`study_days`, `available_minutes`, `required_minutes`, `shortfall_minutes`, and
+`coverable_topic_count`.
+
+- `assessed_on` is the date in the **learner's own timezone**, from `learners.timezone`. The answer
+  depends on it, so it is reported rather than left implicit.
+- `verdict` is `sufficient`, `insufficient`, or `unknown`.
+- **`unknown` is an answer, not a failure**, and `unknown_reason` says which gap caused it:
+  `no_horizon` when the goal aims at neither an examination cycle nor a target date, and
+  `no_availability_saved` when no study week is stored. The two are kept apart because they ask the
+  learner for different things. A week saved and deliberately **kept free is neither** — that is zero
+  minutes, a real answer, so the distinction
+  [ADR-018](../adr/ADR-018-weekly-availability-slots.md) keeps between a day kept free and a day never
+  set survives here.
+- `session_minutes_chosen_by_planner` is `true` when the learner has set no session length and
+  LearnFlow used its own 60 minutes. A preference nobody set is never reported as a default.
+
+**How the assessment is made**, in full, because a learner is entitled to know:
+
+- **What the work needs.** One session for each topic still to be worked through.
+- **Which topics remain.** Every topic on the goal's **active roadmap except those with a completed
+  session anywhere on the goal** — the exclusion PLN-005 applies, so the two cannot disagree. A
+  **skipped or postponed** topic still counts, because the next plan places its work again.
+- **What time is available.** The minutes the saved week offers on every day from `assessed_on` to the
+  horizon, **both ends included**: today can still be studied, and so can the horizon day.
+- **The horizon.** The same one PLN-001 plans against — the earlier of the examination window's first
+  sitting day and the goal's `target_date`. A horizon that has already passed leaves zero study days
+  rather than negative ones.
+- **A goal with no active plan** has nothing to assess and reports no topics remaining. A plan that
+  does not exist cannot be short of time; PLN-001 is what creates one.
+
+**Everything is reported as counts and durations.** There is deliberately **no percentage, no
+completion rate, and no proportion**: `coverable_topic_count` and `remaining_topic_count` are two
+counts a client states side by side, never one over the other, per
+[terminology](../domain/terminology.md#plan-coverage-counts-are-not-learner-scores).
+`shortfall_minutes` is zero when the week is enough and is **never negative** — a surplus is reported
+by the verdict instead. Nothing here describes the learner.
+
+Errors: `404` `not_found` when no such goal is stored *or it belongs to another learner*, as for
+GOAL-003 and PLN-005; `422` `validation_error` when the path segment is not a UUID; `409` `conflict`
+when no learner exists yet to own a plan, or when more than one learner is stored.
 
 ## Progress and Study-Activity Endpoints
 
@@ -903,7 +965,8 @@ Implement in an order that enables one working learner flow:
    happened, contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md). **FR-004's first criterion
    is met in full**: a learner can explicitly mark an item `completed`, `skipped`, or `postponed`,
    and take any of them back. Reporting that a learner's week cannot reach their horizon — FR-004's
-   third criterion — is not built at all.
+   third criterion — is **now built too**, over PLN-006, so **all three of FR-004's acceptance
+   criteria are met**.
 5. Revision reads/updates.
 6. Resource registration and ingestion status.
 7. Mentor questions and grounded retrieval.
@@ -927,6 +990,7 @@ Implement in an order that enables one working learner flow:
 - [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the third status PLN-004 accepts, and what a skip does to a later adaptation
 - [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — the fourth status PLN-004 accepts, and the criterion it completes
 - [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the monthly study view that consumes four of these contracts and adds none
+- [ADR-027: Report whether the saved week reaches the horizon, as a read-only planning rule](../adr/ADR-027-plan-feasibility.md) — the contract PLN-006 answers, and why it is the one planning endpoint that only reads
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

@@ -2,7 +2,7 @@
 title: "ADR-022: Adapt a Study Plan by Rebuilding It Around What Happened"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-11
+last_updated: 2026-08-13
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -14,6 +14,7 @@ related:
   - ADR-023-daily-study-view.md
   - ADR-024-plan-item-skipping.md
   - ADR-025-learner-postponement.md
+  - ADR-027-plan-feasibility.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -125,6 +126,36 @@ reads `plan_items.status = 'completed'` alone and is unchanged. A postponed topi
 triggers no adaptation, exactly as completing or skipping one does not; adaptation still supersedes;
 `_compose` is still shared with generation; and the goal-scoped path, the empty request body, and the
 `409` for a goal with no active plan are all as accepted. ADR-025 needed **no migration** either.
+
+## Implementation status — 2026-08-13 (feasibility)
+
+*Note added 2026-08-13. The decision below is unchanged; this records that the criterion this record
+left explicitly unmet is now delivered.*
+
+**FR-004's third acceptance criterion is met.** PLN-006 reports whether the learner's saved week
+covers the work left before their horizon, per [ADR-027](ADR-027-plan-feasibility.md). It needed **no
+migration**, and it reuses this record's `list_completed_topic_ids` unchanged — so what feasibility
+counts as remaining is exactly what adaptation would re-plan, and the two cannot disagree.
+
+**Three statements above are overtaken.**
+
+- Under [Consequences](#negative) — "**FR-004's third criterion is still unmet.** Nothing highlights
+  that the learner's week cannot reach their horizon. An adapted plan says how much is left, not
+  whether it fits — the same gap ADR-020 recorded, narrowed but not closed." It is closed.
+- Under [Implementation notes](#implementation-notes) — "how a plan should report that a week cannot
+  reach its horizon, which is FR-004's remaining criterion" is listed among the things this record
+  deliberately did not settle. ADR-027 settles it.
+- In the [Status](#status) section — "The **third** criterion, highlighting trade-offs when time is
+  insufficient, is **not** delivered". It is delivered now, by a later change. It was not by this
+  one, which is what that sentence recorded.
+
+**Nothing adapts because of it.** Feasibility is a read: asking writes no plan, no availability, no
+preference, and no item status, and triggers no adaptation. This record's "the learner asks; nothing
+adapts on its own" is untouched, and a learner who reads that their week falls short still chooses
+what to do about it.
+
+**Everything else stands.** The supersede lifecycle, the completed-topic exclusion, the overdue rule,
+the goal-scoped path, and the empty request body are all as accepted.
 
 ## Context
 

@@ -202,3 +202,57 @@ export interface AdaptedStudyPlans {
 }
 
 export type AdaptStudyPlanResponse = DataEnvelope<AdaptedStudyPlans>;
+
+/** What PLN-006 can conclude about a saved week reaching a goal's horizon. */
+export const FEASIBILITY_VERDICTS = ["sufficient", "insufficient", "unknown"] as const;
+
+export type FeasibilityVerdict = (typeof FEASIBILITY_VERDICTS)[number];
+
+/**
+ * Why a feasibility question could not be answered.
+ *
+ * Two different gaps, kept apart because they ask the learner for different
+ * things: a goal aiming at nothing needs a date, and a goal with no saved week
+ * needs a week. A week saved and deliberately kept free is neither -- that is
+ * zero minutes, which is an answer.
+ */
+export type FeasibilityUnknownReason = "no_horizon" | "no_availability_saved";
+
+/**
+ * Whether the learner's saved week reaches their goal's horizon (PLN-006).
+ *
+ * A reading: asking for it writes nothing. Every number is a count or a
+ * duration, and there is deliberately no percentage or ratio -- the backend
+ * refuses to compute one, and this screen must not derive one either
+ * (docs/domain/terminology.md).
+ *
+ * `reason` is the sentence the backend composed beside the numbers it quotes.
+ * The frontend renders it rather than writing its own, as it does for a plan's
+ * `generation_reason`, so what a learner reads is what was actually decided.
+ */
+export interface PlanFeasibility {
+  study_goal_id: string;
+  /** The learner's own date this was assessed for, from their stored timezone. */
+  assessed_on: string;
+  verdict: FeasibilityVerdict | string;
+  reason: string;
+  /** Null unless the verdict is `unknown`. */
+  unknown_reason: FeasibilityUnknownReason | string | null;
+  /** Null when the goal aims at no examination cycle and no target date. */
+  horizon_ends_on: string | null;
+  /** Topics on the active roadmap that still have work. */
+  remaining_topic_count: number;
+  session_minutes: number;
+  /** True when the learner set no session length and LearnFlow chose one. */
+  session_minutes_chosen_by_planner: boolean;
+  /** Calendar days to the horizon, both ends included. */
+  study_days: number;
+  available_minutes: number;
+  required_minutes: number;
+  /** Zero when the week is enough, and never negative. */
+  shortfall_minutes: number;
+  /** How many remaining topics the available time holds a whole session for. */
+  coverable_topic_count: number;
+}
+
+export type PlanFeasibilityResponse = DataEnvelope<PlanFeasibility>;

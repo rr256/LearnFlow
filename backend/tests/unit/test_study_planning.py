@@ -15,6 +15,7 @@ from app.domain.study_planning import (
     DayCapacity,
     PlannableTopic,
     SyllabusPosition,
+    assess_horizon_coverage,
     order_by_prerequisites,
     order_by_syllabus,
     schedule_sessions,
@@ -310,3 +311,210 @@ def test_the_order_given_is_the_order_returned():
 
 def test_nothing_overdue_is_an_empty_result_rather_than_a_failure():
     assert select_overdue([], date(2026, 8, 9)) == ()
+
+
+# --- Horizon coverage: whether a saved week reaches the goal's date -----------
+#
+# The rule behind FR-004's third acceptance criterion. Every assertion below is
+# on a count or a duration; none is on a ratio, because a denominator invites the
+# comparison docs/domain/terminology.md rules out.
+
+WEEK_OF_ONE_HOUR_EVERY_DAY = (60,) * 7
+WEEK_KEPT_ENTIRELY_FREE = (0,) * 7
+
+
+def coverage(
+    *,
+    remaining_topics: int = 10,
+    session_minutes: int = 60,
+    weekly_minutes: tuple[int, ...] = WEEK_OF_ONE_HOUR_EVERY_DAY,
+    starts_on: date = MONDAY,
+    ends_on: date | None = None,
+):
+    """A coverage assessment with one thing varied at a time."""
+    return assess_horizon_coverage(
+        remaining_topics=remaining_topics,
+        session_minutes=session_minutes,
+        weekly_minutes=weekly_minutes,
+        starts_on=starts_on,
+        ends_on=ends_on if ends_on is not None else date(2026, 8, 16),
+    )
+
+
+def test_a_span_counts_both_of_its_ends():
+    """Today can still be studied, and so can the day the horizon names."""
+    result = coverage(starts_on=MONDAY, ends_on=MONDAY)
+
+    assert result.study_days == 1
+    assert result.available_minutes == 60
+
+
+def test_a_full_week_offers_every_day_it_names():
+    result = coverage(starts_on=MONDAY, ends_on=date(2026, 8, 16))
+
+    assert result.study_days == 7
+    assert result.available_minutes == 420
+
+
+def test_only_the_days_a_learner_saved_offer_time():
+    """Monday to Friday at 30 minutes; the weekend is not set and offers nothing."""
+    weekdays_only = (30, 30, 30, 30, 30, 0, 0)
+
+    result = coverage(weekly_minutes=weekdays_only, starts_on=MONDAY, ends_on=date(2026, 8, 16))
+
+    assert result.available_minutes == 150
+
+
+def test_a_partial_week_counts_only_the_weekdays_it_reaches():
+    """Monday to Wednesday, so Thursday's and the weekend's minutes never count."""
+    distinct = (10, 20, 40, 80, 160, 320, 640)
+
+    result = coverage(weekly_minutes=distinct, starts_on=MONDAY, ends_on=date(2026, 8, 12))
+
+    assert result.study_days == 3
+    assert result.available_minutes == 70
+
+
+def test_a_span_starting_midweek_counts_from_that_day():
+    """Starting Thursday for four days reaches Thursday to Sunday, not Monday."""
+    distinct = (10, 20, 40, 80, 160, 320, 640)
+
+    result = coverage(
+        weekly_minutes=distinct, starts_on=date(2026, 8, 13), ends_on=date(2026, 8, 16)
+    )
+
+    assert result.study_days == 4
+    assert result.available_minutes == 80 + 160 + 320 + 640
+
+
+def test_counting_by_weekday_agrees_with_walking_the_days():
+    """The shortcut is the same sum in a different order, over a long horizon.
+
+    Asserted rather than argued, because an unbounded loop is exactly what the
+    weekday count replaces and a drift between them would be invisible.
+    """
+    distinct = (10, 20, 40, 80, 160, 320, 640)
+    starts_on = date(2026, 8, 13)
+    ends_on = date(2027, 2, 6)
+
+    walked = sum(
+        distinct[date.fromordinal(ordinal).weekday()]
+        for ordinal in range(starts_on.toordinal(), ends_on.toordinal() + 1)
+    )
+
+    assert (
+        coverage(weekly_minutes=distinct, starts_on=starts_on, ends_on=ends_on).available_minutes
+        == walked
+    )
+
+
+def test_a_horizon_that_has_passed_offers_no_days_rather_than_negative_ones():
+    result = coverage(starts_on=MONDAY, ends_on=date(2026, 8, 9))
+
+    assert result.study_days == 0
+    assert result.available_minutes == 0
+    assert result.is_sufficient is False
+
+
+def test_a_week_kept_entirely_free_offers_no_time():
+    """Zero minutes is a real answer, not a missing one -- the caller keeps that apart."""
+    result = coverage(weekly_minutes=WEEK_KEPT_ENTIRELY_FREE)
+
+    assert result.available_minutes == 0
+    assert result.coverable_topics == 0
+    assert result.is_sufficient is False
+
+
+def test_work_needs_one_session_for_each_topic_remaining():
+    result = coverage(remaining_topics=12, session_minutes=45)
+
+    assert result.required_minutes == 540
+
+
+def test_enough_time_is_sufficient_and_short_by_nothing():
+    result = coverage(
+        remaining_topics=7, session_minutes=60, starts_on=MONDAY, ends_on=date(2026, 8, 16)
+    )
+
+    assert result.is_sufficient is True
+    assert result.shortfall_minutes == 0
+    assert result.coverable_topics == 7
+
+
+def test_time_exactly_meeting_the_work_is_sufficient():
+    """The boundary is decided rather than discovered: meeting is enough."""
+    result = coverage(
+        remaining_topics=7, session_minutes=60, starts_on=MONDAY, ends_on=date(2026, 8, 16)
+    )
+
+    assert result.available_minutes == result.required_minutes
+    assert result.is_sufficient is True
+
+
+def test_too_little_time_reports_the_shortfall_as_a_duration():
+    result = coverage(
+        remaining_topics=10, session_minutes=60, starts_on=MONDAY, ends_on=date(2026, 8, 16)
+    )
+
+    assert result.is_sufficient is False
+    assert result.required_minutes == 600
+    assert result.available_minutes == 420
+    assert result.shortfall_minutes == 180
+
+
+def test_a_surplus_is_never_reported_as_a_negative_shortfall():
+    """A spare three hours and a missing three hours must not share a number."""
+    result = coverage(remaining_topics=1, session_minutes=60)
+
+    assert result.is_sufficient is True
+    assert result.shortfall_minutes == 0
+
+
+def test_coverable_topics_floors_rather_than_rounding():
+    """Time for half a session is not a topic covered."""
+    result = coverage(
+        remaining_topics=10,
+        session_minutes=60,
+        weekly_minutes=(90,) + (0,) * 6,
+        starts_on=MONDAY,
+        ends_on=MONDAY,
+    )
+
+    assert result.available_minutes == 90
+    assert result.coverable_topics == 1
+
+
+def test_coverable_topics_never_exceeds_what_was_asked_about():
+    result = coverage(
+        remaining_topics=2, session_minutes=60, starts_on=MONDAY, ends_on=date(2026, 8, 16)
+    )
+
+    assert result.available_minutes == 420
+    assert result.coverable_topics == 2
+
+
+def test_a_plan_with_nothing_left_needs_no_time():
+    result = coverage(remaining_topics=0)
+
+    assert result.required_minutes == 0
+    assert result.coverable_topics == 0
+    assert result.is_sufficient is True
+
+
+def test_the_same_inputs_give_the_same_assessment():
+    assert coverage() == coverage()
+
+
+def test_coverage_requires_a_session_of_positive_length():
+    with pytest.raises(ValueError):
+        coverage(session_minutes=0)
+
+
+def test_topics_remaining_cannot_be_negative():
+    with pytest.raises(ValueError):
+        coverage(remaining_topics=-1)
+
+
+def test_a_week_must_describe_exactly_seven_days():
+    with pytest.raises(ValueError):
+        coverage(weekly_minutes=(60, 60, 60))

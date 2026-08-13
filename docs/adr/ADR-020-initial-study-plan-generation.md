@@ -18,6 +18,7 @@ related:
   - ADR-023-daily-study-view.md
   - ADR-024-plan-item-skipping.md
   - ADR-026-monthly-study-view.md
+  - ADR-027-plan-feasibility.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -197,6 +198,36 @@ layer deliberately, and which a view may not reimplement.
 **Nothing in the decision changed.** The plan shape, the pure rules, the supersede lifecycle, and the
 contracts of PLN-001 to PLN-003 are all as accepted, and `select_overdue` is neither read nor mirrored
 by the new screen.
+
+## Implementation status — 2026-08-13 (feasibility)
+
+*Note added 2026-08-13. The decision below is unchanged; this records that the consequence this
+record listed under Negative, and left open in its own implementation notes, now has an answer.*
+
+**A plan can now say whether the learner's week can deliver it.** PLN-006 reports whether the saved
+study week covers the work left before the goal's horizon, per
+[ADR-027](ADR-027-plan-feasibility.md). It reuses this record's `_horizon_of` unchanged, so
+feasibility and generation aim at the same date by construction, and it needed **no migration**.
+
+**Two statements above are overtaken.**
+
+- Under [Consequences](#negative) — "**A plan can be generated that the learner's week cannot
+  deliver**, and nothing says so beyond the roadmap running to the horizon while the week reaches only
+  a few topics. FR-004's 'highlights meaningful trade-offs when time is insufficient' is not met by
+  this change." It is met now, by a later one. A plan can still be generated that the week cannot
+  deliver — that is deliberate, because generation plans the curriculum rather than refusing — but the
+  product now says so, with the numbers.
+- Under [Implementation notes](#implementation-notes) — "how a plan should report that a week cannot
+  deliver its horizon" is listed among the things this record deliberately did not settle. ADR-027
+  settles it: **not** in the plan's stored reason, because this record fixed that a plan's reasons are
+  never rewritten and a frozen answer would go stale the moment the learner edited their week, but as
+  a live read.
+
+**The domain layer gains its fourth rule**, beside the two this record placed there and the one
+ADR-022 added. It is pure in the same way and for the same reasons.
+
+**Nothing in the decision changed.** The plan shape, the ordering and placement rules, the supersede
+lifecycle, the contracts of PLN-001 to PLN-003, and both table shapes are all as accepted.
 
 ## Context
 

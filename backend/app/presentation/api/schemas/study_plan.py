@@ -29,6 +29,7 @@ from app.application.dto.study_plan import (
     PLAN_TYPES,
     AdaptedStudyPlans,
     GeneratedStudyPlans,
+    PlanFeasibility,
     PlanGenerationRequest,
     PlanItemDetail,
     PlanItemStatusChange,
@@ -347,3 +348,104 @@ class AdaptStudyPlanResponse(BaseModel):
     """An adapted plan, under the documented `data` envelope."""
 
     data: AdaptedStudyPlansSchema
+
+
+class PlanFeasibilitySchema(BaseModel):
+    """Whether the learner's saved week reaches their goal's horizon."""
+
+    study_goal_id: uuid.UUID
+    assessed_on: date = Field(
+        description=(
+            "The learner's own date this was assessed for, from their stored timezone "
+            "rather than the server's. The answer depends on it."
+        )
+    )
+    verdict: str = Field(
+        description=(
+            "`sufficient`, `insufficient`, or `unknown`. `unknown` is an answer, not a "
+            "failure: some questions cannot be answered honestly from what is stored."
+        )
+    )
+    reason: str = Field(
+        description=(
+            "The sentence a learner reads. It describes the plan and the time, never the "
+            "learner, and states counts and durations rather than ratios."
+        )
+    )
+    unknown_reason: str | None = Field(
+        default=None,
+        description=(
+            "`no_horizon` when the goal aims at no examination cycle and no target date, "
+            "`no_availability_saved` when no study week is stored. Null unless the verdict "
+            "is `unknown`. A week saved and deliberately kept free is neither -- that is "
+            "zero minutes, which is an answer."
+        ),
+    )
+    horizon_ends_on: date | None = Field(
+        default=None,
+        description=(
+            "The date the work has to be done by: the earlier of the examination window's "
+            "first sitting day and the goal's target date. Null when the goal aims at neither."
+        ),
+    )
+    remaining_topic_count: int = Field(
+        description=(
+            "Topics on the active roadmap that still have work. A completed topic is not "
+            "one; a skipped or postponed one is, because the next plan places its work again."
+        )
+    )
+    session_minutes: int = Field(description="How long one session was taken to run.")
+    session_minutes_chosen_by_planner: bool = Field(
+        description=(
+            "True when the learner has set no session length and LearnFlow chose one for "
+            "itself. Reported so a screen can say whose decision it was, never presenting "
+            "an unset preference as a default the learner made."
+        )
+    )
+    study_days: int = Field(
+        description=(
+            "Calendar days from `assessed_on` to the horizon, both ends included. Zero when "
+            "the horizon has passed."
+        )
+    )
+    available_minutes: int = Field(description="What the saved week offers across those days.")
+    required_minutes: int = Field(description="One session for each remaining topic.")
+    shortfall_minutes: int = Field(
+        description=(
+            "How much more time the work needs than the week offers. Zero when the week is "
+            "enough, and never negative -- a surplus is reported by the verdict instead."
+        )
+    )
+    coverable_topic_count: int = Field(
+        description=(
+            "How many remaining topics the available time holds a whole session for. Stated "
+            "beside `remaining_topic_count` as two counts; never rendered as one over the "
+            "other, because a ratio invites a comparison this contract refuses to make."
+        )
+    )
+
+    @classmethod
+    def of(cls, feasibility: PlanFeasibility) -> PlanFeasibilitySchema:
+        """Build the schema from its application DTO."""
+        return cls(
+            study_goal_id=feasibility.study_goal_id,
+            assessed_on=feasibility.assessed_on,
+            verdict=feasibility.verdict,
+            reason=feasibility.reason,
+            unknown_reason=feasibility.unknown_reason,
+            horizon_ends_on=feasibility.horizon_ends_on,
+            remaining_topic_count=feasibility.remaining_topic_count,
+            session_minutes=feasibility.session_minutes,
+            session_minutes_chosen_by_planner=feasibility.session_minutes_chosen_by_planner,
+            study_days=feasibility.study_days,
+            available_minutes=feasibility.available_minutes,
+            required_minutes=feasibility.required_minutes,
+            shortfall_minutes=feasibility.shortfall_minutes,
+            coverable_topic_count=feasibility.coverable_topic_count,
+        )
+
+
+class PlanFeasibilityResponse(BaseModel):
+    """A feasibility assessment, under the documented `data` envelope."""
+
+    data: PlanFeasibilitySchema

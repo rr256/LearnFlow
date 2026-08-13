@@ -2,12 +2,13 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-11
+last_updated: 2026-08-13
 related:
   - ../00-project-context.md
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
+  - ../adr/ADR-027-plan-feasibility.md
   - ../api/endpoints.md
   - ../architecture/overview.md
   - ../architecture/clean-architecture.md
@@ -104,15 +105,18 @@ adaptation**: PLN-005 reads which topics the learner has completed and which ite
 a first generation is unchanged — planning around outstanding work is what a learner asks for
 explicitly rather than what happens by default.
 
-Of the outputs, two exist: study plans and plan items, and a transparent rationale, which every plan
-and every item carries as prose written when the plan was generated. The third — a warning when
-available time is insufficient for the target scope — is **not** produced, and belongs with
-[FR-004](../requirements/functional.md#fr-004-plan-adaptation)'s plan adaptation.
+**All three outputs now exist**: study plans and plan items; a transparent rationale, which every
+plan and every item carries as prose written when the plan was generated; and a warning when
+available time is insufficient for the target scope, which PLN-006 produces — it reports whether the
+study time the learner saved covers the work left before the goal's horizon, as counts and
+durations, and `/plan` shows it. That warning is a **read**: asking for it changes no plan. See
+[ADR-027](../adr/ADR-027-plan-feasibility.md).
 
 The implementation direction above is met in the strong form: **no AI provider is involved at all**.
-The rules that decide a plan — topic order, session placement, and what makes an item overdue —
-live as pure functions in `backend/app/domain/study_planning.py`, so the same inputs always produce
-the same plan.
+The four rules that decide a plan — topic order, session placement, what makes an item overdue, and
+whether a saved week reaches the horizon — live as pure functions in
+`backend/app/domain/study_planning.py`, so the same inputs always produce the same plan and the same
+warning.
 
 ## Mentor Service
 

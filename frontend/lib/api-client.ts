@@ -35,6 +35,8 @@ import type {
   AdaptedStudyPlans,
   GenerateStudyPlanResponse,
   GeneratedStudyPlans,
+  PlanFeasibility,
+  PlanFeasibilityResponse,
   PlanItem,
   PlanItemResponse,
   PlanItemStatusChange,
@@ -599,4 +601,34 @@ export async function updatePlanItemStatus(
     throw new ApiError("malformed_response", "The API returned a malformed plan item.", null);
   }
   return (body as PlanItemResponse).data;
+}
+
+/**
+ * PLN-006 -- whether the learner's saved week reaches their goal's horizon.
+ *
+ * A reading: it writes nothing, plans nothing, and adapts nothing, so a screen
+ * may ask for it on every render. That is what keeps the answer current as the
+ * learner edits their week, where a sentence frozen into a plan's
+ * `generation_reason` would go stale the moment they changed it.
+ *
+ * A verdict of `unknown` is an answer rather than a failure, with
+ * `unknown_reason` saying which gap caused it.
+ *
+ * @throws ApiError with `isNotFound` when no such goal is stored or it is not
+ *   the local learner's, or `isConflict` when no learner exists yet.
+ */
+export async function readPlanFeasibility(studyGoalId: string): Promise<PlanFeasibility> {
+  const body = await requestJson(
+    `/api/v1/study-goals/${encodeURIComponent(studyGoalId)}/plan-feasibility`,
+  );
+  const data = unwrapData(body);
+
+  if (!isRecord(data) || typeof (data as Record<string, unknown>).verdict !== "string") {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned a feasibility reading without a verdict.",
+      null,
+    );
+  }
+  return (body as PlanFeasibilityResponse).data;
 }

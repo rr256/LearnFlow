@@ -90,7 +90,8 @@ by [`docs/adr/ADR-024-plan-item-skipping.md`](docs/adr/ADR-024-plan-item-skippin
 postponement by
 [`docs/adr/ADR-025-learner-postponement.md`](docs/adr/ADR-025-learner-postponement.md), and the
 monthly study view by
-[`docs/adr/ADR-026-monthly-study-view.md`](docs/adr/ADR-026-monthly-study-view.md).
+[`docs/adr/ADR-026-monthly-study-view.md`](docs/adr/ADR-026-monthly-study-view.md), and plan
+feasibility by [`docs/adr/ADR-027-plan-feasibility.md`](docs/adr/ADR-027-plan-feasibility.md).
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -104,7 +105,7 @@ index; there is deliberately no numbering convention, because Python, JavaScript
 disagree about which day is zero. **Weekly availability** belongs to a study goal and is replaced a
 week at a time: the days GOAL-005 names become the week, a day left out is removed, and an empty list
 clears it. Zero minutes is a day deliberately kept free, which is not the same as a day with no row.
-Nothing totals a week — a plan places sessions on the days a week names and reports no total either.
+Nothing totals a week except the feasibility rule below — a plan places sessions on the days a week names and reports no total either.
 
 A **planning preference** also belongs to a study goal, and is a session length
 (`preferred_session_minutes`, 15 to 480) or a topic order (`topic_sequencing`, `syllabus_order` or
@@ -124,7 +125,8 @@ pure functions in `backend/app/domain/study_planning.py`, the only module in the
 content and reasons read back exactly as written — only an overdue item's `status` may move, to
 `postponed`, when adaptation sets the plan aside. An unset session length becomes 60 minutes *chosen by the planner and named
 as its own* — nothing is stored against the goal. A recorded stage explains an item and never reorders
-one; `priority` is an order, not a score; and nothing totals a day, a week, or a plan.
+one; `priority` is an order, not a score; and nothing totals a day, a week, or a plan — the sole
+exception being the PLN-006 feasibility rule described below.
 `prerequisites_first` currently yields syllabus order, because the curated curriculum stores no
 prerequisite link, and the plan says so.
 
@@ -196,6 +198,26 @@ is neither read nor mirrored, because this screen makes no claim about what is o
 learner's current month is reachable.** Nothing is counted, totalled, ranked, or scored. This meets
 FR-003's second acceptance criterion **in full**.
 
+**PLN-006 says whether the saved week reaches the horizon** —
+`GET /api/v1/study-goals/{study_goal_id}/plan-feasibility`, which meets **FR-004's third acceptance
+criterion**, the last one unmet. **It is a live read and writes nothing**: no plan, no availability,
+no preference, no item status, and no adaptation, so a learner may ask as often as they like and the
+answer moves when their week does. A sentence stored in `generation_reason` was rejected because a
+plan's reasons are never rewritten, so it would go stale the moment the learner edited their week.
+**The arithmetic is a pure domain rule** — `assess_horizon_coverage`, the **fourth** in
+`backend/app/domain/study_planning.py` — because terminology reserves totalling a week for *the
+planner* rather than a screen, which is where this departs from the monthly view's frontend-only
+shape. One session per remaining topic, against the minutes the saved week offers from today to the
+horizon **with both ends included**, counted by weekday rather than walked day by day. **Only a
+completed topic is excluded**, exactly as adaptation excludes it; a skipped or postponed topic still
+needs time. **Three verdicts**: `sufficient`, `insufficient`, and `unknown` — the last an answer, not
+a failure, with `unknown_reason` distinguishing a goal aiming at no date from one with no saved week.
+**A week saved and deliberately kept free is neither**: that is zero minutes. An unset session length
+is named as the planner's own choice, never a default. **Counts and durations only — never a
+percentage, a ratio, or a proportion**, and a shortfall is never a negative surplus. The panel sits on
+`/plan` above the week and carries **no control**. It needed **no column, no table, and no
+migration**.
+
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
 keeps that name. See [`docs/domain/terminology.md`](docs/domain/terminology.md).
@@ -215,7 +237,7 @@ server action, so the browser never reaches the backend, no CORS configuration e
 also reads the learner's recorded stages over PRG-002 and writes one over PRG-004, a `/setup` screen
 over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-005, a home screen at `/` that reads the
 saved setup back over LRN-001, GOAL-002, and EXM-001, a `/plan` screen that reads the current plan
-over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed, skipped, or postponed over PLN-004, and adapts the plan over PLN-005, a `/plan/today` daily study view that reads the same weekly plan over
+over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed, skipped, or postponed over PLN-004, adapts the plan over PLN-005, and reads whether the saved week reaches the horizon over PLN-006, a `/plan/today` daily study view that reads the same weekly plan over
 PLN-002 and PLN-003, takes the learner's date from LRN-001, and moves items over PLN-004 —
 generating and adapting stay on `/plan`, where the learner asks for them — and a `/plan/month` monthly
 study view that reads both active plans over PLN-002 and PLN-003, takes the learner's month from
