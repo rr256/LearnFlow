@@ -2,7 +2,7 @@
 title: "ADR-023: Show Today's Work as a Reading of the Weekly Plan, Not a Daily Plan"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-11
+last_updated: 2026-08-13
 related:
   - ../00-project-context.md
   - ADR-013-examination-schedule-and-study-goal.md
@@ -13,6 +13,7 @@ related:
   - ADR-022-plan-adaptation.md
   - ADR-024-plan-item-skipping.md
   - ADR-025-learner-postponement.md
+  - ADR-026-monthly-study-view.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../database/schema.md
@@ -103,6 +104,37 @@ the learner still asks for on `/plan`.
 **A status this build does not recognise is still treated as outstanding**, which is the safe reading
 of "nobody has said anything about this" and the reason the mirror is a set rather than "anything but
 `planned`".
+
+## Implementation status — 2026-08-13
+
+*Note added 2026-08-13. The decision below is unchanged; this records that the first of the questions
+it left open has been answered, and the one property it claimed that a later screen does not keep.*
+
+**The open question is answered.** This record listed "whether a monthly view is a reading or a plan"
+first among the things it deliberately did not settle.
+[ADR-026](ADR-026-monthly-study-view.md) settles it the same way this record settled the daily one: a
+**reading**. `/plan/month` groups the goal's active `roadmap` and `weekly` plans to the learner's own
+calendar month, resolving that month through the very `learnerToday` this record added. It needed
+**no endpoint, no column, no migration, and no backend change at all**.
+
+**Two statements above are overtaken.**
+
+- Under [Consequences](#negative) — "**FR-003's second criterion is still not met in full.** Monthly
+  is not built, and a `daily` plan type is not written." Monthly is now built, so **the criterion is
+  met in full**. The second half stands: no `daily` plan type is written, and no `monthly` one either.
+- Under [Consequences](#positive) — "**A completed item behaves identically on all three screens.**
+  The daily view reuses `PlanItemStatusControl`, so a plan item is a plan item wherever it is met." It
+  does **not** behave identically on the fourth. ADR-026's monthly view is **read-only** by decision:
+  it shows an item's settled status in words and offers no control, because a month is where a learner
+  looks rather than where they work. That record carries the departure as its chief cost.
+
+**The overdue rule did not move for a third time.** The monthly view makes no claim about what is
+overdue — it has no *From earlier days* heading and no equivalent — so `select_overdue` gained no
+fourth mirror. The duplication this record recorded as a cost is still two-sided.
+
+**`monthly` joins the reading that is not a plan.** What a `monthly` plan *contains* is as undecided
+as what a `daily` one contains, and ADR-026 says so in the same place and for the same reason this
+record did.
 
 ## Context
 

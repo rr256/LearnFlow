@@ -141,6 +141,9 @@ export default function HomePage() {
             <Link href="/plan">Your study plan</Link>
           </li>
           <li>
+            <Link href="/plan/month">Your month</Link>
+          </li>
+          <li>
             <Link href="/setup">Edit your setup</Link>
           </li>
           <li>

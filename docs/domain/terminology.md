@@ -2,7 +2,7 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-11
+last_updated: 2026-08-13
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -18,6 +18,7 @@ related:
   - ../adr/ADR-023-daily-study-view.md
   - ../adr/ADR-024-plan-item-skipping.md
   - ../adr/ADR-025-learner-postponement.md
+  - ../adr/ADR-026-monthly-study-view.md
   - ../development/coding-standards.md
 ---
 
@@ -59,7 +60,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Planning preference** | A choice the learner has made about *how* a study plan should be built, belonging to one study goal. | A planning input beside *weekly availability*, never a measure of anything. A preference the learner has not set is unset, not a default: nothing is invented on their behalf, so a planner meeting an unset preference chooses for itself. See [ADR-019](../adr/ADR-019-study-goal-planning-preferences.md). |
 | **Session length** | How long one block of study should be, in minutes. | The learner's preference, stored as `preferred_session_minutes`, from 15 to 480. A **duration**, not a time of day — nothing records when in a day a session falls, for the reason *availability slot* gives. Report it in minutes; a total or an hours figure is planning arithmetic. |
 | **Topic order** | Which order a study plan works through the curriculum in. | The learner's preference, stored as `topic_sequencing`: `syllabus_order` follows the syllabus's own order, `prerequisites_first` follows the prerequisite links between topics. Stored and sent as the `snake_case` value; the labels a learner reads are *Syllabus order* and *Prerequisites first*. |
-| **Study plan** | A roadmap, monthly plan, weekly plan, or daily plan of recommended work. | Generated against a study goal and current evidence, by deterministic rules rather than by an AI provider. A roadmap and a weekly plan are generated today; see [ADR-020](../adr/ADR-020-initial-study-plan-generation.md). |
+| **Study plan** | A roadmap, monthly plan, weekly plan, or daily plan of recommended work. | Generated against a study goal and current evidence, by deterministic rules rather than by an AI provider. A roadmap and a weekly plan are generated today; see [ADR-020](../adr/ADR-020-initial-study-plan-generation.md). A *daily study view* reads the weekly plan and a *monthly study view* reads both; neither is a plan. |
 | **Superseded plan** | A plan a later generation **or adaptation** replaced. | Kept and readable, never deleted: plan history is what makes a change of direction explainable. Its content and reasons keep the wording they were generated with. The one thing that may move on a superseded plan is an item's status, when adaptation marks overdue work *postponed* as it sets the plan aside — a statement about what happened, not a rewriting of what was planned. A learner cannot write into one at all, whatever the status. See [ADR-022](../adr/ADR-022-plan-adaptation.md). |
 | **Plan item** | One actionable recommendation in a study plan. | Examples: study, practise, revise, or review mistakes. Its position in the plan is an order, never a score. Its *plan item status* records what became of the work it names. |
 | **Plan item status** | What became of the work one plan item names: `planned`, `completed`, `postponed`, or `skipped`. | Stored and sent as the `snake_case` value. It records whether planned **work happened**, never how well a topic is understood — that is a *learning stage*, and nothing derives one from the other. All four are written and all four are things a learner may ask for: `completed`, `skipped`, and `postponed` are the three statements they make about the work, and `planned` takes any of them back. Every move is reversible while the item's plan is active. |
@@ -69,6 +70,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Adaptation** | Rebuilding a goal's active plans around what the learner has and has not done. | The learner asks for it; nothing adapts on its own — completing, skipping, or postponing an item re-plans nothing. It supersedes as a generation does, leaves out topics with completed work, and places again both the work it marks *postponed* and the work the learner did. Deterministic, with no AI provider. Not a re-scoring of the learner and not a judgement about why a day passed. |
 | **Plan coverage count** | A count describing how much of the curriculum a plan covers — how many topics it holds, how many remain, how many are not planned again. | A description of the **plan**, never a measurement of the learner. Permitted because a plan must be able to explain what it covers and why it is shorter than the one before it. It is never a score, a percentage, a streak, or a total of the learner's time or effort; see the rule below the avoid list. |
 | **Daily study view** | The screen showing the work a learner's active weekly plan placed on their own calendar date, alongside work whose day has passed. | A **reading** of the weekly plan, not a plan of its own: no `daily` plan record is written or read, and that plan type stays unwritten. It changes nothing about the plan — saying what became of an item is the only write it offers, and rebuilding the plan stays on the plan screen, where the learner asks for it. "Today" is the learner's date from `learners.timezone`, never the server's. See [ADR-023](../adr/ADR-023-daily-study-view.md). |
+| **Monthly study view** | The screen showing where a learner's own calendar month sits in their plan: the days that month already has dated work on, and the roadmap topics their week has not dated. | A **reading** of the roadmap and the weekly plan, not a plan of its own: no `monthly` plan record is written or read, and that plan type stays unwritten. **It writes nothing at all** — marking an item stays in the daily study view and on the plan screen, and rebuilding the plan stays there too. A weekly plan dates seven days, so a month is mostly undated; the screen says so rather than spreading the roadmap across days nothing placed work on, because placing work is planning. The month is the learner's own, from `learners.timezone`, never the server's. See [ADR-026](../adr/ADR-026-monthly-study-view.md). |
 | **Recommendation reason** | The sentence a plan or a plan item gives for itself. | Written when the plan is generated and never rewritten, so a superseded plan still explains itself in the terms that produced it. A statement about the plan's reasoning, not about the learner. |
 | **Study activity** | A record of actual study, practice, or revision work completed by the learner. | May record duration and related resources/topics. |
 | **Learner topic progress** | The learner-specific state and evidence for one topic. | Combines several signals; it is not a single permanent score. |
@@ -196,6 +198,7 @@ ratio has a denominator and a denominator invites the comparison the third test 
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the *daily study view* above, and the screen where an item is overdue and a learner never is
 - [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — *skipped* and *settled item* above, and why skipping an item does not abandon a topic
 - [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — *postponed* above, its two writers, and why it settles an item without moving it
+- [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the *monthly study view* above, and why a month mostly without dates says so rather than being filled in
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)

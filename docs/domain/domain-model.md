@@ -2,7 +2,7 @@
 title: LearnFlow Domain Model
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-11
+last_updated: 2026-08-13
 related:
   - ../00-project-context.md
   - entities.md
@@ -16,6 +16,7 @@ related:
   - ../adr/ADR-022-plan-adaptation.md
   - ../adr/ADR-024-plan-item-skipping.md
   - ../adr/ADR-025-learner-postponement.md
+  - ../adr/ADR-026-monthly-study-view.md
   - ../requirements/functional.md
   - ../database/schema.md
 ---
@@ -142,6 +143,13 @@ an explanation, but the plan must remain usable without one.
 
 Roadmap and weekly plans are generated today; monthly and daily plans remain part of the model. See
 [ADR-020](../adr/ADR-020-initial-study-plan-generation.md).
+
+A learner can nonetheless **read** their plan at a daily and a monthly level, because both screens
+select from the two plans that are generated rather than generating a third. A *daily study view*
+([ADR-023](../adr/ADR-023-daily-study-view.md)) filters the weekly plan to one date, and a *monthly
+study view* ([ADR-026](../adr/ADR-026-monthly-study-view.md)) groups it and the roadmap to one
+calendar month. Neither is a plan: no `monthly` or `daily` record is written, and what each of those
+plan types would *contain* is still undecided.
 
 ### Plan Item
 
@@ -287,6 +295,8 @@ This document intentionally does not define database fields, table names, API en
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — what a generated plan contains today, and why it is deterministic and self-explaining
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the first code to write a plan item's status, and why it writes no learning stage with it
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the adaptation that rebuilds a plan around completed and missed work, without writing a learning stage
+- [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the daily reading of the weekly plan, which is not the `daily` plan level above
+- [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the monthly reading, which is not the `monthly` plan level above
 - [Functional requirements](../requirements/functional.md)
 - [Domain entities](entities.md)
 - [Terminology](terminology.md)

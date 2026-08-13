@@ -2,7 +2,7 @@
 title: "ADR-020: Generate the Initial Study Plan Deterministically as a Roadmap and a Week"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-10
+last_updated: 2026-08-13
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -17,6 +17,7 @@ related:
   - ADR-022-plan-adaptation.md
   - ADR-023-daily-study-view.md
   - ADR-024-plan-item-skipping.md
+  - ADR-026-monthly-study-view.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -170,6 +171,32 @@ one.
 contracts of PLN-001 to PLN-003 are all as accepted. `select_overdue` — the third domain rule, added
 by ADR-022 rather than by this record — now decides *behind* from whether the learner has **settled**
 an item rather than from whether it is done; generation neither reads it nor is affected by it.
+
+## Implementation status — 2026-08-13
+
+*Note added 2026-08-13. The decision below is unchanged; this records that the second of the two plan
+types this record left ungenerated is now readable without being written.*
+
+**A monthly study view exists, and it is not a `monthly` plan**, per
+[ADR-026](ADR-026-monthly-study-view.md). `/plan/month` groups this record's `roadmap` and `weekly`
+plans to the learner's own calendar month, exactly as ADR-023's daily view filters the weekly plan to
+one date. It needed **no endpoint, no column, no migration, and no backend change at all**.
+
+**One statement above is narrowed rather than overtaken.** The
+[2026-08-10 note](#implementation-status-2026-08-10) said "**`monthly` and `daily` are untouched**".
+That remains true of the **`plan_type` values**: neither is written, neither is read, and what each
+*contains* is still undecided. What has changed is that both levels are now something a learner can
+*see*, by reading the two plans this record does generate.
+
+**The seven-day week this record decided is what shaped ADR-026's central decision.** Because a
+`weekly` plan dates seven days and a roadmap dates nothing, a calendar month holds at most one week of
+dated work. ADR-026 refused to fill the rest by projecting the learner's saved availability across it,
+on the ground that placing sessions is `schedule_sessions` — a rule this record placed in the domain
+layer deliberately, and which a view may not reimplement.
+
+**Nothing in the decision changed.** The plan shape, the pure rules, the supersede lifecycle, and the
+contracts of PLN-001 to PLN-003 are all as accepted, and `select_overdue` is neither read nor mirrored
+by the new screen.
 
 ## Context
 
