@@ -166,6 +166,9 @@ export default function DailyPlanPage() {
             <Link href="/plan">Your study plan</Link>
           </li>
           <li>
+            <Link href="/plan/month">Your month</Link>
+          </li>
+          <li>
             <Link href="/">Your study setup</Link>
           </li>
           <li>

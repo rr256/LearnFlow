@@ -1,0 +1,121 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+.lead {
+  margin: 0 0 var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+/*
+ * What the month holds beyond its dated days, and where the month sits against
+ * the date the learner is working toward. Set below the lists rather than above,
+ * because it explains what the learner has just read.
+ */
+.note {
+  margin: var(--space-4) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.days {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.date {
+  margin: 0 0 var(--space-3);
+  font-size: 1rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--colour-text-muted);
+}
+
+.items {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+/*
+ * A settled item stays where it is, as it does on the week, the roadmap, and the
+ * daily view. The change is a border, never struck-through text: the label beside
+ * it carries the meaning in words, so nothing depends on the colour being seen.
+ */
+.completed {
+  border-left-color: var(--colour-accent);
+}
+
+/*
+ * Skipping is muted rather than accented. It is an ordinary answer, and giving
+ * it the same emphasis as finishing would read as a second kind of achievement.
+ */
+.skipped {
+  border-left-color: var(--colour-text-muted);
+}
+
+/*
+ * Postponing is muted for the same reason skipping is, and it borrows the same
+ * dashed edge nothing else uses: the item is still in the plan, so it must not
+ * look finished, and the label beside it says which of the two it is.
+ */
+.postponed {
+  border-left-style: dashed;
+  border-left-color: var(--colour-text-muted);
+}
+
+.settledLabel {
+  margin: var(--space-1) 0 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.topic {
+  margin: 0;
+}
+
+/*
+ * The action is carried in words, not in a colour or an icon: every item today
+ * is `study`, and the day one is not, a learner must be able to read which.
+ */
+.action {
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.meta {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+/* The reason the plan gives for this item, styled as the other panels style theirs. */
+.why {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}

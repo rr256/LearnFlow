@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-11
+last_updated: 2026-08-13
 related:
   - ../00-project-context.md
   - conventions.md
@@ -25,6 +25,7 @@ related:
   - ../adr/ADR-023-daily-study-view.md
   - ../adr/ADR-024-plan-item-skipping.md
   - ../adr/ADR-025-learner-postponement.md
+  - ../adr/ADR-026-monthly-study-view.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -436,6 +437,16 @@ learner's own calendar date, taken from `learners.timezone` on
 five contracts above changes, and **no `daily` plan is generated or read** — that `plan_type` stays
 constrained and unwritten. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md).
 
+**The monthly study view adds no endpoint either.** The `/plan/month` screen showing where a
+learner's calendar month sits in their plan is a *reading* of the goal's two active plans: it groups
+PLN-003's dated items to the learner's own month, taken from `learners.timezone` on
+[LRN-001](#lrn-001-get-apiv1learnerprofile), and lists the roadmap topics the weekly plan has not
+dated. It **writes nothing** — it does not call PLN-004, PLN-001, or PLN-005. Nothing about the five
+contracts above changes, and **no `monthly` plan is generated or read** — that `plan_type` stays
+constrained and unwritten, as `daily` does. Because a weekly plan dates seven days, a month is mostly
+undated, and the screen says so rather than inventing dates no response carries. Contracted by
+[ADR-026](../adr/ADR-026-monthly-study-view.md).
+
 ### PLN-001 — `POST /api/v1/study-plans/generate`
 
 Request body: `study_goal_id` (a UUID). It is required, and an unknown field is rejected. Returns
@@ -456,8 +467,9 @@ a silently ignored field.
   saved week has room for at least one session, placing the first of those topics onto the next seven
   days. **Those two are the only plan types anything writes.** `monthly` and `daily` are values
   [`study_plans.plan_type`](../database/schema.md#study_plans) accepts and no code stores, so no
-  generation returns one and no read can find one; each arrives with the code that writes it. The
-  `/plan/today` screen is not one — see [the note above](#planning-endpoints).
+  generation returns one and no read can find one; each arrives with the code that writes it. Neither
+  the `/plan/today` screen nor the `/plan/month` screen is one — see
+  [the notes above](#planning-endpoints).
 - `superseded_plan_ids` names the plans this generation set aside. They are kept, not deleted, and
   each is still readable through PLN-003.
 
@@ -914,6 +926,7 @@ Implement in an order that enables one working learner flow:
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the daily study view that consumes five of these contracts and adds none
 - [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the third status PLN-004 accepts, and what a skip does to a later adaptation
 - [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — the fourth status PLN-004 accepts, and the criterion it completes
+- [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the monthly study view that consumes four of these contracts and adds none
 - [API conventions](conventions.md)
 - [API versioning](versioning.md)
 - [Functional requirements](../requirements/functional.md)

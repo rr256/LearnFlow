@@ -86,9 +86,11 @@ plan-item completion by
 adaptation by [`docs/adr/ADR-022-plan-adaptation.md`](docs/adr/ADR-022-plan-adaptation.md), the
 daily study view by
 [`docs/adr/ADR-023-daily-study-view.md`](docs/adr/ADR-023-daily-study-view.md), and plan-item skipping
-by [`docs/adr/ADR-024-plan-item-skipping.md`](docs/adr/ADR-024-plan-item-skipping.md), and
-and learner postponement by
-[`docs/adr/ADR-025-learner-postponement.md`](docs/adr/ADR-025-learner-postponement.md).
+by [`docs/adr/ADR-024-plan-item-skipping.md`](docs/adr/ADR-024-plan-item-skipping.md), learner
+postponement by
+[`docs/adr/ADR-025-learner-postponement.md`](docs/adr/ADR-025-learner-postponement.md), and the
+monthly study view by
+[`docs/adr/ADR-026-monthly-study-view.md`](docs/adr/ADR-026-monthly-study-view.md).
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -178,6 +180,22 @@ neither appears there; a status this build does not recognise is treated as outs
 for display only; that domain rule stays authoritative for what adaptation writes. Say an **item** is
 overdue, never that the learner is behind. Nothing is counted, totalled, ranked, or scored.
 
+**The monthly study view is a reading of the roadmap and the week, not a `monthly` plan** —
+`/plan/month`, which adds **no endpoint, no column, no migration, and no backend change at all**. It
+groups what PLN-003 already returns to the learner's own calendar month — resolved from
+`learners.timezone` through the same `learnerToday` the daily view uses, never the server's zone — and
+lists the roadmap topics the weekly plan has not dated. A `monthly` `plan_type` is still never
+written, and what one *contains* is deliberately still undecided.
+**Because a weekly plan dates seven days, a month is mostly undated, and the screen says so.** It does
+**not** project the saved study week across the month's remaining days or place the roadmap onto them:
+placing work on a day is `schedule_sessions`, a backend rule, and dates existing in no stored record
+would disagree with the plan at the first adaptation. **The screen is read-only** — no status control,
+no generate control, no adapt control — which departs from the daily view deliberately: marking work
+stays on `/plan/today` and `/plan`. A settled item keeps its place, marked in words. `select_overdue`
+is neither read nor mirrored, because this screen makes no claim about what is overdue. **Only the
+learner's current month is reachable.** Nothing is counted, totalled, ranked, or scored. This meets
+FR-003's second acceptance criterion **in full**.
+
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
 keeps that name. See [`docs/domain/terminology.md`](docs/domain/terminology.md).
@@ -197,9 +215,11 @@ server action, so the browser never reaches the backend, no CORS configuration e
 also reads the learner's recorded stages over PRG-002 and writes one over PRG-004, a `/setup` screen
 over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-005, a home screen at `/` that reads the
 saved setup back over LRN-001, GOAL-002, and EXM-001, a `/plan` screen that reads the current plan
-over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed, skipped, or postponed over PLN-004, and adapts the plan over PLN-005, and a `/plan/today` daily study view that reads the same weekly plan over
+over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed, skipped, or postponed over PLN-004, and adapts the plan over PLN-005, a `/plan/today` daily study view that reads the same weekly plan over
 PLN-002 and PLN-003, takes the learner's date from LRN-001, and moves items over PLN-004 —
-generating and adapting stay on `/plan`, where the learner asks for them. A goal response carries the saved study week
+generating and adapting stay on `/plan`, where the learner asks for them — and a `/plan/month` monthly
+study view that reads both active plans over PLN-002 and PLN-003, takes the learner's month from
+LRN-001, and **writes nothing at all**. A goal response carries the saved study week
 and the saved planning preferences, so neither setup nor home calls anything extra to show them.
 
 The frontend serves its own static `/health` for the container health check, distinct from the

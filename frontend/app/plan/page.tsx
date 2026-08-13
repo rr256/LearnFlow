@@ -148,7 +148,7 @@ export default function PlanPage() {
         Built from your curriculum, the date you are working toward, the study time you saved, and
         how you said you want to study. Mark each item completed as you go, and change your mind
         whenever you like. When you are ready, update the plan to rebuild it around where you have
-        got to — nothing moves until you ask. Monthly and daily views are not built yet.
+        got to — nothing moves until you ask.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading your study plan…</p>}>
@@ -159,6 +159,9 @@ export default function PlanPage() {
         <ul className={styles.actions}>
           <li>
             <Link href="/plan/today">What to study today</Link>
+          </li>
+          <li>
+            <Link href="/plan/month">Your month</Link>
           </li>
           <li>
             <Link href="/">Your study setup</Link>

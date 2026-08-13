@@ -26,6 +26,7 @@ related:
   - ../adr/ADR-023-daily-study-view.md
   - ../adr/ADR-024-plan-item-skipping.md
   - ../adr/ADR-025-learner-postponement.md
+  - ../adr/ADR-026-monthly-study-view.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -236,8 +237,10 @@ finished and carrying forward what was missed. A **daily study view** has joined
 no endpoint and no migration. **Skipping and then postponement have since completed the set**: a
 learner can say a planned session will not happen, or will not happen yet, and either settles the item
 without retiring its topic. All four of `plan_items.status`'s values are written, and **all three of
-FR-004's verbs are learner actions**.
-What remains is saying whether a learner's week can reach their horizon, a monthly view, and revision.
+FR-004's verbs are learner actions**. A **monthly study view** has since joined the daily one at
+`/plan/month`, built the same way — by reading the roadmap and the week rather than generating a
+`monthly` plan — which meets **FR-003's second acceptance criterion in full**.
+What remains is saying whether a learner's week can reach their horizon, and revision.
 
 ### Definition of Done
 
@@ -250,9 +253,19 @@ What remains is saying whether a learner's week can reach their horizon, a month
   date — taken from `learners.timezone`, never the server's — with the reason for each item and the
   same completion control the other panels carry, alongside work whose day has passed, which it shows
   and deliberately does not move. It needed **no endpoint and no migration**: it filters what PLN-003
-  already returns. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md). **Monthly remains**, and so does a `daily` *plan*: both are accepted
-  `plan_type` values that nothing writes, and what a daily plan contains is deliberately still
-  undecided, so each is a use-case change rather than a migration.
+  already returns. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md). **A monthly view
+  completes the set, as a reading too**: `/plan/month` shows where the learner's own calendar month
+  sits in their plan — the days that month already has dated work on, and the roadmap topics their
+  week has not dated, openly undated. Because a weekly plan dates seven days, a month is mostly
+  undated, and the screen says so rather than spreading the roadmap across days nothing placed work
+  on: placing work is planning, which the backend owns. It is **read-only** — marking an item stays
+  on `/plan/today` and `/plan` — and it needed **no endpoint, no migration, and no backend change at
+  all**. Contracted by [ADR-026](../adr/ADR-026-monthly-study-view.md). **All four levels are now
+  viewable**, which meets
+  [FR-003](../requirements/functional.md#fr-003-study-timeline-and-plan)'s second acceptance
+  criterion in full. The item stays open because two of the four are read rather than **generated**:
+  a `monthly` and a `daily` *plan* are approved `plan_type` values that nothing writes, and what each
+  contains is deliberately still undecided, so each is a use-case change rather than a migration.
 - [x] Plan items link to topics and supported actions. Every generated item names a trackable topic
   and carries `action_type = 'study'`; `practice`, `revise`, and `review_mistakes` are constrained and
   unwritten, each waiting on the work it names — checkpoint quizzes, revision records, and mistake
@@ -352,6 +365,17 @@ What remains is saying whether a learner's week can reach their horizon, a month
   in any served HTML or client script. Contracted by
   [ADR-025](../adr/ADR-025-learner-postponement.md).
 
+  **The monthly study view is covered at the frontend level only**, which is where all of it lives, as
+  the daily view is: unit tests over the month conversion at a fixed instant across zones and its UTC
+  fallback, over the month boundaries including both Gregorian century rules, and over the selection
+  including a week that straddles a month boundary; and a component test asserting that every item
+  shows its reason, that a settled item keeps its place and is marked in words, that **no button of
+  any kind is rendered** — the screen is read-only by decision — that nothing is counted, and that no
+  copy describes the learner rather than an item or the plan. No backend test changed, because no
+  backend code did. **The scriptless standalone-frontend run was performed** against a
+  contract-shaped stub API with the server on `TZ=UTC`. Contracted by
+  [ADR-026](../adr/ADR-026-monthly-study-view.md).
+
 ## Milestone 4 — Resources, RAG, and Mentor
 
 **Outcome:** learner-owned GATE CSE notes become usable, grounded mentor context.
@@ -444,4 +468,5 @@ What remains is saying whether a learner's week can reach their horizon, a month
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the daily half of the plan-views item above, and why a `daily` plan type stays unwritten
 - [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the second of the three verbs in the complete/skip/postpone item above
 - [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — the third verb, which closes that item, and the two verifications it records as outstanding
+- [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the monthly half of the plan-views item above, which completes FR-003's second criterion, and why a `monthly` plan type stays unwritten
 - [Deferred ideas](future-ideas.md)

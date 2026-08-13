@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-11
+last_updated: 2026-08-13
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -23,6 +23,7 @@ related:
   - ../adr/ADR-022-plan-adaptation.md
   - ../adr/ADR-023-daily-study-view.md
   - ../adr/ADR-024-plan-item-skipping.md
+  - ../adr/ADR-026-monthly-study-view.md
   - ../domain/terminology.md
 ---
 
@@ -254,11 +255,17 @@ app/
 │   │                                       # active goal; writes PLN-001, PLN-004,
 │   │                                       # and PLN-005 via server actions
 │   ├── page.module.css
-│   └── today/
-│       ├── page.tsx                        # The daily study view: LRN-001 for the
+│   ├── today/
+│   │   ├── page.tsx                        # The daily study view: LRN-001 for the
+│   │   │                                   # learner's timezone, GOAL-002, PLN-002,
+│   │   │                                   # and PLN-003 for the active goal's weekly
+│   │   │                                   # plan; writes PLN-004 only
+│   │   └── page.module.css
+│   └── month/
+│       ├── page.tsx                        # The monthly study view: LRN-001 for the
 │       │                                   # learner's timezone, GOAL-002, PLN-002,
-│       │                                   # and PLN-003 for the active goal's weekly
-│       │                                   # plan; writes PLN-004 only
+│       │                                   # and PLN-003 for the active goal's roadmap
+│       │                                   # and weekly plan; writes nothing at all
 │       └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
@@ -271,7 +278,8 @@ Every home, curriculum, setup, and plan route sets `dynamic = "force-dynamic"`. 
 database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
 goal are learner data that changes on submission — and the container build has no API to reach.
 `plan/today` needs it most strongly of all: it is a screen *about* the current date, so a cached copy
-would be wrong from the first midnight after it was built.
+would be wrong from the first midnight after it was built. `plan/month` needs it for the same reason,
+one period up: a cached copy would be wrong from the first month boundary after the build.
 
 `health/route.ts` is the one deliberate exception: it is `force-static`, because it exists to answer
 the container health check and must reach nothing. It asks only whether the frontend process is
@@ -341,6 +349,8 @@ onboarded — and it writes nothing.
 | `planner/GeneratePlanForm.tsx` | The button that asks for a plan, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says plainly that rebuilding keeps the previous plan. |
 | `planner/PlanItemStatusControl.tsx` | The control beside one plan item that records what became of its work, with its CSS Module. It offers the **three statuses the item is not already in** — `completed`, `skipped`, `postponed`, and `planned` in any direction — as one form each, so the status travels in a hidden field and a scriptless submission carries it exactly as a hydrated one does. A client component only so it can report the last submission's result; it calls no API itself. An item in a status PLN-004 does not accept as a target is shown with no control rather than as something a learner can move; every stored status is now offered, so that branch is reached only by a value a later backend adds. Contracted by [ADR-024](../adr/ADR-024-plan-item-skipping.md) and [ADR-025](../adr/ADR-025-learner-postponement.md). |
 | `planner/DailyStudyView.tsx` | The daily study view's two panels — the work the weekly plan placed on the learner's own date, and work whose day has passed — with its CSS Module. Each item shows its reason and carries the same status control the other panels carry. It writes no plan and asks for none: rebuilding stays on `/plan`, where the learner asks for it. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md). |
+| `planner/MonthlyPlanView.tsx` | The monthly study view's two panels — the days this month the plan has already dated, and the roadmap topics the week has not reached — with its CSS Module. Each item shows its reason, and a settled item keeps its place marked in words. It deliberately carries **no status control and no plan control**: it writes nothing at all, so marking work stays on `plan/today` and rebuilding stays on `plan`. Contracted by [ADR-026](../adr/ADR-026-monthly-study-view.md). |
+| `planner/month.ts` | Resolving the learner's own calendar month from their stored timezone, the month's boundaries, and splitting the roadmap and the week into the month's dated days and the topics ahead of them. Plain functions taking the instant as an argument, so they are testable at fixed moments across zones without a running server. `learnerMonth` delegates to `today.ts` rather than converting again, so one conversion and one UTC fallback serve both screens. Month boundaries are computed from the month's own numbers rather than through a `Date`, and the leap-year rule is the full Gregorian one. Nothing here places work on a day: that is planning, and the backend owns it. |
 | `planner/today.ts` | Resolving the learner's own calendar date from their stored timezone, and splitting a weekly plan into today's work and work whose day has passed. Plain functions taking the instant as an argument, so they are testable at a fixed moment across zones without a running server. The overdue boundaries are mirrored from the domain rule `select_overdue`, which stays authoritative for what adaptation writes; nothing here writes anything. |
 | `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. It also decides the classes an item carries and the words beside it, so every panel marks a settled one — completed, skipped, or postponed — the same way, reading the one frontend copy of the settled set in `types/study-plan.ts`. |
 | `planner/submission.ts` | Reads the planner's three forms into the requests they make, and owns their state shapes. It reads no preference and no completion time: a plan is built from what the learner stored, and *when* they marked an item completed is the server's record, never what a client sends. Nothing records when an item was skipped, or why. |
@@ -401,7 +411,8 @@ TypeScript types based on public API contracts. Do not copy database/ORM types i
 Vitest specs for the API client, the configuration reader, the curriculum, learner-setup, home,
 progress, and planner components, the setup, availability, stage, and generate-plan forms' submission
 parsing, the home screen's date presentation, the planning-preference presentation, the plan
-presentation, the daily study view and the date and overdue rules behind it, the stage-to-topic join,
+presentation, the daily study view and the date and overdue rules behind it, the monthly study view
+and the month conversion, boundary, and selection rules behind it, the stage-to-topic join,
 and the `"use server"` export rule. They stub `fetch` and reach no live backend, so `npm test` needs
 nothing running.
 
@@ -509,6 +520,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the plan-item control the planner feature gained, and the write path it shares with generation
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the adapt control, and the third rule in the domain layer
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the `plan/today` route, the two planner modules behind it, and why it is force-dynamic
+- [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the `plan/month` route, the two planner modules behind it, and why it renders no control at all
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry
