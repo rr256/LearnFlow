@@ -47,21 +47,26 @@ export const PLAN_ITEM_ACTION_LABELS: Record<PlanItemAction, string> = {
   review_mistakes: "Review mistakes",
 };
 
-/** The states a plan item can be in. Generation writes `planned`; PLN-005 writes `postponed`. */
+/** The states a plan item can be in. Generation writes `planned`; PLN-004 and PLN-005 write the rest. */
 export type PlanItemStatus = "planned" | "completed" | "skipped" | "postponed";
 
 /**
  * The statuses PLN-004 accepts as a target.
  *
- * A subset of the statuses the column holds: `postponed` is written by
- * adaptation as it sets a plan aside, so offering it here would be a control
- * that always fails.
+ * Every status the column holds, where this was once a strict subset:
+ * `postponed` is now something a learner asks for as well as something
+ * adaptation writes for work whose day passed with nothing said about it.
  *
- * A learner may move an item to any of these three from any of them. Nothing
- * here is one-way, which is why the control offers the other two rather than a
+ * A learner may move an item to any of these four from any of them. Nothing
+ * here is one-way, which is why the control offers the other three rather than a
  * single next step.
  */
-export const PLAN_ITEM_STATUS_CHANGES = ["completed", "planned", "skipped"] as const;
+export const PLAN_ITEM_STATUS_CHANGES = [
+  "completed",
+  "planned",
+  "skipped",
+  "postponed",
+] as const;
 
 export type PlanItemStatusChange = (typeof PLAN_ITEM_STATUS_CHANGES)[number];
 
@@ -76,18 +81,45 @@ export const PLAN_ITEM_STATUS_CHANGE_LABELS: Record<PlanItemStatusChange, string
   completed: "Mark completed",
   planned: "Return to planned",
   skipped: "Skip this item",
+  postponed: "Postpone this item",
 };
+
+/**
+ * The statuses in which nothing carries an item forward on its own.
+ *
+ * The frontend's one mirror of `SETTLED_STATUSES` in
+ * `backend/app/application/dto/study_plan.py`, which is what the domain rule
+ * `select_overdue` reads. It decides which heading an item appears under and
+ * which items are marked; it decides nothing that is stored, so a drift between
+ * the two shows a learner the wrong heading rather than writing a wrong status.
+ * The backend rule stays authoritative (ADR-023).
+ *
+ * `planned` is the only status not here: it is the one about which nothing has
+ * been said.
+ */
+export const PLAN_ITEM_SETTLED_STATUSES: readonly PlanItemStatus[] = [
+  "completed",
+  "skipped",
+  "postponed",
+];
+
+/** True when nothing should carry this item forward on its own. */
+export function isSettledStatus(status: string): boolean {
+  return (PLAN_ITEM_SETTLED_STATUSES as readonly string[]).includes(status);
+}
 
 /**
  * What a learner reads beside an item the API sent in a settled status.
  *
  * `planned` has no label: an item nobody has said anything about needs no
- * announcement. `postponed` has none either — it appears only on a superseded
- * plan, which no screen renders.
+ * announcement. The other three do, including `postponed` — which a learner now
+ * writes on an active plan, where before it appeared only on a superseded one
+ * that no screen renders.
  */
 export const PLAN_ITEM_SETTLED_LABELS: Partial<Record<PlanItemStatus, string>> = {
   completed: "Marked completed",
   skipped: "Marked skipped",
+  postponed: "Marked postponed",
 };
 
 /** True when a string is one of the plan types this build knows. */

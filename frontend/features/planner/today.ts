@@ -24,6 +24,7 @@
  */
 
 import { groupByDay, type PlannedDay } from "@/features/planner/plan";
+import { isSettledStatus } from "@/types/study-plan";
 import type { PlanItem, StudyPlan } from "@/types/study-plan";
 
 /** The zone a learner's date falls back to when their stored one cannot be read. */
@@ -120,15 +121,15 @@ export function selectDailyWork(plan: StudyPlan | null, today: string): DailyWor
 /**
  * Whether a plan item's work is still outstanding.
  *
- * Anything the learner has not settled, which mirrors `select_overdue`'s
- * `is_settled`: the question is whether they have said what became of the work,
- * and both `completed` and `skipped` answer it. A skipped item is left out of
- * *From earlier days* for the same reason adaptation will not postpone it — the
- * learner has already said it is not going to fill that day, and showing it back
- * to them as outstanding would ask again.
+ * Anything nobody has settled, which mirrors `select_overdue`'s `is_settled`:
+ * the question is whether something has already been said about the work, and
+ * `completed`, `skipped`, and `postponed` all answer it. A skipped or postponed
+ * item is left out of *From earlier days* for the same reason adaptation will
+ * not write `postponed` over it — the learner has already said it is not going
+ * to fill that day, and showing it back to them as outstanding would ask again.
  */
 function isOutstanding(item: PlanItem): boolean {
-  return item.status !== "completed" && item.status !== "skipped";
+  return !isSettledStatus(item.status);
 }
 
 /**

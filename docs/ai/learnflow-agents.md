@@ -2,7 +2,7 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-09
+last_updated: 2026-08-11
 related:
   - ../00-project-context.md
   - ../adr/ADR-020-initial-study-plan-generation.md
@@ -89,8 +89,10 @@ Core scheduling and prioritization are deterministic application rules. An AI pr
 
 The planner is partly implemented, by
 [ADR-020](../adr/ADR-020-initial-study-plan-generation.md) and PLN-001 to PLN-003, together with
-PLN-004, which records that a plan item was completed —
-[ADR-021](../adr/ADR-021-plan-item-completion.md) — and PLN-005, which rebuilds a plan around what
+PLN-004, which records what became of a plan item — completed, skipped, or postponed —
+[ADR-021](../adr/ADR-021-plan-item-completion.md),
+[ADR-024](../adr/ADR-024-plan-item-skipping.md), and
+[ADR-025](../adr/ADR-025-learner-postponement.md) — and PLN-005, which rebuilds a plan around what
 happened, [ADR-022](../adr/ADR-022-plan-adaptation.md). See
 [planning endpoints](../api/endpoints.md#planning-endpoints).
 
@@ -288,7 +290,7 @@ The orchestrator selects a workflow; it does not become a second place for busin
 | Mark material completed / set learning stage | Yes; explicit learner action. |
 | Create/accept plan recommendations | Learner can view and adjust; application records plan state transparently. |
 | Request an adapted plan | Yes; explicit learner action. Nothing adapts on its own — not on completion, not on a changed study week. The plan it replaces is kept, not deleted. |
-| Mark a plan item completed | Yes; explicit learner action, and reversible — the learner can return the item to `planned`. It records that planned work happened and writes no learning stage, so nothing infers understanding from it. |
+| Mark a plan item completed, skipped, or postponed | Yes; explicit learner action, and reversible — the learner can return the item to `planned`, or move between any two of the other three. It records what became of planned work and writes no learning stage, so nothing infers understanding from it. Postponing moves nothing on its own: the work is placed again when the learner adapts. |
 | Save quiz attempt | Yes; learner submits the attempt. |
 | Save external test result | Yes; learner enters/confirms data. |
 | Mark revision complete | Yes; explicit learner action. |
@@ -308,6 +310,8 @@ Potential future needs include long-running workflow checkpoints, multi-agent ha
 - [RAG overview](../rag/overview.md)
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the part of the Planner Service that is built, and the rules it follows
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the learner control that records a plan item completed, and why it writes no learning stage
+- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the second status that control writes
+- [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — the third, and why it re-plans nothing on its own
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the learner control that rebuilds a plan, and the one input the planner now reads back
 - [API endpoint catalog](../api/endpoints.md) — the planning endpoints that serve it
 - [Functional requirements](../requirements/functional.md)

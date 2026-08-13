@@ -95,11 +95,13 @@ export async function createStudyPlan(_previous: PlanState, form: FormData): Pro
 }
 
 /**
- * Mark one plan item completed or skipped, or return it to planned.
+ * Mark one plan item completed, skipped, or postponed, or return it to planned.
  *
  * Safe to repeat: sending the status an item already holds changes nothing. The
  * rest of the plan is untouched, and nothing is re-planned around what the
  * learner said — rebuilding the plan is `adaptPlan` below, which they ask for.
+ * Postponing in particular moves nothing on its own: the work is carried onto
+ * the plan the learner's next adaptation writes.
  *
  * A conflict means the item's plan has been superseded, which happens to a
  * learner who rebuilt their plan in another tab. The message says to use the
@@ -160,12 +162,15 @@ export async function savePlanItemStatus(
  *
  * The skip message says the topic comes back, because a learner who reads
  * "skipped" without it could reasonably think they have dropped the topic for
- * good — which is not what PLN-004 does.
+ * good — which is not what PLN-004 does. The postpone message says where the
+ * work goes and who moves it, because postponing is the one status that names a
+ * later plan and nothing here writes that plan on its own.
  */
 const SAVED_MESSAGES: Readonly<Record<string, string>> = {
   completed: "Marked completed.",
   planned: "Returned to your plan.",
   skipped: "Marked skipped. This topic is planned again when you update your plan.",
+  postponed: "Marked postponed. This work is placed again when you update your plan.",
 };
 
 

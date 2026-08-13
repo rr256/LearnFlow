@@ -361,12 +361,12 @@ def test_completing_an_item_on_a_superseded_plan_is_refused(client: TestClient, 
 
 
 def test_a_refused_status_writes_nothing(client: TestClient, goal: dict, session: Session):
-    """A status the endpoint does not accept must not reach the database, where
-    the `CHECK` would take it: `postponed` is a valid column value that only
-    adaptation writes, and an invalid request."""
+    """A status the endpoint does not accept must not reach the database. Every
+    value the `CHECK` takes is now askable, so this is a value it would refuse
+    too — and the request must fail before it gets the chance."""
     item = first_weekly_item(client, goal)
 
-    refused = client.patch(f"{ITEMS}/{item['id']}", json={"status": "postponed"})
+    refused = client.patch(f"{ITEMS}/{item['id']}", json={"status": "abandoned"})
 
     assert refused.status_code == 422
     session.expire_all()
@@ -429,6 +429,34 @@ def test_a_skipped_item_reads_back_over_the_read_endpoint(client: TestClient, go
     line = next(entry for entry in read["items"] if entry["id"] == item["id"])
     assert line["status"] == "skipped"
     assert line["completed_at"] is None
+
+
+def test_postponing_an_item_is_stored(client: TestClient, goal: dict, session: Session):
+    """PLN-004 against real rows: a learner's own `postponed` passes the `CHECK`
+    on `plan_items.status`, and no completion instant is written beside it."""
+    item = first_weekly_item(client, goal)
+
+    response = client.patch(f"{ITEMS}/{item['id']}", json={"status": "postponed"})
+
+    assert response.status_code == 200, response.text
+    session.expire_all()
+    stored = session.get(PlanItem, uuid.UUID(item["id"]))
+    assert stored is not None
+    assert stored.status == "postponed"
+    assert stored.completed_at is None
+
+
+def test_postponing_one_item_moves_no_other_row(client: TestClient, goal: dict, session: Session):
+    """Sixty-odd items are stored across the two plans. Exactly one moves, and
+    its day is not rewritten."""
+    item = first_weekly_item(client, goal)
+
+    client.patch(f"{ITEMS}/{item['id']}", json={"status": "postponed"})
+
+    session.expire_all()
+    postponed = session.scalars(select(PlanItem).where(PlanItem.status == "postponed")).all()
+    assert [record.id for record in postponed] == [uuid.UUID(item["id"])]
+    assert postponed[0].scheduled_for.isoformat() == item["scheduled_for"]
 
 
 def adapt(client: TestClient, goal: dict):
@@ -516,6 +544,39 @@ def test_a_skipped_item_survives_adaptation_and_its_topic_is_planned_again(
     assert reread.status == "skipped"
     roadmap = next(plan for plan in adapted["plans"] if plan["plan_type"] == "roadmap")
     assert set_aside["topic"]["id"] in {item["topic"]["id"] for item in roadmap["items"]}
+
+
+def test_a_learner_s_postponement_survives_adaptation_and_its_topic_is_planned_again(
+    client: TestClient, goal: dict, session: Session
+):
+    """Against real rows: a postponement whose day has passed keeps its status
+    and is not reported as work adaptation carried forward, and the topic comes
+    back rather than being retired the way a completed one is."""
+    created = generate(client, goal).json()["data"]
+    week = next(plan for plan in created["plans"] if plan["plan_type"] == "weekly")
+    deferred = week["items"][0]
+    assert (
+        client.patch(f"{ITEMS}/{deferred['id']}", json={"status": "postponed"}).status_code == 200
+    )
+
+    # As above: move the stored date into the past rather than the clock forward,
+    # so the item would be overdue if postponing did not settle it.
+    stored = session.get(PlanItem, uuid.UUID(deferred["id"]))
+    assert stored is not None
+    stored.scheduled_for = date(2020, 1, 1)
+    session.commit()
+
+    adapted = adapt(client, goal).json()["data"]
+
+    assert deferred["id"] not in adapted["postponed_plan_item_ids"]
+    assert adapted["completed_topic_count"] == 0
+    assert adapted["remaining_topic_count"] == 60
+    session.expire_all()
+    reread = session.get(PlanItem, uuid.UUID(deferred["id"]))
+    assert reread is not None
+    assert reread.status == "postponed"
+    roadmap = next(plan for plan in adapted["plans"] if plan["plan_type"] == "roadmap")
+    assert deferred["topic"]["id"] in {item["topic"]["id"] for item in roadmap["items"]}
 
 
 def test_adapting_writes_no_topic_progress(client: TestClient, goal: dict, session: Session):

@@ -109,11 +109,31 @@ describe("DailyStudyView", () => {
     expect(screen.getByText("CPU scheduling")).toBeDefined();
   });
 
+  it("offers the postpone control beside today's work", () => {
+    /* A learner deciding today's session is not happening yet says so here, on
+     * the screen they are working from. */
+    render(<DailyStudyView plan={week()} today={TODAY} />);
+
+    expect(
+      screen.getByRole("button", { name: /Postpone this item.*CPU scheduling/ }),
+    ).toBeDefined();
+  });
+
+  it("lets a learner take a postponement back, and keeps the item in place", () => {
+    render(
+      <DailyStudyView plan={week({ items: [item({ status: "postponed" })] })} today={TODAY} />,
+    );
+
+    expect(screen.getByText("Marked postponed")).toBeDefined();
+    expect(screen.getByRole("button", { name: /Return to planned.*CPU scheduling/ })).toBeDefined();
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+  });
+
   it("shows no control for a status PLN-004 will not accept", () => {
-    render(<DailyStudyView plan={week({ items: [item({ status: "postponed" })] })} today={TODAY} />);
+    render(<DailyStudyView plan={week({ items: [item({ status: "invented" })] })} today={TODAY} />);
 
     expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.getByText(/Status: postponed/)).toBeDefined();
+    expect(screen.getByText(/Status: invented/)).toBeDefined();
   });
 
   it("leaves out work the plan placed on a day still to come", () => {
@@ -188,6 +208,26 @@ describe("DailyStudyView and work whose day has passed", () => {
           item_count: 2,
           items: [
             item({ id: "friday", scheduled_for: "2026-08-07", status: "skipped" }),
+            item({ id: "today", priority: 2 }),
+          ],
+        })}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.queryByRole("heading", { name: "From earlier days" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "2026-08-07" })).toBeNull();
+  });
+
+  it("leaves out work whose day passed once the learner has postponed it", () => {
+    /* The display half of the settled rule: adaptation will not write over their
+     * statement, so this screen must not present it as still outstanding. */
+    render(
+      <DailyStudyView
+        plan={week({
+          item_count: 2,
+          items: [
+            item({ id: "friday", scheduled_for: "2026-08-07", status: "postponed" }),
             item({ id: "today", priority: 2 }),
           ],
         })}

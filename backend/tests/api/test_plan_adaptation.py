@@ -36,6 +36,10 @@ def skip(client, plan_item_id):
     return client.patch(f"{ITEMS}/{plan_item_id}", json={"status": "skipped"})
 
 
+def postpone(client, plan_item_id):
+    return client.patch(f"{ITEMS}/{plan_item_id}", json={"status": "postponed"})
+
+
 # -- adapting ---------------------------------------------------------------
 
 
@@ -121,6 +125,40 @@ def test_a_skipped_topic_is_planned_again(planning_client, planning):
 
     roadmap = next(plan for plan in adapted["plans"] if plan["plan_type"] == "roadmap")
     assert set_aside["topic"]["id"] in {item["topic"]["id"] for item in roadmap["items"]}
+    assert adapted["completed_topic_count"] == 0
+    assert adapted["remaining_topic_count"] == 3
+
+
+def test_an_item_the_learner_postponed_is_left_as_they_marked_it(planning_client, planning):
+    """The learner already said what should become of the work. Adaptation must
+    not re-mark it and must not claim it carried it forward."""
+    from datetime import UTC, datetime
+
+    created = generate(planning_client, planning.goal.id).json()
+    deferred = plan_of_type(created, "weekly")["items"][0]
+    postpone(planning_client, deferred["id"])
+    planning.clock.instant = datetime(2026, 8, 10, 9, 0, tzinfo=UTC)
+
+    adapted = adapt(planning_client, planning.goal.id).json()["data"]
+
+    assert deferred["id"] not in adapted["postponed_plan_item_ids"]
+    superseded_id = plan_of_type(created, "weekly")["id"]
+    stored = planning_client.get(f"{PLANS}/{superseded_id}").json()["data"]
+    line = next(item for item in stored["items"] if item["id"] == deferred["id"])
+    assert line["status"] == "postponed"
+
+
+def test_a_topic_the_learner_postponed_is_planned_again(planning_client, planning):
+    """Postponing settles the item, not the topic. Only a completed topic is left
+    out of the plans that follow."""
+    created = generate(planning_client, planning.goal.id).json()
+    deferred = plan_of_type(created, "weekly")["items"][0]
+    postpone(planning_client, deferred["id"])
+
+    adapted = adapt(planning_client, planning.goal.id).json()["data"]
+
+    roadmap = next(plan for plan in adapted["plans"] if plan["plan_type"] == "roadmap")
+    assert deferred["topic"]["id"] in {item["topic"]["id"] for item in roadmap["items"]}
     assert adapted["completed_topic_count"] == 0
     assert adapted["remaining_topic_count"] == 3
 

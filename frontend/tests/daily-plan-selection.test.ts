@@ -103,6 +103,17 @@ describe("selectDailyWork", () => {
     expect(work.today.map((entry) => entry.id)).toEqual(["set-aside"]);
   });
 
+  it("keeps a postponed item on today rather than hiding it", () => {
+    /* Postponing names no new day, so the item stays where the plan put it,
+     * with the control that takes the postponement back. */
+    const work = selectDailyWork(
+      plan({ items: [item({ id: "deferred", scheduled_for: today, status: "postponed" })] }),
+      today,
+    );
+
+    expect(work.today.map((entry) => entry.id)).toEqual(["deferred"]);
+  });
+
   it("keeps a completed item on today rather than hiding it", () => {
     /* The plan is the record of what the day held; hiding finished work would
      * leave the day looking undone (ADR-021). */
@@ -130,11 +141,11 @@ describe("selectDailyWork", () => {
     expect(work.earlier[0]?.items.map((entry) => entry.id)).toEqual(["friday"]);
   });
 
-  it.each(["completed", "skipped"])(
+  it.each(["completed", "skipped", "postponed"])(
     "leaves %s work out of the days that have passed",
     (status) => {
-      /* Mirrors the backend rule: an item the learner has settled is never
-       * behind, whether the work happened or they said it would not. */
+      /* Mirrors the backend rule: a settled item is never behind, whether the
+       * work happened, the learner said it would not, or they said not yet. */
       const work = selectDailyWork(
         plan({
           items: [
@@ -149,7 +160,7 @@ describe("selectDailyWork", () => {
     },
   );
 
-  it.each(["completed", "skipped"])(
+  it.each(["completed", "skipped", "postponed"])(
     "drops a passed day entirely once its only item is %s",
     (status) => {
       const work = selectDailyWork(
@@ -160,6 +171,17 @@ describe("selectDailyWork", () => {
       expect(work.earlier).toEqual([]);
     },
   );
+
+  it("still shows work in a status this build does not recognise as outstanding", () => {
+    /* The mirror is of `SETTLED_STATUSES`, not of "anything but planned": a
+     * backend that grows a fifth status must not have it silently dropped. */
+    const work = selectDailyWork(
+      plan({ items: [item({ id: "unknown", scheduled_for: "2026-08-07", status: "invented" })] }),
+      today,
+    );
+
+    expect(work.earlier[0]?.items.map((entry) => entry.id)).toEqual(["unknown"]);
+  });
 
   it("treats an item dated today as due rather than as behind", () => {
     /* The day has not finished, so opening this screen in the morning must not

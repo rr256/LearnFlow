@@ -8,6 +8,7 @@ import {
   itemClassName,
   planOfType,
 } from "@/features/planner/plan";
+import { PLAN_ITEM_SETTLED_STATUSES, isSettledStatus } from "@/types/study-plan";
 import type { PlanItem, StudyPlan } from "@/types/study-plan";
 
 function item(overrides: Partial<PlanItem> = {}): PlanItem {
@@ -130,7 +131,12 @@ describe("planOfType", () => {
 });
 
 describe("itemClassName", () => {
-  const styles = { item: "item", completed: "completed", skipped: "skipped" };
+  const styles = {
+    item: "item",
+    completed: "completed",
+    skipped: "skipped",
+    postponed: "postponed",
+  };
 
   it("marks a completed item without dropping its base class", () => {
     expect(itemClassName(item({ status: "completed" }), styles)).toBe("item completed");
@@ -140,19 +146,24 @@ describe("itemClassName", () => {
     expect(itemClassName(item({ status: "skipped" }), styles)).toBe("item skipped");
   });
 
+  it("marks a postponed item without dropping its base class", () => {
+    expect(itemClassName(item({ status: "postponed" }), styles)).toBe("item postponed");
+  });
+
   it("leaves a planned item unmarked", () => {
     expect(itemClassName(item(), styles)).toBe("item");
   });
 
-  it("leaves a status only a superseded plan can hold unmarked", () => {
-    expect(itemClassName(item({ status: "postponed" }), styles)).toBe("item");
+  it("leaves a status this build does not recognise unmarked", () => {
+    expect(itemClassName(item({ status: "invented" }), styles)).toBe("item");
   });
 });
 
 describe("describeSettledStatus", () => {
-  it("names the two statuses a learner writes", () => {
+  it("names the three statuses a learner writes", () => {
     expect(describeSettledStatus("completed")).toBe("Marked completed");
     expect(describeSettledStatus("skipped")).toBe("Marked skipped");
+    expect(describeSettledStatus("postponed")).toBe("Marked postponed");
   });
 
   it("says nothing about an item nobody has settled", () => {
@@ -162,7 +173,6 @@ describe("describeSettledStatus", () => {
   it("says nothing about a status this build does not recognise", () => {
     /* The control reports it verbatim; a label here would invent wording for a
      * state the product cannot reach. */
-    expect(describeSettledStatus("postponed")).toBeNull();
     expect(describeSettledStatus("invented")).toBeNull();
   });
 
@@ -171,5 +181,24 @@ describe("describeSettledStatus", () => {
     for (const status of ["completed", "skipped", "planned", "postponed"]) {
       expect(describeSettledStatus(status) ?? "").not.toMatch(/\byou\b|\byour\b|behind/i);
     }
+  });
+});
+
+describe("isSettledStatus", () => {
+  it("mirrors the backend's SETTLED_STATUSES exactly", () => {
+    /* The one frontend copy of the set `select_overdue` reads. It decides a
+     * heading and a mark, never a stored value; the backend rule stays
+     * authoritative (ADR-023). */
+    expect(PLAN_ITEM_SETTLED_STATUSES).toEqual(["completed", "skipped", "postponed"]);
+  });
+
+  it("treats a planned item as the only unsettled one", () => {
+    expect(isSettledStatus("planned")).toBe(false);
+  });
+
+  it("treats a status this build does not recognise as unsettled", () => {
+    /* A backend that grows a fifth status must not have it silently dropped from
+     * *From earlier days*, which is where an unsettled item belongs. */
+    expect(isSettledStatus("invented")).toBe(false);
   });
 });

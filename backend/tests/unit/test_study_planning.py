@@ -286,8 +286,8 @@ def test_an_undated_item_is_never_overdue():
 
 
 def test_settled_work_is_never_overdue_however_late_the_day_it_was_placed_on():
-    """Completed and skipped work alike. The learner has said what became of it,
-    so nothing carries it forward on their behalf."""
+    """Completed, skipped, and postponed work alike. Something has already been
+    said about it, so nothing carries it forward on the learner's behalf."""
     assert select_overdue([dated(date(2020, 1, 1), is_settled=True)], date(2026, 8, 9)) == ()
 
 

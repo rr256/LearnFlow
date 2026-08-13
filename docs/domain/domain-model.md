@@ -2,7 +2,7 @@
 title: LearnFlow Domain Model
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-10
+last_updated: 2026-08-11
 related:
   - ../00-project-context.md
   - entities.md
@@ -15,6 +15,7 @@ related:
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
   - ../adr/ADR-024-plan-item-skipping.md
+  - ../adr/ADR-025-learner-postponement.md
   - ../requirements/functional.md
   - ../database/schema.md
 ---

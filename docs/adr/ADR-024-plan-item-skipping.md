@@ -12,6 +12,7 @@ related:
   - ADR-021-plan-item-completion.md
   - ADR-022-plan-adaptation.md
   - ADR-023-daily-study-view.md
+  - ADR-025-learner-postponement.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -73,6 +74,58 @@ endpoint, no column, no table, and no migration**.
 
 FR-004's **third** criterion — highlighting trade-offs when time is insufficient — is not delivered
 at all.
+
+## Implementation status — 2026-08-11
+
+*Note added 2026-08-11. The decision below is unchanged in everything but the set of statuses PLN-004
+accepts and the set `select_overdue` reads; this records what has been overtaken and by what.*
+
+**A learner can postpone an item.** [ADR-025](ADR-025-learner-postponement.md) extends PLN-004 to
+accept `postponed` as a fourth target, so a learner may now move an item between all four statuses in
+any direction. It needed **no migration** either, and the status already had a writer — this is its
+second.
+
+**Six statements above are overtaken.** None was wrong when written.
+
+- In the [Status](#status) section — "**A learner cannot mark an item `postponed`** … PLN-004
+  refuses `postponed` with a `422`", and the conclusion that FR-004's first criterion is "**partly**
+  met, not met in full". They can, and it is now met **in full**: all three verbs are learner
+  actions. The `422` remains only for a status the column could not hold either.
+- The same section's "two of the criterion's three verbs are things the learner does, and the third
+  is a consequence of something else they ask for". All three are things the learner does. Adaptation
+  still writes `postponed` for work whose day passed with nothing said about it, so the status has
+  two writers rather than one.
+- Under [Decision](#pln-004-accepts-skipped-and-every-move-between-the-three-is-allowed) —
+  "**`postponed` is still refused, with a `422`.** Its reason has narrowed rather than changed."
+  The reason has now been discharged: ADR-021 refused the status because postponing had no
+  destination, and PLN-005 has been that destination since ADR-022.
+- The same section's `PLAN_ITEM_STATUS_CHANGES` of `("planned", "completed", "skipped")` is now the
+  whole of `PLAN_ITEM_STATUSES`. The two constants stay separately named for the reason this record
+  gives; they simply coincide today.
+- Under [Decision](#the-write-goes-through-the-existing-server-action-and-the-backend-gains-no-cors)
+  — "**An item in a status the API will not take as a target gets no control at all.** That means
+  `postponed`, and only `postponed`". It now means no stored status at all; the branch is reached
+  only by a value a later backend adds. `PlanItemStatusControl` renders **three** forms rather than
+  two.
+- Under [Consequences](#negative) — "**A learner still cannot postpone an item themselves.** … A
+  learner who wants one specific item moved to next week, and nothing else touched, has no way to say
+  so." They have one. Note that postponing still moves nothing on its own: it settles the item, and
+  the work is placed again when the learner adapts.
+
+**The `is_settled` rename is what made that a one-word change.** `POSTPONED` joins
+`SETTLED_STATUSES` and the domain function is untouched — the fourth boundary this record added
+became a fifth clause in the same sentence. The rule and its display mirror moved together again,
+which is the second time the cost ADR-023 recorded has been paid.
+
+**A postponed item behaves on every screen as a skipped one does**: in place, marked in words, with
+the controls to move it, and **left out of *From earlier days***. What separates the two is what the
+record says about the line — *not happening* against *not happening yet* — and nothing about what the
+next plan does with the topic, which is the same for both.
+
+**Everything else in this record stands.** The reversibility argument, the `409` for an item on a
+superseded plan, the refusal to write a learning stage, the refusal to count anything, the absence of
+a timestamp and of a reason field, and the topic-not-retired rule are all as accepted, and ADR-025
+inherits each rather than renegotiating it.
 
 ## Context
 
@@ -472,6 +525,7 @@ the `PATCH` is doing the work anyway — and PLN-004 is the catalogued contract 
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](ADR-021-plan-item-completion.md) — the contract this extends, and the `skipped` question it left open
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](ADR-022-plan-adaptation.md) — the overdue rule this changes, and the adaptation a skip survives
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](ADR-023-daily-study-view.md) — the display partition that mirrors the changed rule
+- [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](ADR-025-learner-postponement.md) — the fourth status PLN-004 accepts, and the gap this record named
 - [API conventions](../api/conventions.md) — the envelope, the error codes, and the `snake_case` rule
 - [API endpoint catalog](../api/endpoints.md) — the contract this record extends
 - [API versioning](../api/versioning.md) — what makes a change to it breaking

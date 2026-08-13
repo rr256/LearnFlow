@@ -42,6 +42,10 @@ def skip(client, plan_item_id):
     return move(client, plan_item_id, "skipped")
 
 
+def postpone(client, plan_item_id):
+    return move(client, plan_item_id, "postponed")
+
+
 # -- completing a plan item -------------------------------------------------
 
 
@@ -216,15 +220,116 @@ def test_skipping_an_item_on_a_superseded_plan_is_409(planning_client, planning)
     assert response.json()["error"]["code"] == "conflict"
 
 
+# -- postponing a plan item -------------------------------------------------
+
+
+def test_postponing_an_item_returns_200_with_the_whole_item(planning_client, planning):
+    item = first_weekly_item(planning_client, planning.goal.id)
+
+    response = postpone(planning_client, item["id"])
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {"data"}
+    assert payload["data"]["id"] == item["id"]
+    assert payload["data"]["status"] == "postponed"
+    assert payload["data"]["completed_at"] is None
+
+
+def test_a_postponed_item_still_names_its_topic_its_day_and_its_reason(planning_client, planning):
+    """Postponing names no new day, so the item reads back exactly as planned
+    apart from its status."""
+    item = first_weekly_item(planning_client, planning.goal.id)
+
+    data = postpone(planning_client, item["id"]).json()["data"]
+
+    assert data["topic"] == item["topic"]
+    assert data["scheduled_for"] == item["scheduled_for"]
+    assert data["priority"] == item["priority"]
+    assert data["recommendation_reason"] == item["recommendation_reason"]
+
+
+def test_postponing_an_item_can_be_undone(planning_client, planning):
+    item = first_weekly_item(planning_client, planning.goal.id)
+    postpone(planning_client, item["id"])
+
+    response = move(planning_client, item["id"], "planned")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "planned"
+
+
+def test_postponing_a_completed_item_clears_the_completion_time(planning_client, planning):
+    item = first_weekly_item(planning_client, planning.goal.id)
+    complete(planning_client, item["id"])
+
+    data = postpone(planning_client, item["id"]).json()["data"]
+
+    assert data["status"] == "postponed"
+    assert data["completed_at"] is None
+
+
+def test_postponing_an_item_twice_is_accepted(planning_client, planning):
+    """A repeated form submission must not fail on its second attempt."""
+    item = first_weekly_item(planning_client, planning.goal.id)
+    postpone(planning_client, item["id"])
+
+    assert postpone(planning_client, item["id"]).status_code == 200
+
+
+def test_a_postponement_reads_back_through_the_plan(planning_client, planning):
+    payload = generate(planning_client, planning.goal.id).json()
+    week = next(plan for plan in payload["data"]["plans"] if plan["plan_type"] == "weekly")
+    item = week["items"][0]
+    postpone(planning_client, item["id"])
+
+    reread = planning_client.get(f"{PLANS}/{week['id']}").json()["data"]
+
+    postponed = next(line for line in reread["items"] if line["id"] == item["id"])
+    assert postponed["status"] == "postponed"
+    assert postponed["completed_at"] is None
+
+
+def test_postponing_one_item_leaves_the_roadmap_alone(planning_client, planning):
+    payload = generate(planning_client, planning.goal.id).json()
+    plans = {plan["plan_type"]: plan for plan in payload["data"]["plans"]}
+    postpone(planning_client, plans["weekly"]["items"][0]["id"])
+
+    roadmap = planning_client.get(f"{PLANS}/{plans['roadmap']['id']}").json()["data"]
+
+    assert all(item["status"] == "planned" for item in roadmap["items"])
+
+
+def test_postponing_an_undated_roadmap_item_is_accepted(planning_client, planning):
+    """The endpoint knows nothing about dated versus undated items."""
+    payload = generate(planning_client, planning.goal.id).json()
+    roadmap = next(plan for plan in payload["data"]["plans"] if plan["plan_type"] == "roadmap")
+
+    response = postpone(planning_client, roadmap["items"][0]["id"])
+
+    assert response.status_code == 200
+    assert response.json()["data"]["scheduled_for"] is None
+
+
+def test_postponing_an_item_on_a_superseded_plan_is_409(planning_client, planning):
+    item = first_weekly_item(planning_client, planning.goal.id)
+    generate(planning_client, planning.goal.id)
+
+    response = postpone(planning_client, item["id"])
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+
+
 # -- refusals ---------------------------------------------------------------
 
 
-def test_postponed_is_not_a_status_this_endpoint_accepts(planning_client, planning):
-    """Adaptation writes it as it sets a plan aside, so asking for it here would
-    set a status with nothing to move the work to."""
+def test_a_status_outside_the_four_is_refused(planning_client, planning):
+    """Every value the column holds is now askable, so this reaches only a status
+    that is not one of them at all."""
     item = first_weekly_item(planning_client, planning.goal.id)
 
-    response = move(planning_client, item["id"], "postponed")
+    response = move(planning_client, item["id"], "abandoned")
 
     assert response.status_code == 422
     error = response.json()["error"]

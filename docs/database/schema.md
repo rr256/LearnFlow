@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-10
+last_updated: 2026-08-11
 related:
   - ../00-project-context.md
   - overview.md
@@ -20,6 +20,7 @@ related:
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
   - ../adr/ADR-024-plan-item-skipping.md
+  - ../adr/ADR-025-learner-postponement.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
 ---
@@ -439,26 +440,29 @@ Every item is *generated* with `action_type = 'study'` and `status = 'planned'`.
 actions name work the product does not yet model — practice needs checkpoint quizzes, revision needs
 `revision_records`, mistake review needs `mistake_evidence` — so nothing writes one.
 
-**`status` and `completed_at` are now written**, by PLN-004, which moves an item between `planned`,
-`completed`, and `skipped` and is contracted by
-[ADR-021](../adr/ADR-021-plan-item-completion.md) and
-[ADR-024](../adr/ADR-024-plan-item-skipping.md). It needed no migration either time: both columns were
-created by `20260806_03` ahead of the code that writes them, which is the argument
+**`status` and `completed_at` are now written**, by PLN-004, which moves an item between all four
+values and is contracted by [ADR-021](../adr/ADR-021-plan-item-completion.md),
+[ADR-024](../adr/ADR-024-plan-item-skipping.md), and
+[ADR-025](../adr/ADR-025-learner-postponement.md). It needed no migration any of the three times: both
+columns were created by `20260806_03` ahead of the code that writes them, which is the argument
 [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md) made for `stage_source` — an item without
 a state is not a plan item, and adding the column once learners held plans would have meant
 backfilling rows whose state nobody recorded.
 
 `completed_at` holds the instant the learner marked the item completed and is NULL for every other
-status, including an item put back to `planned` and one moved on to `skipped`. It is written from the
-server's clock rather than from a request, so no caller can backdate work. **There is deliberately no
-`skipped_at`**: `status` carries the whole of what a skip is, nothing reads a date for one, and a
-second timestamp would need its own invariant against `status` kept in step in every write path.
+status, including an item put back to `planned` and one moved on to `skipped` or `postponed`. It is
+written from the server's clock rather than from a request, so no caller can backdate work. **There is
+deliberately no `skipped_at` and no `postponed_at`**: `status` carries the whole of what each is,
+nothing reads a date for either, and a second timestamp would need its own invariant against `status`
+kept in step in every write path.
 
-**`postponed` is now written**, by PLN-005. When adaptation supersedes a plan, an item whose day has
-passed and which the learner has not settled is marked `postponed` on the plan being set aside, and its
-topic is re-placed on the plan that replaces it — which is the answer to what postponing moves work
-*to*. That needed no migration either: the `CHECK` has accepted the value since this table was created.
-See [ADR-022](../adr/ADR-022-plan-adaptation.md).
+**`postponed` has two writers.** PLN-005 writes it when adaptation supersedes a plan, for an item
+whose day has passed with nothing said about it, and re-places the topic on the plan that replaces it —
+which is the answer to what postponing moves work *to*. PLN-004 writes it when the **learner** says the
+work is not happening yet, on an active plan and on any day, which completes FR-004's first acceptance
+criterion. The value means the same thing either way, and neither needed a migration: the `CHECK` has
+accepted it since this table was created. See [ADR-022](../adr/ADR-022-plan-adaptation.md) and
+[ADR-025](../adr/ADR-025-learner-postponement.md).
 
 **`skipped` is now written too**, by PLN-004, which makes it the last of the four values the `CHECK`
 has carried unwritten since this table was created. It is a statement about **this item** — the
@@ -469,9 +473,10 @@ plan can no longer be edited. See [ADR-024](../adr/ADR-024-plan-item-skipping.md
 [the skipping review below](#plan_items-skipping-review-2026-08-10); the
 [adaptation review](#plan_items-adaptation-review-2026-08-09) before it covers `postponed`.
 
-A completed item is a record that planned work happened, and a skipped one that the learner decided it
-would not. Neither is a claim about whether the topic is understood — rule 4 of the
-[domain model](../domain/domain-model.md#domain-rules-and-invariants) — so neither writes anything to
+A completed item is a record that planned work happened, a skipped one that the learner decided it
+would not, and a postponed one that they decided it would not yet. None is a claim about whether the
+topic is understood — rule 4 of the
+[domain model](../domain/domain-model.md#domain-rules-and-invariants) — so none writes anything to
 `learner_topic_progress`, and moving a weekly item leaves a roadmap item naming the same topic
 `planned`. Only a plan whose `status` is `active` may have an item moved, whatever status is asked
 for — see [PLN-004](../api/endpoints.md#pln-004-patch-apiv1plan-itemsplan_item_id) for the rule and its
@@ -1153,6 +1158,10 @@ review settled:
 - **The application accepts fewer statuses than the column holds.** `skipped` and `postponed` pass the
   `CHECK` and are refused by PLN-004. The constraint stays as approved: it describes what a plan item
   may *be*, and which of those a learner may currently *ask for* is a contract rule, not a column one.
+  *(Overtaken. `skipped` became askable with [ADR-024](../adr/ADR-024-plan-item-skipping.md) and
+  `postponed` with [ADR-025](../adr/ADR-025-learner-postponement.md); the endpoint and the `CHECK` now
+  admit the same four values. The reasoning stands — the two remain separate rules that happen to
+  agree.)*
 - **`completed_at` is application-maintained, not defaulted.** No column default and no trigger sets
   it; the use case writes the clock's instant when an item becomes `completed` and NULL when it does
   not. A database default would have made an item completed the moment a row was touched.
@@ -1222,9 +1231,44 @@ four to be written. What the review settled:
   `postponed` alone. The `CHECK` is still deliberately wider than the endpoint, by one value rather
   than two. The same sentence appears in
   [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md), where it is dated history.
+  *(Now fully overtaken — see the postponement review below.)*
 
 **Review inputs:** the API contract PLN-004 was re-reviewed here, and the domain rule
 `select_overdue` with it. The revision-scheduling rules remain **pending**.
+
+#### `plan_items` postponement review — 2026-08-11
+
+This review covers the second writer of `plan_items.status = 'postponed'`, contracted by
+[ADR-025](../adr/ADR-025-learner-postponement.md). **No schema change resulted, and no migration was
+written**: the `CHECK` created by `20260806_03` already accepted the value, and PLN-005 has written it
+since [ADR-022](../adr/ADR-022-plan-adaptation.md). What the review settled:
+
+- **The `CHECK` and the endpoint now admit the same four values**, which closes the gap the two
+  reviews above tracked. They stay separate rules for the reason recorded there — one describes what a
+  plan item may *be*, the other what a learner may *ask for* — and a fifth value added to the column
+  would arrive unwritable until somebody decided it should be askable.
+- **No `postponed_at` column**, for the reasons the skipping review gave for `skipped_at`: nothing
+  reads such a date, and a second timestamp would need its own invariant against `status` maintained
+  in every write path. `completed_at` stays the only status timestamp and stays NULL for a postponed
+  item, whichever writer set the status. Adding `postponed_at` later remains an additive change.
+- **No column records *why* an item was postponed**, and none is planned — the skipping review's
+  reasoning, unchanged.
+- **No column distinguishes who wrote `postponed`.** A learner's postponement and adaptation's are the
+  same stored value, and the only surviving trace of the difference is `postponed_plan_item_ids` in
+  the adaptation response. That is recorded as a consequence in ADR-025 rather than solved with a
+  `status_source` column, which would be the shape ADR-017 gave `stage_source` and is not yet needed
+  by anything.
+- **A postponed topic is not excluded from the plans that follow**, as a skipped one is not.
+  Adaptation still reads `plan_items.status = 'completed'` alone through `list_completed_topic_ids`;
+  that query is unchanged, and no new read was added.
+- **No index was added.** Postponing writes one row by primary key and reads nothing new. The overdue
+  scan is unchanged in shape and now excludes three statuses rather than two, in application code
+  rather than in SQL.
+- **No constraint ties an item's status to its plan's**, as above. PLN-004 is still what refuses a
+  write to a superseded plan, for every status without exception.
+
+**Review inputs:** the API contract PLN-004 was re-reviewed here, and the application set
+`SETTLED_STATUSES` with it. The revision-scheduling rules remain **pending**.
 
 ### Progress and revision area — partial review approved 2026-08-05
 
@@ -1292,6 +1336,7 @@ yet.
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the first code to write `plan_items.status` and `completed_at`, and why it needed no migration
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the first code to write `postponed`, and why it needed no migration either
 - [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the first code to write `skipped`, the last unwritten value of the `status` `CHECK`, and why no `skipped_at` column exists
+- [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — the second writer of `postponed`, and why no `postponed_at` column and no status-source column exist
 - [Database overview](overview.md)
 - [Database migrations](migrations.md)
 - [Delivery milestones](../roadmap/milestones.md) — when each pending schema area is migrated

@@ -15,6 +15,8 @@ from app.application.dto.study_plan import (
     ACTIVE,
     COMPLETED,
     DEFAULT_SESSION_MINUTES,
+    PLAN_ITEM_STATUS_CHANGES,
+    PLAN_ITEM_STATUSES,
     PLANNED,
     POSTPONED,
     ROADMAP,
@@ -517,10 +519,10 @@ def test_recording_the_status_an_item_already_holds_writes_nothing():
     assert again.completed_at == first.completed_at
 
 
-@pytest.mark.parametrize("status", ["postponed", "finished", ""])
+@pytest.mark.parametrize("status", ["abandoned", "finished", ""])
 def test_a_status_this_endpoint_does_not_accept_is_refused(status):
-    """`postponed` is written by adaptation as it sets a plan aside, so asking
-    for it here would set a status with nothing to move the work to."""
+    """Every value `plan_items.status` holds is now askable, so a refusal here
+    means a status the column could not hold either."""
     planning = Planning(availability={"thursday": 120})
     generated = planning.generate()
     item = weekly(generated).items[0]
@@ -658,8 +660,15 @@ def test_a_status_is_validated_before_the_item_is_looked_up():
     named -- the order `record_stage` applies to an unknown learning stage."""
     with pytest.raises(UnknownPlanItemStatusError):
         Planning().planner().record_item_status(
-            uuid.uuid4(), PlanItemStatusChange(status="postponed")
+            uuid.uuid4(), PlanItemStatusChange(status="abandoned")
         )
+
+
+def test_every_status_the_column_holds_is_one_a_learner_may_ask_for():
+    """The two constants still answer different questions and are still named
+    separately; today they happen to coincide, and that is the whole of what
+    "a learner may now postpone" means at the contract's edge."""
+    assert set(PLAN_ITEM_STATUS_CHANGES) == set(PLAN_ITEM_STATUSES)
 
 
 # -- skipping a plan item ---------------------------------------------------
@@ -788,6 +797,162 @@ def test_skipping_an_item_on_a_superseded_plan_is_refused():
         planning.planner().record_item_status(item.id, PlanItemStatusChange(status=SKIPPED))
 
 
+# -- postponing a plan item -------------------------------------------------
+
+
+def test_postponing_an_item_records_the_status_and_no_completion_time():
+    """Postponing says the work is not happening yet. `completed_at` is a
+    completion instant, and nothing records when a learner postponed."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+
+    updated = planning.planner().record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+    assert updated.status == POSTPONED
+    assert updated.completed_at is None
+
+
+def test_postponing_an_item_can_be_undone():
+    """A learner who postponed the wrong line must be able to put it back."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+    planner.record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+    reverted = planner.record_item_status(item.id, PlanItemStatusChange(status=PLANNED))
+
+    assert reverted.status == PLANNED
+
+
+def test_a_learner_may_move_between_any_two_of_the_four_statuses():
+    """Nothing is one-way and nothing has to be routed through `planned` first:
+    the four are four answers to one question, not a sequence."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+
+    walked = [
+        planner.record_item_status(item.id, PlanItemStatusChange(status=target)).status
+        for target in (POSTPONED, COMPLETED, POSTPONED, SKIPPED, POSTPONED, PLANNED)
+    ]
+
+    assert walked == [POSTPONED, COMPLETED, POSTPONED, SKIPPED, POSTPONED, PLANNED]
+
+
+def test_postponing_a_completed_item_clears_the_completion_time():
+    """The two travel together: only a `completed` item carries an instant."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+    planner.record_item_status(item.id, PlanItemStatusChange(status=COMPLETED))
+
+    postponed = planner.record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+    assert postponed.status == POSTPONED
+    assert postponed.completed_at is None
+
+
+def test_postponing_the_same_item_twice_writes_nothing_the_second_time():
+    """A repeated form submission must not fail on its second attempt."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+    planner.record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+    again = planner.record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+    assert again.status == POSTPONED
+
+
+def test_postponing_one_item_moves_no_other_item():
+    """The same topic sits on the roadmap and in the week. Postponing the week's
+    session says that session is not happening yet, and decides nothing else."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    session = weekly(generated).items[0]
+    planner = planning.planner()
+
+    planner.record_item_status(session.id, PlanItemStatusChange(status=POSTPONED))
+
+    roadmap_items = planner.read(roadmap(generated).id).items
+    assert [item.status for item in roadmap_items] == [PLANNED, PLANNED, PLANNED]
+
+
+def test_postponing_an_item_records_no_learning_stage():
+    """Rule 4 of the domain model: deferring a session says nothing about how
+    well the learner understands the topic."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+
+    planning.planner().record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+    assert planning.progress.records == []
+
+
+def test_postponing_an_item_re_dates_nothing():
+    """Postponing names no day. The work moves onto the plan the learner's next
+    adaptation writes, so the item they postponed keeps the date it had."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    week = weekly(generated)
+    item = week.items[0]
+    planner = planning.planner()
+
+    planner.record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+    stored = planner.read(week.id)
+    assert stored.period_end == week.period_end
+    postponed = next(line for line in stored.items if line.id == item.id)
+    assert postponed.scheduled_for == item.scheduled_for
+    assert postponed.priority == item.priority
+    assert postponed.recommendation_reason == item.recommendation_reason
+
+
+def test_postponing_an_item_re_plans_nothing():
+    """The learner asks for adaptation; postponing an item is not asking."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    item = weekly(generated).items[0]
+    planner = planning.planner()
+
+    planner.record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+    plans = planner.list_study_plans(filters=StudyPlanFilters(), limit=25, offset=0)
+    assert [plan.id for plan in plans.plans] == [plan.id for plan in generated.plans][::-1]
+    assert {plan.status for plan in plans.plans} == {ACTIVE}
+
+
+def test_postponing_an_undated_roadmap_item_is_accepted():
+    """A plan item is a plan item. The endpoint knows nothing about dated versus
+    undated items, and a roadmap postponement reads as "not this stretch"."""
+    planning = Planning()
+    generated = planning.generate()
+    item = roadmap(generated).items[0]
+
+    updated = planning.planner().record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+    assert updated.status == POSTPONED
+    assert updated.scheduled_for is None
+
+
+def test_postponing_an_item_on_a_superseded_plan_is_refused():
+    """The rule is the plan's status, not the status asked for. The learner is
+    not stranded: the topic is planned again on the plan that replaced it."""
+    planning = Planning(availability={"thursday": 120})
+    first = planning.generate()
+    item = weekly(first).items[0]
+    planning.generate()
+
+    with pytest.raises(PlanItemNotOnActivePlanError):
+        planning.planner().record_item_status(item.id, PlanItemStatusChange(status=POSTPONED))
+
+
 # -- refusals ---------------------------------------------------------------
 
 
@@ -892,6 +1057,11 @@ def complete(planning, item_id):
 def skip(planning, item_id):
     """Mark one item skipped through the use case, as PLN-004 does."""
     planning.planner().record_item_status(item_id, PlanItemStatusChange(status=SKIPPED))
+
+
+def postpone(planning, item_id):
+    """Mark one item postponed through the use case, as PLN-004 does."""
+    planning.planner().record_item_status(item_id, PlanItemStatusChange(status=POSTPONED))
 
 
 def test_adapting_supersedes_the_active_plans_and_writes_a_new_pair():
@@ -1012,6 +1182,53 @@ def test_an_undated_roadmap_item_is_never_postponed():
 
     roadmap_items = {item.id for item in roadmap(generated).items}
     assert not roadmap_items & set(adapted.postponed_plan_item_ids)
+
+
+def test_an_item_the_learner_postponed_is_left_exactly_as_they_marked_it():
+    """Adaptation does not re-mark what the learner already said, even once the
+    day has passed: the status is theirs, and re-writing it would claim
+    adaptation carried forward something it merely left alone."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    deferred = weekly(generated).items[0]
+    postpone(planning, deferred.id)
+    planning.clock.instant = datetime(2026, 8, 20, 9, 0, tzinfo=UTC)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert deferred.id not in adapted.postponed_plan_item_ids
+    assert planning.plans.find_plan_item(deferred.id).status == POSTPONED
+
+
+def test_a_topic_the_learner_postponed_is_planned_again():
+    """Postponing settles the item, not the topic. Only a completed topic is
+    left out of the plans that follow."""
+    planning = Planning(availability={"thursday": 120})
+    generated = planning.generate()
+    deferred = weekly(generated).items[0]
+    postpone(planning, deferred.id)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert deferred.topic.id in {item.topic.id for item in roadmap(adapted).items}
+    assert adapted.completed_topic_count == 0
+    assert adapted.remaining_topic_count == len(roadmap(generated).items)
+
+
+def test_a_learner_s_postponement_is_not_reported_as_work_adaptation_carried_forward():
+    """`postponed_plan_item_ids` names what adaptation itself set aside, so the
+    sentence a learner reads describes what it did rather than what they did."""
+    planning = Planning(availability={"thursday": 120, "friday": 120})
+    generated = planning.generate()
+    week = weekly(generated)
+    deferred, outstanding = week.items[0], week.items[-1]
+    postpone(planning, deferred.id)
+    planning.clock.instant = datetime(2026, 8, 20, 9, 0, tzinfo=UTC)
+
+    adapted = planning.planner().adapt(planning.goal.id)
+
+    assert deferred.id not in adapted.postponed_plan_item_ids
+    assert outstanding.id in adapted.postponed_plan_item_ids
 
 
 def test_adapting_keeps_the_superseded_plan_readable():

@@ -1,11 +1,11 @@
 """Plan item endpoint (PLN-004).
 
-It serves the whole of FR-004's first acceptance criterion — a learner marking a
-planned task completed, skipped, or postponed — between itself and PLN-005. This
-route takes the two statements a learner makes about their own work, `completed`
-and `skipped`, and the `planned` that takes either back. `postponed` is the one
-adaptation writes as it sets a plan aside, so it is refused here rather than
-requested.
+It serves the whole of FR-004's first acceptance criterion on its own: a learner
+marking a planned task `completed`, `skipped`, or `postponed`, and the `planned`
+that takes any of the three back. Adaptation still writes `postponed` too, for
+work whose day passed with nothing said about it, so the status has two writers
+saying the same thing about a line — one because the learner asked, one because a
+day went by.
 
 The route sits at its own prefix rather than under `/study-plans`, as
 docs/api/endpoints.md catalogues it: an item is addressed by its own identifier,
@@ -59,7 +59,7 @@ StudyPlanner = Annotated[ManageStudyPlans, Depends(provide_study_plans)]
 
 @router.patch(
     "/{plan_item_id}",
-    summary="Mark a plan item completed or skipped, or return it to planned",
+    summary="Mark a plan item completed, skipped, or postponed, or return it to planned",
     response_model=PlanItemResponse,
     responses=_NOT_FOUND_RESPONSE | _CONFLICT_RESPONSE,
 )
@@ -69,18 +69,22 @@ def update_plan_item(
     """Record what became of one item's planned work.
 
     Marking an item `completed` says its planned work happened. Marking it
-    `skipped` says the learner decided it would not. Neither is a claim that the
-    topic is understood: a learning stage is the learner's own statement and is
-    recorded separately, through PRG-004.
+    `skipped` says the learner decided it would not. Marking it `postponed` says
+    they decided it would not yet. None is a claim that the topic is understood:
+    a learning stage is the learner's own statement and is recorded separately,
+    through PRG-004.
 
     Every move is reversible. A learner who marked the wrong line can send
     `planned` to put it back, which clears the completion time, and may move
-    straight between `completed` and `skipped`. Nothing here treats a statement
+    straight between any two of the other three. Nothing here treats a statement
     about work as a verdict, so nothing here is one-way.
 
-    Skipping settles the item, not the topic. The item stays skipped, adaptation
-    will not carry it forward as `postponed`, and the topic is planned again on
-    the plan that replaces this one.
+    Skipping and postponing settle the item, not the topic. The item stays as the
+    learner marked it, adaptation will not write `postponed` over their statement,
+    and the topic is planned again on the plan that replaces this one.
+
+    Postponing takes no date. The work moves to the plan the learner's next
+    adaptation writes, which is where PLN-005 already carries postponed work.
 
     Sending the status an item already holds is accepted and writes nothing, so a
     repeated submission does not fail on its second attempt.

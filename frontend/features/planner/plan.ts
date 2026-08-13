@@ -14,7 +14,11 @@
  */
 
 import type { PlanItem, PlanItemStatus, StudyPlan } from "@/types/study-plan";
-import { PLAN_ITEM_ACTION_LABELS, PLAN_ITEM_SETTLED_LABELS } from "@/types/study-plan";
+import {
+  PLAN_ITEM_ACTION_LABELS,
+  PLAN_ITEM_SETTLED_LABELS,
+  isSettledStatus,
+} from "@/types/study-plan";
 
 /** One day of a weekly plan, with the work placed on it. */
 export interface PlannedDay {
@@ -100,14 +104,13 @@ export function planOfType(plans: StudyPlan[], planType: string): StudyPlan | nu
  * A missing class is a stylesheet that no longer defines it, which should leave
  * the item unstyled rather than render the word `undefined` into an attribute.
  *
- * `completed` and `skipped` are marked, because a learner writes both. The mark
- * never carries the meaning on its own: `describeSettledStatus` puts it in words
- * beside the item (docs/development/coding-standards.md). `postponed` is not
- * marked — it appears only on a superseded plan, which no screen renders.
+ * All three settled statuses are marked, because a learner writes all three. The
+ * mark never carries the meaning on its own: `describeSettledStatus` puts it in
+ * words beside the item (docs/development/coding-standards.md).
  */
 export function itemClassName(item: PlanItem, styles: Readonly<Record<string, string>>): string {
   const base = styles.item ?? "";
-  if (item.status !== "completed" && item.status !== "skipped") {
+  if (!isSettledStatus(item.status)) {
     return base;
   }
   return `${base} ${styles[item.status] ?? ""}`.trim();

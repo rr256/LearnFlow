@@ -96,10 +96,16 @@ describe("readPlanItemSubmission", () => {
     expect(read).toEqual({ submission: { planItemId: "item-1", status: "skipped" } });
   });
 
-  it.each(["postponed", "finished"])("refuses %s, which the API does not accept", (status) => {
+  it("reads a postponement", () => {
+    const read = readPlanItemSubmission(form({ plan_item_id: "item-1", status: "postponed" }));
+
+    expect(read).toEqual({ submission: { planItemId: "item-1", status: "postponed" } });
+  });
+
+  it.each(["finished", "abandoned"])("refuses %s, which the API does not accept", (status) => {
     /*
-     * `postponed` is a stored value only adaptation writes. Sending it would earn
-     * a 422 the learner cannot act on, so it is caught before the round trip.
+     * Every status the column holds is now askable, so a refusal here is a value
+     * the API would answer 422 to as well; it is caught before the round trip.
      */
     const read = readPlanItemSubmission(form({ plan_item_id: "item-1", status }));
 

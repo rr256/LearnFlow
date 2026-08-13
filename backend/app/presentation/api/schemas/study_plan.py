@@ -258,21 +258,24 @@ class GenerateStudyPlanResponse(BaseModel):
 
 
 class UpdatePlanItemRequest(BaseModel):
-    """A learner marking one plan item completed, skipped, or planned (PLN-004).
+    """A learner saying what became of one plan item (PLN-004).
 
     Only the status is accepted. `completed_at` is the server's record of when
     the learner said so, so taking one from a client would let a caller backdate
     work; an unknown field is rejected rather than ignored, as generation
-    rejects one. Skipping takes no reason: nothing stores one, and asking for one
-    would invite the product to form a view about the answer.
+    rejects one. Postponing takes no date — the work moves to the plan the next
+    adaptation writes, not to a day named here. Neither skipping nor postponing
+    takes a reason: nothing stores one, and asking for one would invite the
+    product to form a view about the answer.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     status: str = Field(
         description=(
-            f"One of: {', '.join(PLAN_ITEM_STATUS_CHANGES)}. `postponed` is written when a "
-            "learner asks for their plan to be adapted (PLN-005), not requested here."
+            f"One of: {', '.join(PLAN_ITEM_STATUS_CHANGES)}. Every one is reversible while "
+            "the item's plan is active. `postponed` is also written by adaptation (PLN-005) "
+            "for work whose day passed with nothing said about it."
         )
     )
 
