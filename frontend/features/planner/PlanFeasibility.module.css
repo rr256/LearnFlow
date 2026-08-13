@@ -1,0 +1,67 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+/*
+ * The verdict is carried in words directly above these, so the edge colour never
+ * carries the meaning on its own — the rule the plan panels follow for a settled
+ * item, and the reason nothing here depends on colour being seen.
+ */
+.sufficient {
+  border-left-color: var(--colour-accent);
+}
+
+.insufficient {
+  border-left-color: var(--colour-text-muted);
+}
+
+.unknown {
+  border-left-style: dashed;
+  border-left-color: var(--colour-text-muted);
+}
+
+.verdict {
+  margin: 0;
+  font-weight: 600;
+}
+
+.reason {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.next {
+  margin: var(--space-3) 0 0;
+  font-size: 0.9375rem;
+}
+
+/*
+ * Each figure stands on its own, labelled. They are deliberately not laid out as
+ * a fraction or a bar: a denominator invites a comparison, and a bar is a
+ * percentage drawn rather than written (docs/domain/terminology.md).
+ */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+
+.figure dt {
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.figure dd {
+  margin: var(--space-1) 0 0;
+  font-size: 1.0625rem;
+  font-variant-numeric: tabular-nums;
+}

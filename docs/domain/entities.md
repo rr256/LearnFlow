@@ -129,7 +129,7 @@ A day is identified by its name, never by an index, so no numbering convention e
 
 A slot of zero minutes is a day the learner deliberately keeps free. A day with no slot is one they have not set — the same distinction learner topic progress draws between an explicit *Not explored* and a topic with no record.
 
-Availability is a planning input. Nothing totals it, compares one week with another, or judges whether a week is enough; a study plan is where that reasoning belongs.
+Availability is a planning input. Nothing compares one week with another; totalling it and judging whether it is enough belong to the planner's feasibility rule ([ADR-027](../adr/ADR-027-plan-feasibility.md)) and to nothing else; a study plan is where that reasoning belongs.
 
 ### Planning Preference
 

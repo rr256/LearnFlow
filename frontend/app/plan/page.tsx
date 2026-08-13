@@ -5,12 +5,19 @@ import styles from "@/app/plan/page.module.css";
 import { Notice } from "@/components/Notice";
 import { AdaptPlanForm } from "@/features/planner/AdaptPlanForm";
 import { GeneratePlanForm } from "@/features/planner/GeneratePlanForm";
+import { PlanFeasibility } from "@/features/planner/PlanFeasibility";
 import { PlanWeek } from "@/features/planner/PlanWeek";
 import { StudyRoadmap } from "@/features/planner/StudyRoadmap";
 import { planOfType } from "@/features/planner/plan";
-import { ApiError, listStudyGoals, listStudyPlans, readStudyPlan } from "@/lib/api-client";
+import {
+  ApiError,
+  listStudyGoals,
+  listStudyPlans,
+  readPlanFeasibility,
+  readStudyPlan,
+} from "@/lib/api-client";
 import type { StudyGoal } from "@/types/study-goal";
-import type { StudyPlan } from "@/types/study-plan";
+import type { PlanFeasibility as PlanFeasibilityReading, StudyPlan } from "@/types/study-plan";
 
 /**
  * Rendered per request rather than prerendered.
@@ -24,6 +31,8 @@ interface PlanData {
   goal: StudyGoal | null;
   roadmap: StudyPlan | null;
   week: StudyPlan | null;
+  /** Whether the saved week reaches the horizon, or null when unavailable. */
+  feasibility: PlanFeasibilityReading | null;
 }
 
 /**
@@ -31,7 +40,9 @@ interface PlanData {
  *
  * PLN-002 says which plans are active without their items — a page of plans each
  * carrying every item would be an unbounded payload — so the two that exist are
- * read individually with PLN-003. They are independent, so they run together.
+ * read individually with PLN-003. They are independent, so they run together,
+ * and PLN-006 joins them: it reads records rather than writing any, so it costs
+ * a round trip and changes nothing.
  */
 async function readPlanData(): Promise<PlanData> {
   const goals = await listStudyGoals();
@@ -40,17 +51,18 @@ async function readPlanData(): Promise<PlanData> {
   // all the learner has.
   const goal = goals.find((candidate) => candidate.status === "active") ?? goals[0] ?? null;
   if (!goal) {
-    return { goal: null, roadmap: null, week: null };
+    return { goal: null, roadmap: null, week: null, feasibility: null };
   }
 
   const active = await listStudyPlans({ studyGoalId: goal.id, status: "active" });
   const summaries = { roadmap: planOfType(active, "roadmap"), week: planOfType(active, "weekly") };
-  const [roadmap, week] = await Promise.all([
+  const [roadmap, week, feasibility] = await Promise.all([
     summaries.roadmap ? readStudyPlan(summaries.roadmap.id) : Promise.resolve(null),
     summaries.week ? readStudyPlan(summaries.week.id) : Promise.resolve(null),
+    readPlanFeasibility(goal.id),
   ]);
 
-  return { goal, roadmap, week };
+  return { goal, roadmap, week, feasibility };
 }
 
 /**
@@ -122,6 +134,12 @@ async function StudyPlanSection() {
             The backend refuses the same case with a 409.
           */}
           <AdaptPlanForm studyGoalId={data.goal.id} />
+          {/*
+            Above the week, because it is about the whole horizon rather than
+            any one item, and because a learner deciding whether to adapt is
+            owed it before they read the days. It writes nothing.
+          */}
+          <PlanFeasibility reading={data.feasibility} />
           <PlanWeek plan={data.week} />
           <StudyRoadmap plan={data.roadmap} />
         </>
@@ -148,7 +166,8 @@ export default function PlanPage() {
         Built from your curriculum, the date you are working toward, the study time you saved, and
         how you said you want to study. Mark each item completed as you go, and change your mind
         whenever you like. When you are ready, update the plan to rebuild it around where you have
-        got to — nothing moves until you ask.
+        got to — nothing moves until you ask. It also says whether the study time you saved covers
+        what is left before the date you are working toward.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading your study plan…</p>}>

@@ -122,6 +122,38 @@ week at a time, so seven days is the longest span the stored input describes
 without repeating itself.
 """
 
+FEASIBILITY_VERDICTS: tuple[str, ...] = ("sufficient", "insufficient", "unknown")
+"""What PLN-006 can conclude about a saved week reaching a goal's horizon.
+
+Not a stored value: no column holds these, and nothing is written when one is
+computed. They are named here beside the stored vocabularies because they are a
+controlled set the API contract commits to, and a client switching on them is
+entitled to the same guarantee.
+
+`unknown` is a first-class answer rather than a failure. A goal with no horizon
+and a learner who has saved no availability are both questions the product cannot
+answer honestly, and inventing a verdict for either would be worse than saying so.
+"""
+
+SUFFICIENT = "sufficient"
+INSUFFICIENT = "insufficient"
+UNKNOWN = "unknown"
+
+NO_HORIZON = "no_horizon"
+NO_AVAILABILITY_SAVED = "no_availability_saved"
+
+UNKNOWN_REASONS: tuple[str, ...] = (NO_HORIZON, NO_AVAILABILITY_SAVED)
+"""Why a feasibility question could not be answered, when it could not.
+
+Two different gaps, kept apart because they ask the learner for different things:
+a goal aiming at nothing needs a date, and a goal with no saved week needs a week.
+Collapsing them into one `unknown` would leave the screen guessing which to say.
+
+A week the learner saved and deliberately kept free is **not** here. That is an
+answer -- zero minutes -- and reporting it as unknown would erase the distinction
+[ADR-018](../../../docs/adr/ADR-018-weekly-availability-slots.md) exists to keep.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class PlanItemTopic:
@@ -311,3 +343,69 @@ class AdaptedStudyPlans:
     postponed_plan_item_ids: tuple[uuid.UUID, ...] = field(default=())
     completed_topic_count: int = 0
     remaining_topic_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class PlanFeasibility:
+    """Whether the learner's saved week reaches their goal's horizon (PLN-006).
+
+    This answers
+    [FR-004](../../../docs/requirements/functional.md#fr-004-plan-adaptation)'s
+    third acceptance criterion — highlighting meaningful trade-offs when time is
+    insufficient. **It is a reading and writes nothing**: no plan, no
+    availability, no preference, and no item status moves because this was asked.
+
+    **Every number here is a count or a duration.** There is deliberately no
+    percentage, no ratio, and no proportion: docs/domain/terminology.md rules that
+    a denominator invites a comparison and a comparison turns a description of
+    work into a measurement of a person. `coverable_topic_count` and
+    `remaining_topic_count` are two counts a caller may state side by side; they
+    are never to be rendered as one over the other.
+
+    Every field describes **the plan and the time**, never the learner. A week
+    that cannot reach a horizon is a fact about arithmetic, not a verdict on
+    effort.
+
+    Attributes:
+        study_goal_id: The goal assessed.
+        assessed_on: The learner's own date the assessment was made for, from
+            their stored timezone. The answer depends on it, so it is reported
+            rather than left implicit.
+        verdict: One of `FEASIBILITY_VERDICTS`.
+        unknown_reason: Why no verdict could be reached, from `UNKNOWN_REASONS`,
+            and `None` whenever the verdict is not `unknown`.
+        horizon_ends_on: The date the work has to be done by — the earlier of the
+            examination window's first sitting day and the goal's target date
+            (ADR-020). `None` when the goal aims at neither.
+        remaining_topic_count: Topics still to be worked through on the active
+            roadmap. A completed topic is not one; a skipped or postponed one is,
+            because the next plan places its work again.
+        session_minutes: How long one session was taken to run.
+        session_minutes_chosen_by_planner: Whether that length is the planner's
+            own choice because the learner has set no preference. Reported so the
+            screen can say whose decision it was, which is ADR-019's distinction
+            between an unset preference and a default.
+        study_days: Calendar days from `assessed_on` to the horizon, inclusive.
+        available_minutes: What the saved week offers across those days.
+        required_minutes: One session for each remaining topic.
+        shortfall_minutes: How much more time the work needs than the week
+            offers; zero when the week is enough, and never negative.
+        coverable_topic_count: How many remaining topics the available time holds
+            a whole session for.
+        reason: The sentence the learner reads, composed where the numbers are.
+    """
+
+    study_goal_id: uuid.UUID
+    assessed_on: date
+    verdict: str
+    reason: str
+    unknown_reason: str | None = None
+    horizon_ends_on: date | None = None
+    remaining_topic_count: int = 0
+    session_minutes: int = DEFAULT_SESSION_MINUTES
+    session_minutes_chosen_by_planner: bool = True
+    study_days: int = 0
+    available_minutes: int = 0
+    required_minutes: int = 0
+    shortfall_minutes: int = 0
+    coverable_topic_count: int = 0

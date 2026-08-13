@@ -1,10 +1,11 @@
 """The deterministic rules that turn a curriculum and a week into planned work.
 
-Two rules live here, and both are pure functions over plain values: which order
-the topics are worked through, and which day each session lands on. They are
-domain rules rather than application plumbing because they are the part a learner
-would recognise as *the plan* — everything around them is reading records and
-writing them back.
+Four rules live here, and all of them are pure functions over plain values: which
+order the topics are worked through, which day each session lands on, what makes
+an item overdue, and whether a saved week holds enough time to reach the goal's
+horizon. They are domain rules rather than application plumbing because they are
+the part a learner would recognise as *the plan* — everything around them is
+reading records and writing them back.
 
 Being pure is the point. FR-003 requires a plan the learner can see the reasons
 for, and docs/ai/learnflow-agents.md requires the planner to work with "core
@@ -16,7 +17,9 @@ a clock or a database cannot.
 Nothing here knows about days of the week, learning stages, examination windows,
 or storage. A capacity arrives as a calendar date and a number of minutes, so the
 seven day *names* — which belong to the availability contract, not to arithmetic
-— stay in the application layer that owns them (ADR-018).
+— stay in the application layer that owns them (ADR-018). The one rule that has
+to reason about a repeating week takes it as seven minute counts in
+`date.weekday()` order and says so, which keeps the naming decision outside.
 """
 
 import heapq
@@ -308,3 +311,145 @@ def select_overdue(items: Iterable[DatedItem], today: date) -> tuple[uuid.UUID, 
         for item in items
         if not item.is_settled and item.scheduled_for is not None and item.scheduled_for < today
     )
+
+
+DAYS_IN_WEEK = 7
+"""How many minute counts a repeating week is described by.
+
+`assess_horizon_coverage` takes exactly this many, in `date.weekday()` order —
+Monday first — because that is how Python indexes the type it is already given.
+Which stored day *name* fills which position is the application's decision, and
+[ADR-018](../../../docs/adr/ADR-018-weekly-availability-slots.md) keeps it there.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class HorizonCoverage:
+    """Whether a repeating week reaches a horizon, and by how much it misses.
+
+    Every field is a count or a duration, never a ratio, a percentage, or a
+    proportion. That is the line docs/domain/terminology.md draws: a denominator
+    invites a comparison, and a comparison turns a description of work into a
+    measurement of a person. A caller that wants to say how much is covered says
+    it as two counts.
+
+    Attributes:
+        study_days: Calendar days from the start date to the horizon, inclusive.
+            Zero when the horizon has already passed.
+        available_minutes: What the saved week offers across those days.
+        required_minutes: One session for each topic still to be worked through.
+        shortfall_minutes: How much more time the work needs than the week
+            offers. Zero when the week is enough, never negative — a surplus is
+            reported by `is_sufficient` rather than as a negative shortfall,
+            because "twelve hours spare" is a different statement from "twelve
+            hours short" and a sign is a poor way to tell a learner which.
+        coverable_topics: How many of the remaining topics the available time
+            holds a whole session for. Never more than were asked about.
+        is_sufficient: Whether the available time meets or exceeds what the
+            remaining work needs.
+    """
+
+    study_days: int
+    available_minutes: int
+    required_minutes: int
+    shortfall_minutes: int
+    coverable_topics: int
+    is_sufficient: bool
+
+
+def assess_horizon_coverage(
+    *,
+    remaining_topics: int,
+    session_minutes: int,
+    weekly_minutes: Sequence[int],
+    starts_on: date,
+    ends_on: date,
+) -> HorizonCoverage:
+    """Whether the saved week holds enough time for the work left before a date.
+
+    This is the rule behind
+    [FR-004](../../../docs/requirements/functional.md#fr-004-plan-adaptation)'s
+    third acceptance criterion — highlighting meaningful trade-offs when time is
+    insufficient. It is a domain rule for the same reason the ordering and
+    placement rules are: it is arithmetic a learner would recognise as part of
+    their plan, it depends on nothing but its arguments, and
+    docs/domain/terminology.md says explicitly that totalling available time is
+    planning arithmetic the *planner* should perform rather than a screen.
+
+    **The whole span is counted by weekday rather than walked day by day.** A
+    goal aimed years out would otherwise mean an unbounded loop to answer one
+    question; counting how often each weekday falls in the span is exact, is
+    seven multiplications, and cannot drift from the day-by-day answer because it
+    is the same sum in a different order.
+
+    Three boundaries are decided here rather than left to be discovered:
+
+    - **Both ends are inclusive.** Today can still be studied, and so can the day
+      the horizon names — an examination window's first sitting day is when the
+      studying has to be *done by*, and declaring today already lost would be the
+      same error `select_overdue` refuses when it rules that today is not behind.
+    - **A horizon that has passed offers no days**, rather than negative ones.
+      The work is then short by all of what it needs, which is true and sayable.
+    - **A partial session covers no topic.** Time enough for half a session is
+      not a topic covered, so `coverable_topics` floors rather than rounds. A
+      plan that claimed a topic it had forty minutes for would be the optimism
+      this rule exists to replace.
+
+    Args:
+        remaining_topics: Topics still to be worked through. A completed topic is
+            not one of these; a skipped or postponed one is, because the next
+            plan places its work again (ADR-022, ADR-024, ADR-025).
+        session_minutes: How long one session runs — the learner's preference, or
+            the length the caller chose on their behalf and names as its own.
+            Must be positive.
+        weekly_minutes: Seven minute counts in `date.weekday()` order, Monday
+            first. A day the learner never set and a day they deliberately kept
+            free both arrive as zero: neither is a statement that they can study,
+            and keeping them distinct is the *caller's* business, because only it
+            knows which of the two happened.
+        starts_on: The first day that may be studied, normally the learner's own
+            today.
+        ends_on: The horizon — the date the work has to be done by.
+
+    Returns:
+        The coverage, as counts and durations only.
+
+    Raises:
+        ValueError: `session_minutes` is not positive, which would make
+            `coverable_topics` meaningless; `remaining_topics` is negative; or
+            `weekly_minutes` does not describe exactly seven days.
+    """
+    if session_minutes < MINIMUM_PLANNED_MINUTES:
+        raise ValueError("A session must be at least one minute long.")
+    if remaining_topics < 0:
+        raise ValueError("A plan cannot have a negative number of topics remaining.")
+    if len(weekly_minutes) != DAYS_IN_WEEK:
+        raise ValueError(f"A week must be described by exactly {DAYS_IN_WEEK} minute counts.")
+
+    study_days = max(0, ends_on.toordinal() - starts_on.toordinal() + 1)
+    available = sum(
+        minutes * _weekday_occurrences(starts_on, study_days, weekday)
+        for weekday, minutes in enumerate(weekly_minutes)
+    )
+    required = remaining_topics * session_minutes
+
+    return HorizonCoverage(
+        study_days=study_days,
+        available_minutes=available,
+        required_minutes=required,
+        shortfall_minutes=max(0, required - available),
+        coverable_topics=min(remaining_topics, available // session_minutes),
+        is_sufficient=available >= required,
+    )
+
+
+def _weekday_occurrences(starts_on: date, study_days: int, weekday: int) -> int:
+    """How often one weekday falls in a span of consecutive days.
+
+    Every weekday occurs once per whole week the span holds. The days left over
+    run forward from `starts_on`, so a weekday is owed one more when it falls
+    inside that remainder.
+    """
+    whole_weeks, remainder = divmod(study_days, DAYS_IN_WEEK)
+    offset = (weekday - starts_on.weekday()) % DAYS_IN_WEEK
+    return whole_weeks + (1 if offset < remainder else 0)

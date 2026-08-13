@@ -17,6 +17,7 @@ related:
   - ../adr/ADR-024-plan-item-skipping.md
   - ../adr/ADR-025-learner-postponement.md
   - ../adr/ADR-026-monthly-study-view.md
+  - ../adr/ADR-027-plan-feasibility.md
   - ../requirements/functional.md
   - ../database/schema.md
 ---
@@ -112,7 +113,7 @@ A goal has at most seven — one per day — and the set of them is the learner'
 
 A day is identified by name rather than by an index, so no numbering convention exists to be read wrongly. A slot records a quantity of minutes, not a sitting between two clock times; nothing in the model has a time of day. Zero minutes is a day deliberately kept free, which is a different statement from a day with no slot at all.
 
-Availability is a planning input and nothing more. Nothing totals a week, ranks one day above another, or judges whether a week is enough — that reasoning belongs to a study plan, which is where the trade-offs can be shown.
+Availability is a planning input and nothing more. Nothing ranks one day above another. Totalling a week and judging whether it is enough belong to the planner, which is where the trade-offs can be shown: since [ADR-027](../adr/ADR-027-plan-feasibility.md) a domain rule does exactly that, reporting whether the saved week covers the work left before the goal's horizon. Nothing else adds a week up.
 
 ### Planning Preference
 
@@ -297,6 +298,7 @@ This document intentionally does not define database fields, table names, API en
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the adaptation that rebuilds a plan around completed and missed work, without writing a learning stage
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the daily reading of the weekly plan, which is not the `daily` plan level above
 - [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the monthly reading, which is not the `monthly` plan level above
+- [ADR-027: Report whether the saved week reaches the horizon, as a read-only planning rule](../adr/ADR-027-plan-feasibility.md) — the one place a week is totalled, and the judgement this section defers to the planner
 - [Functional requirements](../requirements/functional.md)
 - [Domain entities](entities.md)
 - [Terminology](terminology.md)

@@ -20,7 +20,10 @@ own path, because it addresses one item rather than a plan.
 
 PLN-005 is served here but sits under a **goal-scoped** path, on the second router
 below: adaptation supersedes and rewrites every active plan of a goal, so a path
-naming one plan would misdescribe what moves.
+naming one plan would misdescribe what moves. **PLN-006 sits there too**, for the
+same reason and one more: it reads the goal's horizon, its saved week, and its
+preferences alongside the active plan, so the goal is what is being asked about.
+It is the only route here that writes nothing at all.
 """
 
 import uuid
@@ -54,6 +57,8 @@ from app.presentation.api.schemas.study_plan import (
     GeneratedStudyPlansSchema,
     GenerateStudyPlanRequest,
     GenerateStudyPlanResponse,
+    PlanFeasibilityResponse,
+    PlanFeasibilitySchema,
     StudyPlanCollectionResponse,
     StudyPlanResponse,
     StudyPlanSchema,
@@ -236,3 +241,42 @@ def adapt_study_plan(study_goal_id: uuid.UUID, planner: StudyPlanner) -> AdaptSt
     ) as error:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
     return AdaptStudyPlanResponse(data=AdaptedStudyPlansSchema.of(adapted))
+
+
+@goal_router.get(
+    "/{study_goal_id}/plan-feasibility",
+    summary="Report whether the saved study week reaches the goal's horizon",
+    response_model=PlanFeasibilityResponse,
+    responses=_NOT_FOUND_RESPONSE | _CONFLICT_RESPONSE,
+)
+def read_plan_feasibility(
+    study_goal_id: uuid.UUID, planner: StudyPlanner
+) -> PlanFeasibilityResponse:
+    """Say whether the learner's saved week can cover the work left before their date.
+
+    **A reading. Nothing is written** — no plan, no availability, no preference,
+    and no plan item status moves because this was asked, and nothing adapts. A
+    learner may ask as often as they like, which is what keeps the answer current
+    as they edit their week.
+
+    The verdict is `sufficient`, `insufficient`, or `unknown`. **`unknown` is an
+    answer**, with `unknown_reason` saying which gap caused it: a goal aiming at no
+    date needs one, and a goal with no saved week needs a week. A week the learner
+    saved and deliberately kept free is neither — that is zero minutes, which is a
+    real answer.
+
+    The arithmetic is deterministic and involves no AI provider: one session for
+    each remaining topic, against the minutes the saved week offers on every day
+    from today to the horizon, both ends included. Everything is reported as
+    **counts and durations**; there is deliberately no percentage, ratio, or
+    proportion, and no number here describes the learner.
+
+    PLN-006. Serves FR-004's third acceptance criterion.
+    """
+    try:
+        feasibility = planner.assess_feasibility(study_goal_id)
+    except StudyGoalNotFoundError as error:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except (LearnerNotSetUpError, AmbiguousLocalLearnerError) as error:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
+    return PlanFeasibilityResponse(data=PlanFeasibilitySchema.of(feasibility))

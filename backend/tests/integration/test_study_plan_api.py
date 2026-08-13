@@ -603,3 +603,140 @@ def test_a_refused_adaptation_writes_nothing(client: TestClient, goal: dict, ses
     assert response.status_code == 404
     assert session.scalar(select(func.count()).select_from(StudyPlan)) == 0
     assert session.scalar(select(func.count()).select_from(PlanItem)) == 0
+
+
+# -- PLN-006: whether the saved week reaches the horizon ---------------------
+#
+# The part a fake cannot prove: that the feasibility reading is taken over the
+# rows the seeds actually created -- 60 trackable topics of real syllabus -- and
+# that asking leaves every one of them exactly as it was.
+#
+# The fixture goal saves 180 minutes on Monday, 240 on Saturday, and deliberately
+# keeps Sunday free, with 90-minute sessions and a target date of 2027-02-07.
+
+
+def feasibility(client: TestClient, goal: dict):
+    return client.get(f"{GOALS}/{goal['id']}/plan-feasibility")
+
+
+def test_feasibility_is_assessed_over_the_seeded_curriculum(client: TestClient, goal: dict):
+    generate(client, goal)
+
+    data = feasibility(client, goal).json()["data"]
+
+    assert data["remaining_topic_count"] == 60
+    assert data["session_minutes"] == 90
+    assert data["session_minutes_chosen_by_planner"] is False
+    assert data["required_minutes"] == 60 * 90
+
+
+def test_feasibility_uses_the_saved_week_and_the_goals_horizon(client: TestClient, goal: dict):
+    generate(client, goal)
+
+    data = feasibility(client, goal).json()["data"]
+
+    assert data["horizon_ends_on"] == "2027-02-07"
+    assert data["study_days"] > 0
+    assert data["verdict"] in {"sufficient", "insufficient"}
+    assert data["unknown_reason"] is None
+    # 180 + 240 a week, and Sunday kept free contributes nothing.
+    assert data["available_minutes"] > 0
+
+
+def test_a_completed_topic_stops_counting_toward_the_work_remaining(client: TestClient, goal: dict):
+    generate(client, goal)
+    before = feasibility(client, goal).json()["data"]["remaining_topic_count"]
+    item = first_weekly_item(client, goal)
+    assert client.patch(f"{ITEMS}/{item['id']}", json={"status": "completed"}).status_code == 200
+
+    after = feasibility(client, goal).json()["data"]["remaining_topic_count"]
+
+    assert after == before - 1
+
+
+def test_a_skipped_topic_still_counts_toward_the_work_remaining(client: TestClient, goal: dict):
+    """A skip settles the item, not the topic: the next plan places it again."""
+    generate(client, goal)
+    before = feasibility(client, goal).json()["data"]["remaining_topic_count"]
+    item = first_weekly_item(client, goal)
+    assert client.patch(f"{ITEMS}/{item['id']}", json={"status": "skipped"}).status_code == 200
+
+    assert feasibility(client, goal).json()["data"]["remaining_topic_count"] == before
+
+
+def test_asking_writes_no_row_at_all(client: TestClient, goal: dict, session: Session):
+    """The read-only guarantee, against the real tables."""
+    generate(client, goal)
+    plans_before = session.scalar(select(func.count()).select_from(StudyPlan))
+    items_before = session.scalar(select(func.count()).select_from(PlanItem))
+    statuses_before = sorted(
+        (str(item.id), item.status) for item in session.scalars(select(PlanItem)).all()
+    )
+
+    feasibility(client, goal)
+    feasibility(client, goal)
+    session.expire_all()
+
+    assert session.scalar(select(func.count()).select_from(StudyPlan)) == plans_before
+    assert session.scalar(select(func.count()).select_from(PlanItem)) == items_before
+    assert (
+        sorted((str(item.id), item.status) for item in session.scalars(select(PlanItem)).all())
+        == statuses_before
+    )
+
+
+def test_asking_before_any_plan_exists_is_answered_rather_than_refused(
+    client: TestClient, goal: dict, session: Session
+):
+    response = feasibility(client, goal)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["remaining_topic_count"] == 0
+    assert session.scalar(select(func.count()).select_from(StudyPlan)) == 0
+
+
+def test_a_goal_with_no_saved_week_reports_that_it_cannot_be_assessed(
+    client: TestClient, goal: dict
+):
+    generate(client, goal)
+    cleared = client.put(f"{GOALS}/{goal['id']}/availability", json={"slots": []})
+    assert cleared.status_code == 200, cleared.text
+
+    data = feasibility(client, goal).json()["data"]
+
+    assert data["verdict"] == "unknown"
+    assert data["unknown_reason"] == "no_availability_saved"
+
+
+def test_a_week_kept_entirely_free_is_an_answer_rather_than_unknown(client: TestClient, goal: dict):
+    """ADR-018's distinction survives the round trip through PostgreSQL."""
+    generate(client, goal)
+    saved = client.put(
+        f"{GOALS}/{goal['id']}/availability",
+        json={"slots": [{"day_of_week": "monday", "available_minutes": 0}]},
+    )
+    assert saved.status_code == 200, saved.text
+
+    data = feasibility(client, goal).json()["data"]
+
+    assert data["verdict"] == "insufficient"
+    assert data["unknown_reason"] is None
+    assert data["available_minutes"] == 0
+
+
+def test_feasibility_for_a_goal_that_is_not_stored_is_refused(
+    client: TestClient, goal: dict, session: Session
+):
+    """A learner exists, so an unknown goal is missing rather than a conflict."""
+    response = client.get(f"{GOALS}/{uuid.uuid4()}/plan-feasibility")
+
+    assert response.status_code == 404, response.text
+    assert session.scalar(select(func.count()).select_from(StudyPlan)) == 0
+
+
+def test_feasibility_before_a_learner_exists_is_a_conflict(client: TestClient, session: Session):
+    """The same refusal PLN-001 gives: there is no learner to own a plan."""
+    response = client.get(f"{GOALS}/{uuid.uuid4()}/plan-feasibility")
+
+    assert response.status_code == 409, response.text
+    assert session.scalar(select(func.count()).select_from(StudyPlan)) == 0

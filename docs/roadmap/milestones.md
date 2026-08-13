@@ -27,6 +27,7 @@ related:
   - ../adr/ADR-024-plan-item-skipping.md
   - ../adr/ADR-025-learner-postponement.md
   - ../adr/ADR-026-monthly-study-view.md
+  - ../adr/ADR-027-plan-feasibility.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -240,7 +241,11 @@ without retiring its topic. All four of `plan_items.status`'s values are written
 FR-004's verbs are learner actions**. A **monthly study view** has since joined the daily one at
 `/plan/month`, built the same way — by reading the roadmap and the week rather than generating a
 `monthly` plan — which meets **FR-003's second acceptance criterion in full**.
-What remains is saying whether a learner's week can reach their horizon, and revision.
+**Saying whether a learner's week can reach their horizon has since been delivered too**, over
+PLN-006 and a fourth domain rule, which closes FR-004 in full. What remains of this milestone is
+**revision**, which is unbuilt entirely; a generated `monthly` or `daily` **plan**, which keeps the
+plan-views item below open even though all four levels are now viewable; and the deterministic-tests
+item, which stays open for the revision half.
 
 ### Definition of Done
 
@@ -296,18 +301,26 @@ What remains is saying whether a learner's week can reach their horizon, and rev
   adapts on its own. It supersedes as generation does, uses the same ordering and placement rules,
   and needed **no migration**. Contracted by [ADR-022](../adr/ADR-022-plan-adaptation.md).
   What FR-004's third criterion asks for — reporting that the
-  learner's week cannot reach their horizon — is still not built, and is the item below.
+  learner's week cannot reach their horizon — has since been built, over PLN-006; see the
+  insufficient-time item below.
 - [ ] Revision records are generated, listed, and updateable by learner action. `revision_records`
   does not exist; nothing is built.
 - [x] Planning works with deterministic rules when Ollama is unavailable. No AI provider is involved
   at all: the same goal, curriculum, week, preferences, and date produce the same plan every time, and
   the two rules that decide it — topic order and session placement — are pure functions in
   `backend/app/domain/study_planning.py`.
-- [ ] Insufficient-time trade-offs are visible rather than hidden. Partly: a plan states what it was
-  built from, what the planner chose for itself, when no week could be scheduled, and — since PLN-005 —
-  how many topics remain and how much was carried forward. What it still does not say is whether the
-  saved week can reach the horizon at all. That is FR-004's third acceptance criterion and the last
-  part of it unbuilt; adaptation narrowed the gap without closing it.
+- [x] Insufficient-time trade-offs are visible rather than hidden. **Done**: PLN-006 reports whether
+  the study time the learner saved covers the work left before their horizon, and `/plan` shows the
+  verdict, the figures behind it, and — when time is short — how many topics that time does cover and
+  what the learner could change. The arithmetic is a **pure domain rule**, `assess_horizon_coverage`,
+  the fourth in `backend/app/domain/study_planning.py`: one session per remaining topic against the
+  minutes the saved week offers between today and the horizon, both ends included. **It is a live read
+  and writes nothing**, so the answer moves when the learner's week does. `unknown` is an answer, with
+  its reason naming whether a date or a week is missing; a week saved and deliberately kept free is
+  zero minutes rather than unknown. Everything is reported as **counts and durations, never a ratio**.
+  It needed **no migration**. That closes **FR-004's third acceptance criterion**, so **all three of
+  FR-004's criteria are now met**. Contracted by
+  [ADR-027](../adr/ADR-027-plan-feasibility.md).
 - [ ] Core planning/revision rules have deterministic tests. **Covered for planning**: unit tests over
   the domain rules with no database or clock, unit tests over the use case against fakes with a fixed
   clock, API tests over the real application factory, and PostgreSQL integration tests that generate a
@@ -375,6 +388,23 @@ What remains is saying whether a learner's week can reach their horizon, and rev
   backend code did. **The scriptless standalone-frontend run was performed** against a
   contract-shaped stub API with the server on `TZ=UTC`. Contracted by
   [ADR-026](../adr/ADR-026-monthly-study-view.md).
+
+  **Plan feasibility is covered on four levels**, the deepest of the planning features: pure domain
+  tests over `assess_horizon_coverage` — the span boundaries, a horizon that has passed, a week kept
+  entirely free, the flooring of a partial session, and an assertion that counting by weekday equals
+  walking the days one by one over a six-month horizon — use-case tests against fakes with a fixed
+  clock, API tests over the real application factory, and PostgreSQL integration tests over the
+  seeded GATE CSE curriculum asserting 60 remaining topics. Three of those levels assert the
+  **read-only** guarantee directly: asking twice moves no stored row, and the endpoint refuses a
+  write method. The frontend tests cover the three verdicts, both unknown reasons, that the panel
+  renders no control, and that no percentage or fraction appears. **The scriptless
+  standalone-frontend run was performed** against a contract-shaped stub API with the server on
+  `TZ=UTC`: **54 checks passed**, covering the three verdicts, both unknown states with their
+  distinct next steps, the absence of any control in the panel, the absence of a percentage, a
+  fraction, a `<progress>`, or a `<meter>`, that rendering the panel issued only `GET` requests and
+  never reached PLN-001, PLN-004, or PLN-005, that the existing generate, adapt, and item controls
+  are untouched, and that no API address appeared in any served page or client script. Contracted by
+  [ADR-027](../adr/ADR-027-plan-feasibility.md).
 
 ## Milestone 4 — Resources, RAG, and Mentor
 
@@ -469,4 +499,5 @@ What remains is saying whether a learner's week can reach their horizon, and rev
 - [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the second of the three verbs in the complete/skip/postpone item above
 - [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — the third verb, which closes that item, and the two verifications it records as outstanding
 - [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the monthly half of the plan-views item above, which completes FR-003's second criterion, and why a `monthly` plan type stays unwritten
+- [ADR-027: Report whether the saved week reaches the horizon, as a read-only planning rule](../adr/ADR-027-plan-feasibility.md) — the trade-off item above, which closes FR-004's last criterion
 - [Deferred ideas](future-ideas.md)

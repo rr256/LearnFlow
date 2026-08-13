@@ -72,6 +72,9 @@ from app.application.dto.study_plan import (
     ACTIVE,
     COMPLETED,
     DEFAULT_SESSION_MINUTES,
+    INSUFFICIENT,
+    NO_AVAILABILITY_SAVED,
+    NO_HORIZON,
     PLAN_ITEM_STATUS_CHANGES,
     PLAN_STATUSES,
     PLAN_TYPES,
@@ -81,10 +84,13 @@ from app.application.dto.study_plan import (
     ROADMAP,
     SETTLED_STATUSES,
     STUDY,
+    SUFFICIENT,
     SUPERSEDED,
+    UNKNOWN,
     WEEKLY,
     AdaptedStudyPlans,
     GeneratedStudyPlans,
+    PlanFeasibility,
     PlanGenerationRequest,
     PlanItemDetail,
     PlanItemStatusChange,
@@ -118,10 +124,12 @@ from app.application.use_cases.local_learner import resolve_local_learner
 from app.domain.study_planning import (
     DatedItem,
     DayCapacity,
+    HorizonCoverage,
     PlannableTopic,
     PlannedSession,
     SyllabusPosition,
     TopicOrdering,
+    assess_horizon_coverage,
     order_by_prerequisites,
     order_by_syllabus,
     schedule_sessions,
@@ -693,6 +701,122 @@ class ManageStudyPlans:
             items=self._describe(items, curriculum_version_id=goal.curriculum_version_id),
         )
 
+    def assess_feasibility(self, study_goal_id: uuid.UUID) -> PlanFeasibility:
+        """Whether the saved week reaches the goal's horizon (PLN-006).
+
+        This is FR-004's third acceptance criterion, and it is a **reading**:
+        nothing is written, nothing is planned, and nothing adapts. A learner may
+        ask it as often as they like and their plan will be exactly as they left
+        it — which is what lets the answer stay current as they edit their week,
+        where a sentence frozen into `generation_reason` would go stale the moment
+        they changed it.
+
+        The arithmetic is a pure domain rule, `assess_horizon_coverage`. What
+        stays here is everything that needs a record to decide: which topics
+        remain, which day names fill which weekday, whether a horizon exists at
+        all, and what to say about each.
+
+        **Three answers, not two.** A week that cannot reach the horizon and a
+        question that cannot be answered are different, and the second splits
+        again: a goal aiming at no date needs a date, and a goal with no saved
+        week needs a week. A week the learner saved and deliberately kept free is
+        **none of these** -- it is zero minutes, a real answer, because ADR-018
+        keeps a day kept free distinct from a day never set and reporting it as
+        unknown would collapse them.
+
+        **What remains excludes completed topics and nothing else.** A skipped or
+        postponed topic still needs time, because the next plan places its work
+        again (ADR-022, ADR-024, ADR-025). Reading the roadmap rather than the
+        curriculum keeps this the same set adaptation would re-plan.
+
+        Raises:
+            LearnerNotSetUpError: No learner exists to own a plan.
+            StudyGoalNotFoundError: No such goal is stored, or it belongs to
+                another learner.
+            AmbiguousLocalLearnerError: More than one learner is stored.
+        """
+        learner = resolve_local_learner(self._learners)
+        if learner is None:
+            raise LearnerNotSetUpError("No learner is stored, so no study goal can be assessed.")
+        goal = self._require_own_goal(study_goal_id, learner)
+        today = _today_for(learner, self._clock)
+
+        horizon = self._horizon_of(goal)
+        session_minutes = goal.planning_preferences.preferred_session_minutes
+        slots = self._goals.list_availability_slots([goal.id])
+        remaining = self._remaining_topic_count(goal)
+
+        if horizon.ends_on is None:
+            return _unanswerable(
+                goal, today, remaining=remaining, session_minutes=session_minutes, why=NO_HORIZON
+            )
+        if not slots:
+            return _unanswerable(
+                goal,
+                today,
+                remaining=remaining,
+                session_minutes=session_minutes,
+                why=NO_AVAILABILITY_SAVED,
+            )
+
+        coverage = assess_horizon_coverage(
+            remaining_topics=remaining,
+            session_minutes=session_minutes or DEFAULT_SESSION_MINUTES,
+            weekly_minutes=_weekly_minutes(slots),
+            starts_on=today,
+            ends_on=horizon.ends_on,
+        )
+        return PlanFeasibility(
+            study_goal_id=goal.id,
+            assessed_on=today,
+            verdict=SUFFICIENT if coverage.is_sufficient else INSUFFICIENT,
+            reason=_feasibility_reason(
+                coverage=coverage,
+                horizon=horizon,
+                remaining=remaining,
+                session_minutes=session_minutes,
+            ),
+            horizon_ends_on=horizon.ends_on,
+            remaining_topic_count=remaining,
+            session_minutes=session_minutes or DEFAULT_SESSION_MINUTES,
+            session_minutes_chosen_by_planner=session_minutes is None,
+            study_days=coverage.study_days,
+            available_minutes=coverage.available_minutes,
+            required_minutes=coverage.required_minutes,
+            shortfall_minutes=coverage.shortfall_minutes,
+            coverable_topic_count=coverage.coverable_topics,
+        )
+
+    def _remaining_topic_count(self, goal: StudyGoalRecord) -> int:
+        """How many topics the goal's active roadmap still has work for.
+
+        Read from the roadmap rather than the curriculum, so this is the same set
+        adaptation would re-plan: a roadmap written before a completion still
+        lists that topic, which is why the completed set is subtracted rather
+        than trusted to be absent.
+
+        A goal with no active roadmap has nothing to assess and reports zero
+        rather than falling back to the whole curriculum -- a plan that does not
+        exist cannot be short of time, and PLN-001 is what creates one.
+        """
+        roadmap = next(
+            (
+                plan
+                for plan in self._plans.list_active_study_plans(goal.id)
+                if plan.plan_type == ROADMAP
+            ),
+            None,
+        )
+        if roadmap is None:
+            return 0
+
+        completed = self._plans.list_completed_topic_ids(goal.id)
+        return sum(
+            1
+            for item in self._plans.list_plan_items(roadmap.id)
+            if item.topic_id is not None and item.topic_id not in completed
+        )
+
     def record_item_status(
         self, plan_item_id: uuid.UUID, change: PlanItemStatusChange
     ) -> PlanItemDetail:
@@ -1182,6 +1306,145 @@ def _position_path(topic: TopicRecord, by_id: Mapping[uuid.UUID, TopicRecord]) -
         path.append(current.position)
         current = None if current.parent_topic_id is None else by_id.get(current.parent_topic_id)
     return tuple(reversed(path))
+
+
+def _weekly_minutes(slots: Sequence[AvailabilitySlotRecord]) -> tuple[int, ...]:
+    """The saved week as seven minute counts in `date.weekday()` order.
+
+    The second place a stored day *name* meets a calendar index, and it maps the
+    two the same way `_week_capacities` does and for the same reason: the domain
+    rule reasons about a repeating week, so somebody has to say which position
+    Monday is, and ADR-018 puts that decision in this layer rather than in the
+    arithmetic.
+
+    A day with no slot contributes zero. The caller has already established that
+    *some* week was saved, so a missing day here is a day inside a saved week that
+    the learner left out -- not the "no week at all" case, which is answered
+    before this is reached.
+    """
+    minutes = {slot.day_of_week: slot.available_minutes for slot in slots}
+    return tuple(minutes.get(day, 0) for day in WEEKDAYS)
+
+
+def _unanswerable(
+    goal: StudyGoalRecord,
+    today: date,
+    *,
+    remaining: int,
+    session_minutes: int | None,
+    why: str,
+) -> PlanFeasibility:
+    """The answer when the question cannot honestly be answered.
+
+    Named rather than blank: a learner who is told nothing cannot tell a product
+    that has no opinion from one that has a bad one. Each reason says what is
+    missing and, by implication, what would settle it.
+
+    The numbers that *are* known are still reported -- how many topics remain, and
+    the session length in play -- because they stay true whatever is missing.
+    """
+    if why == NO_HORIZON:
+        reason = (
+            "This goal aims at no examination cycle and no target date, so there is no "
+            "date to measure the time against. Set one in your study setup and this "
+            "can be answered."
+        )
+    else:
+        reason = (
+            "No study week is saved for this goal, so there is no time to measure. "
+            "Save the days you can study in your study setup and this can be answered. "
+            "A day you deliberately keep free is not the same as one you have not set."
+        )
+    return PlanFeasibility(
+        study_goal_id=goal.id,
+        assessed_on=today,
+        verdict=UNKNOWN,
+        reason=reason,
+        unknown_reason=why,
+        horizon_ends_on=None,
+        remaining_topic_count=remaining,
+        session_minutes=session_minutes or DEFAULT_SESSION_MINUTES,
+        session_minutes_chosen_by_planner=session_minutes is None,
+    )
+
+
+def _feasibility_reason(
+    *,
+    coverage: HorizonCoverage,
+    horizon: Horizon,
+    remaining: int,
+    session_minutes: int | None,
+) -> str:
+    """The sentence a learner reads about their week and their horizon.
+
+    Composed here, beside the numbers it quotes, for the reason every other reason
+    in this module is: a screen that assembled its own could disagree with the
+    values it was given.
+
+    Three rules govern the wording, and all three come from
+    docs/domain/terminology.md. It describes **the plan and the time**, never the
+    learner -- a week that falls short is arithmetic, not effort. It reports
+    **counts and durations, never a ratio**, so two counts are stated side by side
+    rather than one over the other. And an unset session length is named as the
+    **planner's own choice**, never as a default the learner is presumed to have
+    made.
+    """
+    length = (
+        f"sessions of {coverage.required_minutes // remaining} minutes"
+        if remaining
+        else f"sessions of {session_minutes or DEFAULT_SESSION_MINUTES} minutes"
+    )
+    chosen = (
+        " that you set"
+        if session_minutes is not None
+        else " that LearnFlow chose, because you have not set a session length"
+    )
+    by_when = f"by {horizon.ends_on}"
+    if horizon.examination_window_starts_on == horizon.ends_on:
+        by_when = f"by {horizon.ends_on}, when your examination window opens"
+    elif horizon.target_date == horizon.ends_on:
+        by_when = f"by {horizon.ends_on}, the date you are working toward"
+    provisional = " Those dates are still provisional." if horizon.dates_may_change else ""
+
+    if remaining == 0:
+        return (
+            f"No topics are left to plan on this goal, so the study time you saved is "
+            f"enough to reach {by_when}.{provisional}"
+        )
+    if coverage.study_days == 0:
+        return (
+            f"The date this goal aims at, {horizon.ends_on}, has passed, so no study days "
+            f"are left before it. {remaining} topics still have work planned. Update your "
+            f"setup with a date you are working toward, and your plan can be rebuilt "
+            f"around it.{provisional}"
+        )
+
+    common = (
+        f"Across the {coverage.study_days} days to {horizon.ends_on}, the week you saved "
+        f"offers {_hours(coverage.available_minutes)}. The {remaining} topics still to "
+        f"work through need {_hours(coverage.required_minutes)}, at {length}{chosen}."
+    )
+    if coverage.is_sufficient:
+        return f"{common} That is enough time to cover them {by_when}.{provisional}"
+    return (
+        f"{common} That is {_hours(coverage.shortfall_minutes)} short. The time you have "
+        f"covers {coverage.coverable_topics} of them. You could save more study time "
+        f"in your setup, shorten your sessions, or aim at a later date.{provisional}"
+    )
+
+
+def _hours(minutes: int) -> str:
+    """A duration a learner reads, in hours and minutes.
+
+    A duration rather than a total of anything: this is time the learner already
+    told LearnFlow about, restated over a span, not a measure of their commitment
+    (docs/domain/terminology.md).
+    """
+    if minutes < 60:
+        return f"{minutes} minutes"
+    hours, remainder = divmod(minutes, 60)
+    hour_part = "1 hour" if hours == 1 else f"{hours} hours"
+    return hour_part if remainder == 0 else f"{hour_part} {remainder} minutes"
 
 
 def _week_capacities(
