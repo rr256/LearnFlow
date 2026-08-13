@@ -2,7 +2,7 @@
 title: "ADR-023: Show Today's Work as a Reading of the Weekly Plan, Not a Daily Plan"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-10
+last_updated: 2026-08-11
 related:
   - ../00-project-context.md
   - ADR-013-examination-schedule-and-study-goal.md
@@ -12,6 +12,7 @@ related:
   - ADR-021-plan-item-completion.md
   - ADR-022-plan-adaptation.md
   - ADR-024-plan-item-skipping.md
+  - ADR-025-learner-postponement.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../database/schema.md
@@ -68,6 +69,40 @@ today's list with the controls to take the skip back, because "the plan is the r
 held"; and it does **not** appear under *From earlier days*, because that heading is for work still
 outstanding and a skip is the learner having answered. Nothing on this screen writes a status the
 learner did not ask for, and nothing still adapts on its own.
+
+## Implementation status — 2026-08-11
+
+*Note added 2026-08-11. The decision below is unchanged; this records the boundary count that has
+moved again, and the second payment of the cost this record predicted.*
+
+**Two statements are overtaken, both of them counts.**
+
+- Under [Decision](#the-classification-is-mirrored-for-display-the-domain-rule-stays-authoritative) —
+  the frontend "restates its **three** boundaries". The 2026-08-10 note made that four; it is now
+  **five**, the fifth being that work the learner has **postponed** is never overdue, per
+  [ADR-025](ADR-025-learner-postponement.md).
+- Under [Consequences](#neutral) — the list of values that "remain constrained and unwritten". Only
+  `monthly`, `daily`, `practice`, `revise`, and `review_mistakes` remain; every value of
+  `plan_items.status` is now written, and three of the four are written by a learner.
+
+**The duplication has been paid a second time, and made cheaper.** This record said under *Negative*
+that "the overdue rule now exists in two places … Changing the boundaries means changing both". They
+changed again and both moved: `POSTPONED` joined `SETTLED_STATUSES` in the application, and
+`isOutstanding` in `features/planner/today.ts` now reads a named `PLAN_ITEM_SETTLED_STATUSES` in
+`types/study-plan.ts` rather than a condition written out beside each use. The duplication is not
+removed — a frontend that cannot import from the backend cannot remove it — but it is one line per
+side, and each still has its own test.
+
+**A postponed item behaves on this screen as a skipped one does.** It keeps its place and its date in
+today's list with the controls to take the postponement back, and it does **not** appear under *From
+earlier days*, because that heading is for work still outstanding and a postponement is the learner
+having answered. Nothing on this screen writes a status the learner did not ask for, nothing re-dates
+an item, and nothing still adapts on its own — postponing here is a note to the next adaptation, which
+the learner still asks for on `/plan`.
+
+**A status this build does not recognise is still treated as outstanding**, which is the safe reading
+of "nobody has said anything about this" and the reason the mirror is a set rather than "anything but
+`planned`".
 
 ## Context
 
@@ -355,6 +390,7 @@ beside two buttons that rebuild the plan, on the screen a learner opens to tick 
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](ADR-021-plan-item-completion.md) — the control this screen reuses unchanged
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](ADR-022-plan-adaptation.md) — the overdue rule this view mirrors for display, and the adaptation it links to rather than performing
 - [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](ADR-024-plan-item-skipping.md) — the status this screen's control gained, and the boundary change both halves of the mirrored rule absorbed
+- [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](ADR-025-learner-postponement.md) — the fifth boundary, and the third control this screen now carries
 - [API endpoint catalog](../api/endpoints.md) — the five contracts this screen consumes, none of which changes
 - [Database schema](../database/schema.md) — `study_plans.plan_type`, whose `daily` value stays unwritten
 - [Domain model](../domain/domain-model.md) — the four plan levels, of which a daily *plan* is still one this view is not

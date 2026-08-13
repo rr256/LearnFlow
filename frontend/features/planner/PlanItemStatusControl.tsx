@@ -27,10 +27,10 @@ function isOffered(status: string): status is PlanItemStatusChange {
 /**
  * Where a learner says what became of one plan item's work.
  *
- * It offers the two statuses the item is not already in, so completing,
- * skipping, and putting an item back are the same control rather than three.
- * Nothing here is one-way: PLN-004 accepts a move between any two of the three,
- * and a mis-tap on a list of sixty items should not be permanent.
+ * It offers the three statuses the item is not already in, so completing,
+ * skipping, postponing, and putting an item back are the same control rather
+ * than four. Nothing here is one-way: PLN-004 accepts a move between any two of
+ * the four, and a mis-tap on a list of sixty items should not be permanent.
  *
  * A client component only so it can show the result of the last submission
  * beside the item it acted on. It calls no API itself: each submission goes to a
@@ -41,14 +41,15 @@ function isOffered(status: string): status is PlanItemStatusChange {
  * The status travels in a hidden field rather than on the button, so a scriptless
  * submission carries it exactly as a hydrated one does.
  *
- * **Skipping is a statement about this item, not about the topic.** The wording
- * says so, and the message after a skip says the topic is planned again — a
- * learner reading "skipped" alone could reasonably think they had dropped it for
- * good.
+ * **Skipping and postponing are statements about this item, not about the
+ * topic.** The wording says so, and each message says what happens next — a
+ * learner reading "skipped" or "postponed" alone could reasonably think they had
+ * dropped the topic for good, or that something had already re-dated the work.
  *
- * An item in a status the API will not take as a target -- `postponed`, which
- * only ever sits on a superseded plan -- is shown as the API sent it, with no
- * control, rather than being presented as something a learner can move.
+ * An item in a status the API will not take as a target is shown as the API sent
+ * it, with no control, rather than being presented as something a learner can
+ * move. Every status the column holds is now offered, so this reaches only a
+ * value a later backend adds and this build has not been taught.
  */
 export function PlanItemStatusControl({
   planItemId,

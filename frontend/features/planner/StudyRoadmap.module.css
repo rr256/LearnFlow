@@ -64,6 +64,16 @@
   border-left-color: var(--colour-text-muted);
 }
 
+/*
+ * Postponing is muted for the same reason skipping is, and it borrows the same
+ * dashed edge nothing else uses: the item is still in the plan, so it must not
+ * look finished, and the label beside it says which of the two it is.
+ */
+.postponed {
+  border-left-style: dashed;
+  border-left-color: var(--colour-text-muted);
+}
+
 .settledLabel {
   margin: var(--space-1) 0 0;
   font-size: 0.875rem;

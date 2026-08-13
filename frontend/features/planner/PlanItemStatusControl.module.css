@@ -6,9 +6,10 @@
 }
 
 /*
- * The two moves an item offers sit side by side and wrap on a narrow screen,
- * rather than one being hidden behind a menu: skipping is as ordinary an answer
- * as finishing, and burying it would make it read as an admission.
+ * The three moves an item offers sit side by side and wrap on a narrow screen,
+ * rather than any of them being hidden behind a menu: skipping and postponing
+ * are as ordinary an answer as finishing, and burying either would make it read
+ * as an admission.
  */
 .actions {
   display: flex;
@@ -17,13 +18,15 @@
 }
 
 /*
- * Every button is an ordinary button rather than one accent and two warnings.
- * Putting an item back is a correction and skipping one is a decision; styling
- * either as a danger would make an ordinary answer feel like a consequence.
+ * Every button is an ordinary button rather than one accent and three warnings.
+ * Putting an item back is a correction, and skipping or postponing one is a
+ * decision; styling any of them as a danger would make an ordinary answer feel
+ * like a consequence.
  */
 .completed,
 .planned,
-.skipped {
+.skipped,
+.postponed {
   border: 1px solid var(--colour-border);
   border-radius: var(--radius);
   padding: var(--space-1) var(--space-3);
@@ -43,7 +46,8 @@
 
 .completed:disabled,
 .planned:disabled,
-.skipped:disabled {
+.skipped:disabled,
+.postponed:disabled {
   cursor: progress;
   opacity: 0.7;
 }

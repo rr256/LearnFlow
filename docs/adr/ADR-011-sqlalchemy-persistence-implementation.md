@@ -2,7 +2,7 @@
 title: "ADR-011: Implement PostgreSQL Persistence Synchronously and Migrate Per Milestone"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-08
+last_updated: 2026-08-13
 related:
   - ADR-020-initial-study-plan-generation.md
   - ../00-project-context.md
@@ -14,6 +14,9 @@ related:
   - ADR-014-api-response-contract.md
   - ADR-018-weekly-availability-slots.md
   - ADR-019-study-goal-planning-preferences.md
+  - ADR-021-plan-item-completion.md
+  - ADR-024-plan-item-skipping.md
+  - ADR-025-learner-postponement.md
   - ../database/schema.md
   - ../database/migrations.md
   - ../api/endpoints.md
@@ -215,6 +218,38 @@ Two points of fact, neither altering the decision:
 - **No constraint ties `status` to `completed_at`.** The pairing is an application rule, as
   [schema.md](../database/schema.md#plan_items-status-review-2026-08-08) records; nothing else in this
   schema constrains one column by another.
+
+**The one open item is still the one open item**: numeric precision for score columns, in tables that
+do not exist.
+
+## Implementation status — 2026-08-13
+
+*Note added 2026-08-13. The accepted decision below is unchanged, and so is the 2026-08-08 note's
+reasoning; this records the one statement of fact in that note which the product has since
+overtaken.*
+
+**The `CHECK` on `plan_items.status` and the endpoint now admit the same four values.** The
+2026-08-08 note recorded, under "Two points of fact", that "`skipped` and `postponed` pass it and
+PLN-004 refuses them". Neither half is true any longer:
+
+- **`skipped` became askable** with [ADR-024](ADR-024-plan-item-skipping.md).
+- **`postponed` became askable** with [ADR-025](ADR-025-learner-postponement.md).
+
+**The rule that note stated is unaffected, and is why nothing had to change here.** Its point was
+that "the constraint says what a plan item may *be*, and which of those a learner may currently *ask
+for* is a contract rule" — the two remain separate rules, and they happen to agree today. That they
+agree is a fact about the product having run out of statuses only adaptation writes, not a merging of
+the two. A fifth value added to the column would arrive unwritable until somebody decided it should
+be askable, exactly as this record's validated-text rule intends.
+
+**No migration, no constraint change, and no schema change followed from either.** The `CHECK`
+created by `20260806_03` has carried all four values from the start, which is the same
+columns-ahead-of-their-code argument the 2026-08-08 note recorded as discharged. `completed_at` is
+still paired to `status` by an application rule and by no constraint, and it is still cleared by
+every move off `completed` — now including a move to `postponed`.
+
+The [schema document](../database/schema.md#plan_items-postponement-review-2026-08-11) carries the
+dated review for the second writer of `postponed`, and stays authoritative for the table.
 
 **The one open item is still the one open item**: numeric precision for score columns, in tables that
 do not exist.

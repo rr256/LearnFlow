@@ -81,7 +81,8 @@ export function readPlanItemSubmission(
   const status = trimmed(form.get("status"));
   if (!isPlanItemStatusChange(status)) {
     return {
-      problem: "A plan item can only be marked completed or skipped, or returned to planned.",
+      problem:
+        "A plan item can only be marked completed, skipped, or postponed, or returned to planned.",
     };
   }
 

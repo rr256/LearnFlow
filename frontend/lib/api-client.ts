@@ -570,14 +570,17 @@ export async function adaptStudyPlan(studyGoalId: string): Promise<AdaptedStudyP
 }
 
 /**
- * PLN-004 -- mark one plan item done, or put it back.
+ * PLN-004 -- say what became of one plan item, or put it back.
  *
- * Only `planned` and `completed` are accepted. Sending the status an item
- * already holds is accepted and changes nothing, so a repeated submission does
- * not fail.
+ * `completed`, `skipped`, and `postponed`, and the `planned` that takes any of
+ * them back; a learner may move between any two of the four. Sending the status
+ * an item already holds is accepted and changes nothing, so a repeated
+ * submission does not fail.
  *
  * Nothing else moves: no other item changes and no plan is re-planned. Marking
- * work done is a statement that it happened, not a claim about the topic.
+ * work done is a statement that it happened, not a claim about the topic, and
+ * postponing it names no date -- the work is placed again by the learner's next
+ * adaptation.
  *
  * @throws ApiError with `isNotFound` when no such item is stored or it is not
  *   the local learner's, or `isConflict` when its plan has been superseded.

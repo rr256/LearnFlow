@@ -2,7 +2,7 @@
 title: "ADR-022: Adapt a Study Plan by Rebuilding It Around What Happened"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-10
+last_updated: 2026-08-11
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -13,6 +13,7 @@ related:
   - ADR-021-plan-item-completion.md
   - ADR-023-daily-study-view.md
   - ADR-024-plan-item-skipping.md
+  - ADR-025-learner-postponement.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -87,6 +88,43 @@ unchanged, and a skipped topic counts toward the second.
 supersedes; `_compose` is still shared with generation; the goal-scoped path, the empty request body,
 and the `409` for a goal with no active plan are all as accepted. ADR-024 needed **no migration**
 either.
+
+## Implementation status — 2026-08-11
+
+*Note added 2026-08-11. The decision below is unchanged except where this says otherwise; it records
+the statement about `postponed` that has moved, and the rule that moved with it.*
+
+**`postponed` now has two writers.** [ADR-025](ADR-025-learner-postponement.md) extends PLN-004 to
+accept it as a target, so a learner may postpone one item themselves. Adaptation still writes it for
+work whose day passed with nothing said about it, exactly as decided here.
+
+**Three statements above are overtaken.**
+
+- Under [Decision](#overdue-work-is-marked-postponed-and-its-topic-is-planned-again) — "An item whose
+  day has passed with the work undone is written `postponed` **on the plan being set aside**". Still
+  true of what *adaptation* writes. What has changed is that the same status may already be there
+  because the learner put it there, on an **active** plan and on any day, including one still to come.
+- The same section's list of boundaries: an item the learner has **settled** is never overdue, and
+  `postponed` is now one of the settled statuses. `SETTLED_STATUSES` accordingly means "the statuses
+  in which nothing should carry an item forward on its own" rather than "the statuses in which the
+  learner has said what became of the work"; `planned` is the only status outside it. `select_overdue`
+  and `DatedItem` are unchanged — the rename ADR-024 made is what absorbed this.
+- The description of `postponed_plan_item_ids` — it names what **adaptation itself** set aside, and
+  deliberately not an item the learner postponed. Reporting theirs would claim adaptation carried
+  forward work they had already dealt with, and would say a day had passed when it may not have.
+
+**Adaptation never meets its own postponements again**, which is why including the status costs
+nothing: it reads only a goal's `active` plans, and an item it postpones is on a plan it supersedes in
+the same operation. The set therefore changes behaviour for exactly one case — a learner's own.
+
+**A postponed topic is planned again, as a skipped one is.** The exclusion this record decided still
+reads `plan_items.status = 'completed'` alone and is unchanged. A postponed topic counts toward
+`remaining_topic_count`.
+
+**Everything else stands.** The learner still asks and nothing adapts on its own — postponing an item
+triggers no adaptation, exactly as completing or skipping one does not; adaptation still supersedes;
+`_compose` is still shared with generation; and the goal-scoped path, the empty request body, and the
+`409` for a goal with no active plan are all as accepted. ADR-025 needed **no migration** either.
 
 ## Context
 
@@ -376,6 +414,7 @@ client sends changes what the plan is built from — a property ADR-020 chose de
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](ADR-021-plan-item-completion.md) — the completions this consumes, and the `postponed` question it left open
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](ADR-023-daily-study-view.md) — the screen that mirrors this record's overdue boundaries for display and links to adaptation rather than performing it
 - [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](ADR-024-plan-item-skipping.md) — the fourth overdue boundary, and why a skipped item survives an adaptation while a completed topic never returns to one
+- [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](ADR-025-learner-postponement.md) — the second writer of `postponed`, and why adaptation leaves a learner's own alone
 - [API conventions](../api/conventions.md) — the envelope, the error codes, and the `snake_case` rule
 - [API endpoint catalog](../api/endpoints.md) — the contract this record decides, and the catalogued path it departs from
 - [API versioning](../api/versioning.md) — what makes a change to it breaking

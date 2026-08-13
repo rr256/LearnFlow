@@ -2,7 +2,7 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-10
+last_updated: 2026-08-11
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -15,6 +15,7 @@ related:
   - ../adr/ADR-021-plan-item-completion.md
   - ../adr/ADR-022-plan-adaptation.md
   - ../adr/ADR-024-plan-item-skipping.md
+  - ../adr/ADR-025-learner-postponement.md
   - ../database/schema.md
 ---
 
@@ -170,12 +171,13 @@ Represents one recommended action in a study plan.
 
 An item's status records what became of the work it names: `planned` while it stands, `completed`
 when the learner says the work happened, `skipped` when they say it will not, and `postponed` when
-adaptation finds its day has passed with the work unsettled and re-places the topic on the plan that
-replaces it. All four are written. The learner writes the first three, in any direction, and only
-adaptation writes the fourth; the status set and its rules live in
+they say it will not yet — or when adaptation finds its day has passed with nothing said about it.
+The learner writes all four, in any direction; `postponed` is the one adaptation also writes, and it
+means the same thing either way: the work is placed again on the plan that replaces this one. The
+status set and its rules live in
 [endpoints.md](../api/endpoints.md#pln-004-patch-apiv1plan-itemsplan_item_id) rather than here.
-Skipping settles the **item**, not the topic — a skipped item's topic is planned again, where a
-completed one's is not. An item's position within its plan is an order, not a ranking: nothing scores a topic, and a topic
+Skipping and postponing settle the **item**, not the topic — either item's topic is planned again,
+where a completed one's is not. An item's position within its plan is an order, not a ranking: nothing scores a topic, and a topic
 later in a plan is not one the learner is worse at. Its reason is a statement about the plan's
 reasoning rather than about the learner, and it is not rewritten, so a superseded plan still explains
 itself.
@@ -310,6 +312,8 @@ Topic ── Learning Resource
 - [ADR-020: Generate the initial study plan deterministically as a roadmap and a week](../adr/ADR-020-initial-study-plan-generation.md) — the study plan and plan item entities as they are persisted today
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the plan item whose completion state a learner now sets, reversibly
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the plan a learner has rebuilt around what happened, and the `postponed` state an item can reach
+- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the `skipped` status a plan item holds, and why it settles the item rather than the topic
+- [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — the `postponed` status a learner writes, and its second writer
 - [Domain model](domain-model.md)
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)

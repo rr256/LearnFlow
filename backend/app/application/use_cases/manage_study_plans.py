@@ -28,16 +28,20 @@ Milestone 3 continues.
 
 **Moving a plan item moves that item and nothing else.** PLN-004 writes an item's
 `status` and `completed_at`, and touches no plan, no other item, and no topic
-progress. Completing planned work is a statement that it happened and skipping it
-is a statement that it will not; neither is a claim about how well the learner
-understands the topic — rule 4 of the domain model — and neither re-plans
-anything. Re-planning is what the learner asks for through `adapt`.
+progress. Completing planned work is a statement that it happened, skipping it is
+a statement that it will not, and postponing it is a statement that it will not
+yet; none is a claim about how well the learner understands the topic — rule 4 of
+the domain model — and none re-plans anything. Re-planning is what the learner
+asks for through `adapt`.
 
-**Skipping settles an item; it does not retire a topic.** A skipped item is never
-overdue, so adaptation leaves it as the learner left it rather than carrying it
-forward as `postponed`. Its topic is planned again, because skipping says the
-work is not happening *now* — unlike completing, which says the work is done and
-takes the topic out of the plans that follow.
+**Skipping and postponing settle an item; neither retires a topic.** A skipped or
+postponed item is never overdue, so adaptation leaves it as the learner left it
+rather than writing `postponed` over their own statement. The topic is planned
+again either way, because both say the work is not happening *now* — unlike
+completing, which says the work is done and takes the topic out of the plans that
+follow. What separates the two is what the record says about the line, not what
+the next plan does with the topic: a skip says the learner is not doing this
+session, and a postponement says they mean to, later.
 
 **Generating again supersedes rather than refuses.** The goal's active plans
 become `superseded` and a new pair is written, so the learner's plan history stays
@@ -198,9 +202,10 @@ class PlanItemNotFoundError(StudyPlanManagementError):
 class UnknownPlanItemStatusError(StudyPlanManagementError):
     """A learner asked to move an item to a status PLN-004 does not accept.
 
-    Today that means `postponed`, which adaptation writes as it sets a plan
-    aside. Asking for it here would set a status with nothing to move the work
-    *to*, so the refusal names what adaptation is instead of implying a typo.
+    Every value `plan_items.status` holds is now askable, so this is reached only
+    by a status that is not one of them at all. The refusal names what *is*
+    accepted rather than repeating what was sent, which is the rule
+    docs/api/conventions.md applies to the error envelope.
     """
 
 
@@ -378,10 +383,12 @@ class ManageStudyPlans:
         superseding a plan does not un-complete the work the learner did under it.
 
         **What was missed is named rather than lost.** An item whose day passed
-        with the work undone is marked `postponed` on the plan being set aside,
-        and its topic is re-placed on the plan that replaces it. That is the
-        answer to "postponed to where?" that ADR-021 could not give, and it is the
-        first code to write the status.
+        with nothing said about it is marked `postponed` on the plan being set
+        aside, and its topic is re-placed on the plan that replaces it. That is
+        the answer to "postponed to where?" that ADR-021 could not give, and it is
+        where an item the learner postponed themselves is carried to as well —
+        that item is left exactly as they marked it, because it is already
+        settled, and its topic is planned again alongside the rest.
 
         **Everything else is the plan PLN-001 would build**, from the same
         curriculum, week, preferences, and horizon, by the same pure rules. The
@@ -576,10 +583,12 @@ class ManageStudyPlans:
         item is never overdue, and an item the learner has settled is never
         overdue — are testable without a clock or a database.
 
-        An item is settled when the learner has said what became of its work:
-        `completed`, however late it was done, or `skipped`. Writing `postponed`
-        over a skip would replace what the learner said with an inference about a
-        day that passed, which is the one thing this must not do.
+        An item is settled when something has already been said about its work:
+        `completed`, however late it was done, `skipped`, or `postponed`. Writing
+        `postponed` over any of them would replace a statement with an inference
+        about a day that passed, which is the one thing this must not do — and
+        over a learner's own postponement it would also claim adaptation carried
+        forward something it merely left alone.
 
         The items are written before their plans are superseded, so the record a
         learner reads back says both things at once: this plan was replaced, and
@@ -687,27 +696,35 @@ class ManageStudyPlans:
     def record_item_status(
         self, plan_item_id: uuid.UUID, change: PlanItemStatusChange
     ) -> PlanItemDetail:
-        """Mark one of the learner's plan items completed or skipped, or plan it again.
+        """Record what became of one of the learner's plan items.
 
-        The caller owns the transaction: this method writes through the
+        `completed`, `skipped`, `postponed`, or the `planned` that takes any of
+        them back. The caller owns the transaction: this method writes through the
         repository but never commits.
 
         **Only the item moves.** Its `status` and `completed_at` are written and
         nothing else is: not the plan, not another item naming the same topic,
         and not the learner's topic progress. A completed item records that
-        planned work happened and a skipped one that the learner decided it would
-        not; neither is a claim that the topic is understood (rule 4 of the domain
-        model), and neither re-plans anything — re-planning is what `adapt` does,
-        when the learner asks for it.
+        planned work happened, a skipped one that the learner decided it would
+        not, and a postponed one that they decided it would not yet; none is a
+        claim that the topic is understood (rule 4 of the domain model), and none
+        re-plans anything — re-planning is what `adapt` does, when the learner
+        asks for it.
 
         **Every move is reversible.** A learner who marked the wrong line can put
         it back to `planned`, which clears the timestamp, and may go directly
-        between `completed` and `skipped`. Nothing here treats a statement about
+        between any two of the other three. Nothing here treats a statement about
         work as a verdict, and a mis-tap that could not be undone would be one.
 
-        **Skipping is a statement about this item, not about the topic.** The
-        topic is planned again the next time the learner adapts, because skipping
-        says the work is not happening now rather than that it is finished with.
+        **Skipping and postponing are statements about this item, not about the
+        topic.** The topic is planned again the next time the learner adapts,
+        because neither says the work is finished with — one says it is not
+        happening, the other that it is not happening yet.
+
+        **Postponing names no date.** The work moves to the plan the learner's
+        next adaptation writes, which is where PLN-005 already carries postponed
+        work. Accepting a date here would make an item's own content
+        learner-writable, which nothing else in the plan contract allows.
 
         **Recording the status an item already holds is accepted and writes
         nothing**, as PRG-004 does: a repeated form submission must not fail on
@@ -725,12 +742,10 @@ class ManageStudyPlans:
         if change.status not in PLAN_ITEM_STATUS_CHANGES:
             # The rejected value is deliberately not repeated back, which
             # docs/api/conventions.md keeps out of the error envelope. Naming
-            # what is accepted is what a caller needs, and saying where
-            # `postponed` comes from keeps a client from reading its absence as a
-            # typo or as work the product cannot express.
+            # what is accepted is the whole of what a caller needs, now that
+            # every status the column holds is one a learner may ask for.
             raise UnknownPlanItemStatusError(
-                f"A plan item can be marked {_listed(PLAN_ITEM_STATUS_CHANGES)}. Work is "
-                "postponed when you ask for your plan to be adapted, not here."
+                f"A plan item can be marked {_listed(PLAN_ITEM_STATUS_CHANGES)}."
             )
 
         learner = resolve_local_learner(self._learners)

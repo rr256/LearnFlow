@@ -262,9 +262,9 @@ def schedule_sessions(
 class DatedItem:
     """One plan item reduced to what deciding "behind" needs.
 
-    An identifier, the day the plan asked for the work, and whether the learner
-    has already said what became of it. Nothing else about an item bears on the
-    question.
+    An identifier, the day the plan asked for the work, and whether anything has
+    already been said about what became of it. Nothing else about an item bears
+    on the question.
     """
 
     plan_item_id: uuid.UUID
@@ -273,7 +273,7 @@ class DatedItem:
 
 
 def select_overdue(items: Iterable[DatedItem], today: date) -> tuple[uuid.UUID, ...]:
-    """The items whose day has passed and which the learner has not settled.
+    """The items whose day has passed and which nobody has settled.
 
     This is the definition of an item being *overdue*, kept here rather than inside the
     use case because it is a rule about a plan rather than a database read, and
@@ -288,14 +288,16 @@ def select_overdue(items: Iterable[DatedItem], today: date) -> tuple[uuid.UUID, 
     - **An undated item is never behind.** A roadmap item says what order to work
       in, not which day; it cannot be late for a day it never named.
     - **A settled item is never behind.** Work that happened is not late, however
-      late it was completed; and work the learner chose to *skip* is not late
-      either, because they have already said it is not going to fill that day.
+      late it was completed; work the learner chose to *skip* is not late either,
+      because they have already said it is not going to fill that day; and work
+      they *postponed* is not late, because they have already said it is moving.
 
-    That last boundary is why the field is `is_settled` rather than `is_done`. A
-    skipped item and a completed one are different statements about different
-    things, but they answer this question the same way: the learner has said what
-    became of the work, so nothing should carry it forward on their behalf and
-    overwrite what they said.
+    That last boundary is why the field is `is_settled` rather than `is_done`.
+    Completing, skipping, and postponing are three different statements about
+    three different things, but they answer this question the same way: something
+    has already been said about the work, so nothing should carry it forward on
+    the learner's behalf and overwrite what they said with an inference about a
+    date.
 
     Returns:
         The identifiers, in the order given, so a caller writing them back does so

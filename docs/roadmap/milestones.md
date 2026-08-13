@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-10
+last_updated: 2026-08-13
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -25,6 +25,7 @@ related:
   - ../adr/ADR-022-plan-adaptation.md
   - ../adr/ADR-023-daily-study-view.md
   - ../adr/ADR-024-plan-item-skipping.md
+  - ../adr/ADR-025-learner-postponement.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -232,9 +233,10 @@ of plan adaptation has since followed, and then the second: PLN-004 lets a learn
 completed, and PLN-005 rebuilds the plan around what they have and have not done — leaving out what is
 finished and carrying forward what was missed. A **daily study view** has joined them at
 `/plan/today`, built by reading the weekly plan rather than by generating a `daily` one, so it needed
-no endpoint and no migration. **Skipping has since completed the set**: a learner can say a planned
-session will not happen, which settles the item without retiring its topic, and `plan_items.status`
-now has no unwritten value left.
+no endpoint and no migration. **Skipping and then postponement have since completed the set**: a
+learner can say a planned session will not happen, or will not happen yet, and either settles the item
+without retiring its topic. All four of `plan_items.status`'s values are written, and **all three of
+FR-004's verbs are learner actions**.
 What remains is saying whether a learner's week can reach their horizon, a monthly view, and revision.
 
 ### Definition of Done
@@ -255,25 +257,25 @@ What remains is saying whether a learner's week can reach their horizon, a month
   and carries `action_type = 'study'`; `practice`, `revise`, and `review_mistakes` are constrained and
   unwritten, each waiting on the work it names — checkpoint quizzes, revision records, and mistake
   evidence.
-- [ ] Learner can complete, skip, or postpone plan items. **Completing and skipping are delivered as
-  learner actions; postponing is not.** PLN-004 marks an item `completed` or `skipped` and
-  puts either back to `planned`, writing `plan_items.status` and `completed_at` — the two columns
-  `20260806_03` created ahead of the code that writes them, so neither delivery needed a migration.
-  **A learner cannot postpone an item.** `postponed` is written by adaptation, on the plan it
-  supersedes, for items whose day passed with the work still `planned`; PLN-004 refuses the status
-  with a `422`, and the learner who asks for adaptation does not choose which items it moves. This
-  item therefore stays open on its third verb, even though `plan_items.status` now has no unwritten
-  value left — that is a fact about the column, not about what a learner can do.
+- [x] Learner can complete, skip, or postpone plan items. **All three are now learner actions.**
+  PLN-004 marks an item `completed`, `skipped`, or `postponed` and puts any of them back to
+  `planned`, writing `plan_items.status` and `completed_at` — the two columns `20260806_03` created
+  ahead of the code that writes them, so none of the three deliveries needed a migration.
+  **`postponed` now has two writers**: the learner, saying the work is not happening yet, and
+  adaptation, marking work whose day passed with nothing said about it on the plan it supersedes. The
+  value means the same thing either way, and postponing **moves nothing on its own** — the work is
+  placed again when the learner adapts.
   `/plan`'s two panels and `/plan/today` all offer the controls beside every item, and a settled item
-  keeps its place rather than disappearing. **Every move between the three PLN-004 accepts is
-  reversible**, as a learning stage is, and each moves that item alone: no plan, no other item, and no
-  learning stage, because a plan item records whether planned work happened rather than that a topic
-  is understood. Nothing is counted and nothing is re-planned. **Skipping settles the
-  item, not the topic** — a skipped item is never overdue, so adaptation leaves it alone, and its
-  topic is planned again, which is what keeps a skip reversible once the plan it sits on is
-  superseded. Contracted by [ADR-021](../adr/ADR-021-plan-item-completion.md),
-  [ADR-022](../adr/ADR-022-plan-adaptation.md), and
-  [ADR-024](../adr/ADR-024-plan-item-skipping.md).
+  keeps its place rather than disappearing. **Every move is reversible**, as a learning stage is, and
+  each moves that item alone: no plan, no other item, and no learning stage, because a plan item
+  records whether planned work happened rather than that a topic is understood. Nothing is counted and
+  nothing is re-planned. **Skipping and postponing settle the item, not the topic** — neither is ever
+  overdue, so adaptation leaves both alone, and either topic is planned again, which is what keeps
+  both reversible once the plan they sit on is superseded. Contracted by
+  [ADR-021](../adr/ADR-021-plan-item-completion.md),
+  [ADR-022](../adr/ADR-022-plan-adaptation.md),
+  [ADR-024](../adr/ADR-024-plan-item-skipping.md), and
+  [ADR-025](../adr/ADR-025-learner-postponement.md).
 - [x] Learner can request plan adaptation after missed work or availability changes. **Done**:
   PLN-005 rebuilds a goal's active plans around what happened. A topic with a completed session
   anywhere on the goal is not planned again; work whose day passed with the task undone is marked
@@ -333,6 +335,22 @@ What remains is saying whether a learner's week can reach their horizon, a month
   completed one is not. The frontend tests assert the control on all three screens, that a skipped
   item keeps its place and its reason, that it leaves *From earlier days*, and that nothing counts
   skips. Contracted by [ADR-024](../adr/ADR-024-plan-item-skipping.md).
+
+  **Postponement is covered on the same four levels**, sharing the settled boundary with skipping. The
+  use-case, API, and PostgreSQL integration tests assert that a learner may walk all four statuses in
+  any direction, that postponing clears `completed_at`, re-dates nothing, and moves no other row, that
+  a postponement whose day has passed is never re-marked by adaptation **nor reported in**
+  `postponed_plan_item_ids`, and that its topic is planned again. The frontend tests assert the third
+  control on all three screens, that a postponed item keeps its place, its day, and its reason, that it
+  leaves *From earlier days*, that an unrecognised status does not, and that nothing counts
+  postponements. **The scriptless standalone-frontend run was performed** — the one every planner
+  change since ADR-015 has carried, and which mattered here because the control's rendered shape
+  changed again, from two forms per item to three. **Sixty-one checks passed**, covering the three
+  targets on every screen, a no-JavaScript postponement reaching PLN-004 exactly once with only
+  `{"status":"postponed"}` and no date, the postponed item leaving *From earlier days*, the `409` for
+  a superseded plan, adaptation reporting neither settled item as carried forward, and no API address
+  in any served HTML or client script. Contracted by
+  [ADR-025](../adr/ADR-025-learner-postponement.md).
 
 ## Milestone 4 — Resources, RAG, and Mentor
 
@@ -424,5 +442,6 @@ What remains is saying whether a learner's week can reach their horizon, a month
 - [ADR-021: Mark a plan item completed as a reversible statement about work, not about the learner](../adr/ADR-021-plan-item-completion.md) — the contract behind the completion half of the plan-item item above, and why skipping and postponing wait
 - [ADR-022: Adapt a study plan by rebuilding it around what happened](../adr/ADR-022-plan-adaptation.md) — the contract behind the adaptation item above, and the first write of `postponed`
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the daily half of the plan-views item above, and why a `daily` plan type stays unwritten
-- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the skip that closes the complete/skip/postpone item above
+- [ADR-024: Let a learner skip a plan item, settling the item without retiring the topic](../adr/ADR-024-plan-item-skipping.md) — the second of the three verbs in the complete/skip/postpone item above
+- [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — the third verb, which closes that item, and the two verifications it records as outstanding
 - [Deferred ideas](future-ideas.md)

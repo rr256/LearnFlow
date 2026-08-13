@@ -294,13 +294,57 @@ describe("every panel that shows an item lets the learner say what became of it"
     expect(screen.getByText(/Topic 1 of 60 in syllabus order/)).toBeDefined();
   });
 
-  it.each(panels)("%s shows no control for a status the API will not accept", (_name, Panel) => {
-    /* `postponed` is written by adaptation onto the plan it supersedes, so a
-     * button offering it would be one that always fails. */
+  it.each(panels)("%s offers a way to postpone a planned item", (_name, Panel) => {
+    /* FR-004's first criterion in full: a learner may say a planned task is not
+     * happening yet, not only that it is done or that it is not happening. */
+    render(<Panel plan={withStatus("planned")} />);
+
+    expect(
+      screen.getByRole("button", { name: /Postpone this item.*CPU scheduling/ }),
+    ).toBeDefined();
+  });
+
+  it.each(panels)("%s says in words that an item is postponed", (_name, Panel) => {
+    /* Never colour alone: the meaning has to survive a monochrome screen. */
     render(<Panel plan={withStatus("postponed")} />);
 
+    expect(screen.getByText("Marked postponed")).toBeDefined();
+  });
+
+  it.each(panels)("%s offers a way to take a postponement back", (_name, Panel) => {
+    /* Nothing in LearnFlow treats a statement about work as a verdict, so
+     * postponing is no more one-way than completing is. */
+    render(<Panel plan={withStatus("postponed")} />);
+
+    expect(screen.getByRole("button", { name: /Return to planned.*CPU scheduling/ })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Mark completed.*CPU scheduling/ })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Skip this item.*CPU scheduling/ })).toBeDefined();
+  });
+
+  it.each(panels)("%s keeps a postponed item in place rather than hiding it", (_name, Panel) => {
+    /* The plan is a record of what was planned, and the day it named is not
+     * rewritten by postponing it. */
+    render(<Panel plan={withStatus("postponed")} />);
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.getByText(/Topic 1 of 60 in syllabus order/)).toBeDefined();
+  });
+
+  it.each(panels)("%s offers the three statuses an item is not already in", (_name, Panel) => {
+    /* Every status the column holds is now one a learner may ask for, so the
+     * control offers the other three rather than a single next step. */
+    render(<Panel plan={withStatus("planned")} />);
+
+    expect(screen.getAllByRole("button")).toHaveLength(3);
+  });
+
+  it.each(panels)("%s shows no control for a status the API will not accept", (_name, Panel) => {
+    /* Reached only by a status a later backend adds and this build has not been
+     * taught; a button offering it would be one that always fails. */
+    render(<Panel plan={withStatus("invented")} />);
+
     expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.getByText(/Status: postponed/)).toBeDefined();
+    expect(screen.getByText(/Status: invented/)).toBeDefined();
   });
 
   it.each(panels)("%s counts nothing about what is done", (_name, Panel) => {
