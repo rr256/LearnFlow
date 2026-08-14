@@ -62,7 +62,8 @@ Migrations are never applied automatically, by startup or by a container entrypo
 migrated one area per milestone; the curriculum tables, the examination schedule tables, `learners`
 and `study_goals` — including its two planning-preference columns — `learner_topic_progress`,
 `availability_slots`, `study_plans`, and `plan_items` exist today, which completes the
-learner-planning area. Curated content is loaded by idempotent seeds, not by
+learner-planning area, and `revision_records` arrives with `20260813_01` — the first migration since
+`20260806_03`, creating one table and one index and altering nothing. Curated content is loaded by idempotent seeds, not by
 migrations — each matches records on a natural key and never deletes, so both are safe to repeat.
 Run them in the order above; each refuses to run ahead of its predecessor. See
 [`docs/database/migrations.md`](docs/database/migrations.md).
@@ -91,7 +92,9 @@ postponement by
 [`docs/adr/ADR-025-learner-postponement.md`](docs/adr/ADR-025-learner-postponement.md), and the
 monthly study view by
 [`docs/adr/ADR-026-monthly-study-view.md`](docs/adr/ADR-026-monthly-study-view.md), and plan
-feasibility by [`docs/adr/ADR-027-plan-feasibility.md`](docs/adr/ADR-027-plan-feasibility.md).
+feasibility by [`docs/adr/ADR-027-plan-feasibility.md`](docs/adr/ADR-027-plan-feasibility.md), and the
+revision workflow by [`docs/adr/ADR-028-revision-workflow.md`](docs/adr/ADR-028-revision-workflow.md) —
+which is **proposed**, not accepted.
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -120,7 +123,8 @@ preferences, and any recorded stages — **deterministically, with no AI provide
 produce the same plan. One generation writes a `roadmap` ordering every trackable topic across the
 goal's horizon, and a `weekly` plan dating the first of them, when the learner's week has room. The
 rules that decide a plan — topic order, session placement, and what makes an item overdue — are
-pure functions in `backend/app/domain/study_planning.py`, the only module in the domain layer. Generating again
+pure functions in `backend/app/domain/study_planning.py`, the first of the domain layer's two
+modules — `revision_scheduling.py` is the second. Generating again
 **supersedes** the goal's active plans and keeps them; nothing is deleted, and a superseded plan's
 content and reasons read back exactly as written — only an overdue item's `status` may move, to
 `postponed`, when adaptation sets the plan aside. An unset session length becomes 60 minutes *chosen by the planner and named
@@ -218,6 +222,27 @@ percentage, a ratio, or a proportion**, and a shortfall is never a negative surp
 `/plan` above the week and carries **no control**. It needed **no column, no table, and no
 migration**.
 
+**REV-001 to REV-004 bring finished topics back for review** — the built part of FR-006, and the last
+of Milestone 3's requirements to be started. **FR-006 is not met in full**: seeing what is due and
+recording a completion or skip are, its fourth criterion considers three of its four inputs because
+no quiz or test evidence is stored, and the **resource-and-practice half of its second criterion is
+deferred** to FR-007 and FR-009. Do not write that FR-006 is complete. **The learner asks; nothing schedules on its own**: completing a plan item creates no
+revision, and neither does completing a revision. Asking twice creates nothing the second time — a
+topic with a review already waiting, or one the learner has **skipped or postponed**, is left alone,
+because they have answered and every status is reversible. A topic returns an **interval after the
+work it follows**, decided by the **learning stage the learner recorded**: 7 days with none, rising to
+21 at `strong_understanding`. **These are LearnFlow's intervals, named as its own** in every
+revision's frozen `recommendation_reason`; a longer wait is **not a better mark**, and this does not
+disturb ADR-020's refusal to let a stage reorder a *plan*. **A revision is not a plan item**:
+`plan_items.action_type = 'revise'` stays unwritten, no revision enters a plan, and PLN-005 is
+untouched — a review must survive the supersede adaptation performs. **Nothing writes a learning
+stage.** REV-003 mirrors PLN-004 exactly — `due`, `completed`, `skipped`, `postponed`, any direction,
+`completed_at` from the server clock, **no `skipped_at`, no date, no reason field**; `scheduled` is
+refused because nothing collects the date it needs. It lives at `/revisions`, its own route, and the
+roadmap, week, day, and month views are unchanged. It needed **the first migration since
+`20260806_03`**, and `revision_records` carries a **`recommendation_reason` the approved table does
+not list**, so a due date computed from a stage cannot drift from the sentence explaining it.
+
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
 keeps that name. See [`docs/domain/terminology.md`](docs/domain/terminology.md).
@@ -241,7 +266,8 @@ over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed, s
 PLN-002 and PLN-003, takes the learner's date from LRN-001, and moves items over PLN-004 —
 generating and adapting stay on `/plan`, where the learner asks for them — and a `/plan/month` monthly
 study view that reads both active plans over PLN-002 and PLN-003, takes the learner's month from
-LRN-001, and **writes nothing at all**. A goal response carries the saved study week
+LRN-001, and **writes nothing at all**, and a `/revisions` screen that reads the learner's reviews
+over REV-001, schedules them over REV-004, and records what became of each over REV-003. A goal response carries the saved study week
 and the saved planning preferences, so neither setup nor home calls anything extra to show them.
 
 The frontend serves its own static `/health` for the container health check, distinct from the

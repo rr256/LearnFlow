@@ -54,6 +54,7 @@ from app.infrastructure.persistence.progress import (
     LEARNING_STAGES,
     STAGE_SOURCES,
     LearnerTopicProgress,
+    RevisionRecord,
 )
 
 CURRICULUM_TABLES = (
@@ -77,7 +78,7 @@ LEARNER_PLANNING_TABLES = (
     "plan_items",
 )
 
-PROGRESS_TABLES = ("learner_topic_progress",)
+PROGRESS_TABLES = ("learner_topic_progress", "revision_records")
 
 MAPPED_TABLES = CURRICULUM_TABLES + EXAMINATION_TABLES + LEARNER_PLANNING_TABLES + PROGRESS_TABLES
 
@@ -227,15 +228,15 @@ def test_topic_ordering_and_trackability_use_the_documented_types():
 
 
 def test_the_remaining_schema_areas_are_absent():
-    """Guards the agreed scope. `study_plans` and `plan_items` have arrived with
-    the planning code that reads them, completing the learner-planning area;
-    `revision_records` and `study_activities` complete the progress area, and the
-    resource and assessment areas follow with their own milestones. Each waits for
-    the code that reads it, so no column fixes a shape before a requirement
-    constrains it."""
+    """Guards the agreed scope. `study_plans` and `plan_items` arrived with the
+    planning code that reads them, completing the learner-planning area, and
+    `revision_records` has since arrived with the revision code that reads it.
+    `study_activities` is what the progress area still lacks, and the resource and
+    assessment areas follow with their own milestones. Each waits for the code
+    that reads it, so no column fixes a shape before a requirement constrains
+    it."""
     for table_name in (
         "study_activities",
-        "revision_records",
         "resources",
         "checkpoint_quizzes",
     ):
@@ -704,3 +705,55 @@ def test_the_plan_item_index_is_the_one_schema_md_requires():
     names = {index.name for index in PlanItem.__table__.indexes}
 
     assert "ix_plan_items_study_plan_id_scheduled_for_status" in names
+
+
+# -- revision records -------------------------------------------------------
+
+
+def test_revision_status_is_constrained_to_the_documented_values():
+    ddl = compiled("revision_records")
+
+    assert "ck_revision_records_status_is_known" in ddl
+    for status in ("due", "scheduled", "completed", "skipped", "postponed"):
+        assert f"'{status}'" in ddl
+
+
+def test_revision_trigger_is_constrained_to_what_something_writes():
+    """Only the two triggers code produces. Low evidence needs quiz and external
+    test records, which do not exist, so it is not permitted here."""
+    ddl = compiled("revision_records")
+
+    assert "ck_revision_records_trigger_type_is_known" in ddl
+    assert "'completed_plan_item'" in ddl
+    assert "'completed_revision'" in ddl
+
+
+def test_a_revision_names_a_learner_and_a_topic():
+    columns = RevisionRecord.__table__.columns
+
+    assert columns["learner_id"].nullable is False
+    assert columns["topic_id"].nullable is False
+
+
+def test_a_revision_may_name_no_plan_item():
+    """One that follows an earlier revision has no plan item behind it."""
+    assert RevisionRecord.__table__.columns["plan_item_id"].nullable is True
+
+
+def test_a_revision_always_has_a_due_date_and_never_needs_a_scheduled_one():
+    columns = RevisionRecord.__table__.columns
+
+    assert isinstance(columns["due_on"].type, Date)
+    assert columns["due_on"].nullable is False
+    assert columns["scheduled_for"].nullable is True
+
+
+def test_the_revision_index_matches_the_documented_access_pattern():
+    """One learner's revisions, by the day they fall due and what became of them."""
+    index = next(
+        index
+        for index in RevisionRecord.__table__.indexes
+        if index.name == "ix_revision_records_learner_id_due_on_status"
+    )
+
+    assert [column.name for column in index.columns] == ["learner_id", "due_on", "status"]

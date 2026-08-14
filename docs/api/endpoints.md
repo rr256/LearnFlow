@@ -27,6 +27,7 @@ related:
   - ../adr/ADR-025-learner-postponement.md
   - ../adr/ADR-026-monthly-study-view.md
   - ../adr/ADR-027-plan-feasibility.md
+  - ../adr/ADR-028-revision-workflow.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -877,13 +878,121 @@ Related entities: [learner topic progress](../domain/entities.md#learner-topic-p
 
 ## Revision Endpoints
 
-Supports **FR-006 — Revision Guidance**.
+Supports **FR-006 — Revision Guidance**, which these four endpoints do **not** complete. They deliver
+its revision scheduling, its status updates, and its view of what is due. The **resource-and-practice
+half of FR-006's second criterion is deferred**: a revision links its topic, and linking resource or
+practice suggestions depends on FR-007's resources and FR-009's checkpoint quizzes, neither of which
+exists. FR-006's fourth criterion considers three of its four inputs — completion, learning stage, and
+prior revision history — because no quiz or test evidence is stored.
 
-| ID | Method and path | Purpose | Primary response |
-| --- | --- | --- | --- |
-| REV-001 | `GET /api/v1/revisions` | List due/scheduled/completed revision records. | Revision collection. |
-| REV-002 | `GET /api/v1/revisions/{revision_id}` | Read one revision record and linked topic context. | Revision details. |
-| REV-003 | `PATCH /api/v1/revisions/{revision_id}` | Mark a revision completed, skipped, scheduled, or postponed. | Updated revision record. |
+| ID | Method and path | Purpose | Primary response | State |
+| --- | --- | --- | --- | --- |
+| REV-001 | `GET /api/v1/revisions` | List the learner's revisions, earliest due date first. | Revision collection. | Implemented |
+| REV-002 | `GET /api/v1/revisions/{revision_id}` | Read one revision record and its topic. | Revision details. | Implemented |
+| REV-003 | `PATCH /api/v1/revisions/{revision_id}` | Mark a revision completed, skipped, or postponed, or put it back to due. | Updated revision record. | Implemented |
+| REV-004 | `POST /api/v1/revisions/schedule` | Schedule revisions for topics whose finished work is ready to return. | The revisions written, and what was left alone. | Implemented |
+
+All four are implemented and contracted by [ADR-028](../adr/ADR-028-revision-workflow.md). None of
+them accepts a `learner_id`: the effective learner is resolved server-side, per the
+[identity assumption](#identity-assumption) above. All four are synchronous and read and write
+through the `ManageRevisions` application use case.
+
+**REV-004 is not one of the three this catalogue first held.** Something has to create a revision,
+and nothing may create one automatically — completing a plan item writes no revision, because that
+would move a record the learner did not name (ADR-021). So the learner asks, exactly as they ask for
+a plan to be generated or adapted. ADR-028 records the addition, as ADR-022 recorded PLN-005's
+departure.
+
+**The learner asks; nothing schedules on its own.** Asking twice creates nothing the second time: a
+topic with a revision already waiting, or one the learner has skipped or postponed, is left alone,
+and `already_scheduled_topic_count` says how many. The endpoint takes no request body.
+
+**A topic returns an interval after the work it follows**, and the interval comes from the learning
+stage the learner recorded — 7 days with none recorded, rising to 21 at `strong_understanding`. Those
+are LearnFlow's intervals, named as its own in every revision's `recommendation_reason`. A completed
+review schedules the next, which is FR-006's *prior revision history*.
+
+**A revision is not a plan item**, does not appear in any plan, and is untouched by PLN-005: a review
+the learner acted on survives the supersede adaptation performs on every active plan of a goal.
+**Nothing here writes a learning stage** — a revision records that a review happened, never that a
+topic is understood.
+
+**REV-003 mirrors PLN-004.** It accepts `due`, `completed`, `skipped`, and `postponed`, from
+whichever the revision holds; every move is allowed and reversible. `completed_at` is read from the
+server's clock and cleared by any move off `completed`. There is deliberately no `skipped_at`, no
+date, and no reason field. `scheduled` is refused: the column holds it, but nothing collects the date
+it would need.
+
+Errors: `404` `not_found` when no such revision is stored *or it belongs to another learner*; `422`
+`validation_error` for an unknown status, an unknown filter, a path segment that is not a UUID, or a
+body carrying an unknown field; `409` `conflict` when no learner exists yet, or when more than one is
+stored.
+
+### REV-001 — `GET /api/v1/revisions`
+
+Query parameters `status` (optional), `due_only` (boolean, default `false`), `limit` (1–100, default
+25), and `offset` (0 or greater, default 0). Returns `200` with the `data` array and the `pagination`
+block described in [conventions](conventions.md#success-response-shapes), **earliest due date first** —
+the order a learner works through them, fixed by the backend so a page cannot be reordered after it
+has been sliced.
+
+Each item carries `id`, `topic`, `due_on`, `scheduled_for`, `status`, `trigger_type`,
+`recommendation_reason`, `completed_at`, and `is_due`.
+
+- `topic` names the topic to review, with its subject. It is `null` only when the topic is no longer
+  stored, which is reported rather than hiding the learner's own record.
+- `scheduled_for` is **always null**: naming a day for a review is an approved capability nothing
+  writes.
+- `is_due` says whether the review is owed today — its day has arrived or passed and nobody has
+  settled it. Reported by the backend because what counts as due is a domain rule, so a client cannot
+  disagree with it. Unlike an *overdue* plan item, a revision dated **today is due**.
+- `recommendation_reason` is written when the revision is created and never rewritten, so the record
+  explains itself in the terms that produced its date.
+
+`due_only=true` returns the revisions nobody has settled. An installation where setup has not run has
+no learner and therefore no revisions, which is an empty page. Errors: `422` `validation_error` for an
+unknown `status`, or a `limit` or `offset` outside those bounds.
+
+### REV-002 — `GET /api/v1/revisions/{revision_id}`
+
+`revision_id` is a UUID. Returns `200` with one revision under `data`, in the same shape REV-001
+returns per item. Errors: `404` `not_found` when no such revision is stored *or it belongs to another
+learner*; `422` `validation_error` when the path segment is not a UUID.
+
+### REV-003 — `PATCH /api/v1/revisions/{revision_id}`
+
+Request body: `status`, one of `due`, `completed`, `skipped`, or `postponed`. An unknown field is a
+`422` rather than being ignored. Returns `200` with the updated revision under `data`.
+
+**Every move between the four is allowed**, from whichever the revision currently holds, and each is
+reversible — the shape PLN-004 uses for a plan item. Sending the status a revision already holds is
+accepted and changes nothing, so a repeated submission does not fail.
+
+`completed_at` is read from the **server's clock** rather than accepted from a caller, and is cleared
+by any move off `completed`. There is deliberately **no `skipped_at`, no date, and no reason field**:
+asking why a learner skipped a review would invite the product to form a view about the answer.
+
+**Only the named revision moves** — no other revision, no plan, no plan item, and **no learning
+stage**. `scheduled` is refused with a `422`: the column holds it, but nothing collects the date it
+would need.
+
+### REV-004 — `POST /api/v1/revisions/schedule`
+
+**No request body.** Everything it reads is already stored, so no caller can schedule toward an
+interval the learner never set. Returns `201` with the run under `data`.
+
+`data` carries `scheduled_on`, `created`, `already_scheduled_topic_count`, and `reason`.
+
+- `scheduled_on` is the date in the **learner's own timezone**, from `learners.timezone`.
+- `created` holds the revisions written, each in REV-001's item shape with the reason it exists.
+- `already_scheduled_topic_count` says how many finished topics were left alone because they already
+  have a review waiting or one the learner has settled. A description of **the run**, not a score for
+  the learner.
+- `reason` says what the run looked at, what it wrote, and what it left alone — including when it
+  wrote nothing, which is the common case once a learner has asked twice.
+
+Errors: `409` `conflict` when no learner exists yet to own a revision, or when more than one learner
+is stored.
 
 ## Resource and Ingestion Endpoints
 
@@ -967,7 +1076,7 @@ Implement in an order that enables one working learner flow:
    and take any of them back. Reporting that a learner's week cannot reach their horizon — FR-004's
    third criterion — is **now built too**, over PLN-006, so **all three of FR-004's acceptance
    criteria are met**.
-5. Revision reads/updates.
+5. Revision reads/updates. **Done** — REV-001 to REV-004, per [ADR-028](../adr/ADR-028-revision-workflow.md).
 6. Resource registration and ingestion status.
 7. Mentor questions and grounded retrieval.
 8. Checkpoint quizzes and attempts.
@@ -999,3 +1108,4 @@ Implement in an order that enables one working learner flow:
 - [Database schema](../database/schema.md)
 - [Database migrations](../database/migrations.md) — the seed that loads the rows the curriculum endpoints serve
 - [Delivery milestones](../roadmap/milestones.md) — which endpoints each milestone delivers
+- [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the four revision contracts, and the one this catalogue did not hold

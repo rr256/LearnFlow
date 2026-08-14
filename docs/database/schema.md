@@ -2,8 +2,9 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-11
+last_updated: 2026-08-13
 related:
+  - ../adr/ADR-028-revision-workflow.md
   - ../00-project-context.md
   - overview.md
   - ../domain/domain-model.md
@@ -45,7 +46,7 @@ tables arrive in more than one migration.
 | Curriculum | Implemented — migrations `20260731_01_create_curriculum_tables` and `20260731_02_add_topic_code_unique_constraint`, populated by the idempotent seed described in [migrations](migrations.md#the-curriculum-seed). |
 | Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
 | Learner planning | Implemented — `learners` and `study_goals` arrive in migration `20260801_01`, `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots), `study_goals`' planning preferences in `20260806_02`, as two typed columns rather than the `planning_preferences jsonb` documented [below](#study_goals), and `study_plans` and `plan_items` in `20260806_03`, whose controlled columns are `varchar(32)` guarded by a `CHECK` rather than the `text` documented [below](#study_plans). |
-| Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `study_activities` arrives with the code that records study work, and `revision_records` with Milestone 3. |
+| Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `revision_records` arrives in `20260813_01` with the revision code that reads it, per [ADR-028](../adr/ADR-028-revision-workflow.md). `study_activities` still arrives with the code that records study work. |
 | Resources and RAG metadata | Not implemented — arrives with Milestone 4. |
 | Assessment | Not implemented — arrives with Milestone 5. |
 | External evidence | Not implemented — arrives with Milestone 5. |
@@ -437,8 +438,7 @@ in, not which day to do it on.
 nothing ranks one topic above another by anything except where the planning rules placed it.
 
 Every item is *generated* with `action_type = 'study'` and `status = 'planned'`. The other three
-actions name work the product does not yet model — practice needs checkpoint quizzes, revision needs
-`revision_records`, mistake review needs `mistake_evidence` — so nothing writes one.
+actions name work the product does not yet model — practice needs checkpoint quizzes, mistake review needs `mistake_evidence` — so nothing writes one.
 
 **`status` and `completed_at` are now written**, by PLN-004, which moves an item between all four
 values and is contracted by [ADR-021](../adr/ADR-021-plan-item-completion.md),
@@ -568,9 +568,33 @@ Stores recommended and completed revisions.
 | `due_on` | date | Date revision becomes due. |
 | `scheduled_for` | date nullable | Planned completion date. |
 | `status` | text | `due`, `scheduled`, `completed`, `skipped`, or `postponed`. |
-| `trigger_type` | text | Why revision was created, e.g. completion, low evidence, spaced schedule. |
+| `trigger_type` | varchar(32) | Why revision was created. `completed_plan_item` or `completed_revision`. |
+| `recommendation_reason` | text nullable | The sentence the revision gives for itself. |
 | `completed_at` | timestamptz nullable | Completion timestamp. |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. |
+
+**Implemented** by migration `20260813_01`, with the code that reads it (REV-001 to REV-004), per
+[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md). Three points where the created
+table differs from the row above, all recorded by
+[ADR-028](../adr/ADR-028-revision-workflow.md):
+
+- **`status` and `trigger_type` are `varchar(32)` guarded by a `CHECK`** rather than bare `text`,
+  which is this document's own *Conventions* rule and the departure `day_of_week`,
+  `topic_sequencing`, and the study-plan columns each made.
+- **`recommendation_reason` is a column this table did not list.** A revision's due date is computed
+  from the learning stage recorded *at the moment it was created*, so a reason recomputed later from
+  a stage the learner has since changed would contradict the date stored beside it. Freezing the
+  sentence keeps the record self-explaining — the guarantee `plan_items.recommendation_reason` and
+  `study_plans.generation_reason` carry, and the reason ADR-020 gave for them.
+- **`trigger_type` permits only the two values something writes.** Low evidence needs quiz and
+  external-test records, which do not exist; a third value arrives with the evidence that justifies
+  it.
+
+`scheduled` and `scheduled_for` are created and **unwritten**: naming a day for a review is a second
+capability, and the `CHECK` carries the value so it arrives as a use-case change rather than a
+migration. A revision is **not** a plan item and never becomes one — `plan_items.action_type =
+'revise'` stays unwritten — because adaptation supersedes every active plan of a goal and a review the
+learner has acted on must survive that.
 
 ### `resources`
 
@@ -808,7 +832,7 @@ the migration that creates its table; the three marked below are implemented tod
 - `learner_topic_progress(learner_id, topic_id)` unique — implemented, as the unique constraint named above
 - `study_plans(learner_id, study_goal_id, status, period_start)` — implemented
 - `plan_items(study_plan_id, scheduled_for, status)` — implemented
-- `revision_records(learner_id, due_on, status)`
+- `revision_records(learner_id, due_on, status)` — implemented
 - `study_activities(learner_id, topic_id, created_at desc)`
 - `resource_topic_links(topic_id, resource_id)`
 - `resources(owner_learner_id, status)`
@@ -1003,7 +1027,7 @@ What the review settled:
 | Review input | State |
 | --- | --- |
 | The first API contracts | **Reviewed 2026-08-05** — LRN-001, LRN-002, and GOAL-001 to GOAL-004 are implemented and their schemas need no change to `learners` or `study_goals`. See below. |
-| The actual revision-scheduling rules | **Pending** — `study_plans` and `plan_items` now exist and are reviewed [below](#study_plans-and-plan_items-review-2026-08-06), but the rules deciding what a revision plan item looks like arrive with `revision_records` in Milestone 3. |
+| The actual revision-scheduling rules | **Discharged** — [ADR-028](../adr/ADR-028-revision-workflow.md) supplies them, and decides that a revision is not a plan item at all. |
 | The `day_of_week` numbering convention | **Retired 2026-08-06** — `availability_slots` stores the day's name, so there is no numbering. See [its own review](#availability_slots-review-approved-2026-08-06) below. |
 
 One input remains pending. Every table in the area now exists and has been reviewed — `learners`,
@@ -1136,12 +1160,15 @@ and every other column is created as approved. What the review settled:
 - The constraint-name length limit was checked, as the examination-schedule precedent requires: the
   longest, `ix_study_plans_learner_id_study_goal_id_status_period_start`, is 58 characters, inside
   PostgreSQL's 63-character limit. The unit test guarding that limit covers both tables.
-- **The revision-scheduling review input is not discharged.** These tables were created for planning
-  rather than for revision, and `revision_records` still does not exist; a revision plan item is an
-  `action_type` the `CHECK` already accepts and nothing writes.
+- **The revision-scheduling review input is now discharged.** It was pending here because these
+  tables were created for planning rather than for revision. `revision_records` now exists
+  (`20260813_01`), and [ADR-028](../adr/ADR-028-revision-workflow.md) settles what a revision
+  plan item looks like by deciding there is not one: a revision is its own record, and
+  `plan_items.action_type = 'revise'` stays unwritten permanently, because adaptation supersedes
+  every active plan of a goal and a review the learner has acted on must survive that.
 
 **Review inputs:** the first API contracts — PLN-001 to PLN-003 — were reviewed here. The
-revision-scheduling rules remain **pending** and are the last input outstanding for this area.
+revision-scheduling rules are supplied by [ADR-028](../adr/ADR-028-revision-workflow.md), which leaves no input outstanding for this area.
 
 #### `plan_items` status review — 2026-08-08
 
@@ -1234,7 +1261,7 @@ four to be written. What the review settled:
   *(Now fully overtaken — see the postponement review below.)*
 
 **Review inputs:** the API contract PLN-004 was re-reviewed here, and the domain rule
-`select_overdue` with it. The revision-scheduling rules remain **pending**.
+`select_overdue` with it. The revision-scheduling rules are supplied by [ADR-028](../adr/ADR-028-revision-workflow.md).
 
 #### `plan_items` postponement review — 2026-08-11
 
@@ -1268,7 +1295,7 @@ since [ADR-022](../adr/ADR-022-plan-adaptation.md). What the review settled:
   write to a superseded plan, for every status without exception.
 
 **Review inputs:** the API contract PLN-004 was re-reviewed here, and the application set
-`SETTLED_STATUSES` with it. The revision-scheduling rules remain **pending**.
+`SETTLED_STATUSES` with it. The revision-scheduling rules are supplied by [ADR-028](../adr/ADR-028-revision-workflow.md).
 
 ### Progress and revision area — partial review approved 2026-08-05
 
@@ -1314,7 +1341,7 @@ Covered by this review:
 | Review input | State |
 | --- | --- |
 | The final GATE CSE curriculum seed structure | **Reviewed 2026-08-05** — progress references `topics.id`, which the seed already creates and never deletes, so a re-seeded curriculum cannot orphan a learner's record. |
-| The actual revision-scheduling rules | **Pending** — they constrain `revision_records`, which arrives in Milestone 3. |
+| The actual revision-scheduling rules | **Discharged** — supplied by [ADR-028](../adr/ADR-028-revision-workflow.md). |
 
 One input remains pending, and it belongs to a table this review does not cover, so the area stays
 **partly reviewed** for `learner_topic_progress` and unreviewed for the two tables that do not exist
@@ -1343,3 +1370,4 @@ yet.
 - [Domain model](../domain/domain-model.md)
 - [Functional requirements](../requirements/functional.md)
 - [API endpoints](../api/endpoints.md)
+- [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — `revision_records`, its two departures from the table above, and the revision-scheduling rules this document held pending

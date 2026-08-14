@@ -18,6 +18,7 @@ related:
   - ../adr/ADR-025-learner-postponement.md
   - ../adr/ADR-026-monthly-study-view.md
   - ../adr/ADR-027-plan-feasibility.md
+  - ../adr/ADR-028-revision-workflow.md
   - ../requirements/functional.md
   - ../database/schema.md
 ---
@@ -199,6 +200,13 @@ A record that a topic was recommended for revision, scheduled, completed, skippe
 
 Revision records preserve the history needed to make future revision recommendations. They can be linked to a plan item, resource, quiz, or mistake-review activity.
 
+A revision is created **only when the learner asks**, from a topic they have completed planned
+work on, and comes back an interval later that the learning stage they recorded decides. It is **not**
+a plan item and never becomes one: adaptation supersedes every active plan of a goal, and a review the
+learner has acted on must survive that. Completing a review records that **the review happened** and
+writes no learning stage, which is the same principle rule 4 states for a plan item. See
+[ADR-028](../adr/ADR-028-revision-workflow.md).
+
 ### Checkpoint Quiz
 
 A topic-focused practice set used to gather learning evidence after study or revision. Questions may be generated with grounded context or drawn from verified sources when available.
@@ -304,3 +312,4 @@ This document intentionally does not define database fields, table names, API en
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)
 - [Architecture overview](../architecture/overview.md)
+- [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the revision record, and why completing a review writes no learning stage

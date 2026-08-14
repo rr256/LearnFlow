@@ -24,6 +24,7 @@ related:
   - ../adr/ADR-023-daily-study-view.md
   - ../adr/ADR-024-plan-item-skipping.md
   - ../adr/ADR-026-monthly-study-view.md
+  - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-027-plan-feasibility.md
   - ../domain/terminology.md
 ---
@@ -138,6 +139,7 @@ records onto these values rather than the other way round.
 
 | Path | Responsibility |
 | --- | --- |
+| `revision_scheduling.py` | The deterministic rules a revision is made of: how long after finished work a topic comes back, and which revisions are due on a day. Pure functions over plain values — no clock, no session, no configuration. The intervals are LearnFlow's own and are named as such wherever a revision explains itself; a longer wait is not a better mark. See [ADR-028](../adr/ADR-028-revision-workflow.md). |
 | `study_planning.py` | The deterministic rules a study plan is made of: what order the topics are worked through, which day each session lands on, what makes an item overdue (ADR-022), and — since ADR-027 — whether a saved week holds enough time to reach the goal's horizon. Pure functions over plain values — no clock, no session, no configuration — which is what makes a plan replayable and exhaustively testable rather than merely observable. It knows nothing of day *names*, learning stages, or storage; a capacity arrives as a date and a number of minutes. See [ADR-020](../adr/ADR-020-initial-study-plan-generation.md), [ADR-022](../adr/ADR-022-plan-adaptation.md), and [ADR-027](../adr/ADR-027-plan-feasibility.md). |
 
 The package exists from the change that first needed it, which is the folder-creation rule below.
@@ -268,6 +270,11 @@ app/
 │       │                                   # and PLN-003 for the active goal's roadmap
 │       │                                   # and weekly plan; writes nothing at all
 │       └── page.module.css
+├── revisions/
+│   ├── page.tsx                            # The revision screen: REV-001 for the
+│   │                                       # learner's reviews; writes REV-003 and
+│   │                                       # REV-004 via server actions
+│   └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
                                             # writes LRN-002, GOAL-001/GOAL-004 — which
@@ -275,7 +282,7 @@ app/
                                             # GOAL-005, via server actions
 ```
 
-Every home, curriculum, setup, and plan route sets `dynamic = "force-dynamic"`. The curriculum lives in the
+Every home, curriculum, setup, plan, and revision route sets `dynamic = "force-dynamic"`. The curriculum lives in the
 database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
 goal are learner data that changes on submission — and the container build has no API to reach.
 `plan/today` needs it most strongly of all: it is a screen *about* the current date, so a cached copy
@@ -318,7 +325,7 @@ quizzes/
 external-tests/
 ```
 
-Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, and `progress/` exist today.
+Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, and `revision/` exist today.
 
 `onboarding/` holds the **learner setup** capability's screen. The module keeps the narrower name
 because a module directory names a UI flow, which is the one use
@@ -352,6 +359,11 @@ onboarded — and it writes nothing.
 | `planner/DailyStudyView.tsx` | The daily study view's two panels — the work the weekly plan placed on the learner's own date, and work whose day has passed — with its CSS Module. Each item shows its reason and carries the same status control the other panels carry. It writes no plan and asks for none: rebuilding stays on `/plan`, where the learner asks for it. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md). |
 | `planner/PlanFeasibility.tsx` | Whether the learner's saved study week covers the work left before their horizon, with its CSS Module. It renders the sentence and the figures PLN-006 returned rather than computing any — totalling a week is planning arithmetic the backend owns — and carries **no control of any kind**. Counts and durations only: no percentage, no fraction, and no progress bar, which would be a percentage drawn. Contracted by [ADR-027](../adr/ADR-027-plan-feasibility.md). |
 | `planner/MonthlyPlanView.tsx` | The monthly study view's two panels — the days this month the plan has already dated, and the roadmap topics the week has not reached — with its CSS Module. Each item shows its reason, and a settled item keeps its place marked in words. It deliberately carries **no status control and no plan control**: it writes nothing at all, so marking work stays on `plan/today` and rebuilding stays on `plan`. Contracted by [ADR-026](../adr/ADR-026-monthly-study-view.md). |
+| `revision/RevisionList.tsx` | The revision screen's two panels — reviews ready now, and those still to come or already answered — with its CSS Module. Each shows the reason the schedule gave and carries the control that records what became of it. Contracted by [ADR-028](../adr/ADR-028-revision-workflow.md). |
+| `revision/RevisionStatusControl.tsx` | The control beside one review that records what became of it, with its CSS Module. It offers the three statuses the review is not already in — reviewed, skipped, postponed, or back to due — deliberately mirroring `PlanItemStatusControl`, so a learner meets one vocabulary rather than two. |
+| `revision/ScheduleRevisionsForm.tsx` | The button that asks for reviews to be scheduled from finished work, with its CSS Module. A client component only so it can report what the last run did; nothing schedules on its own, and asking twice adds nothing. |
+| `revision/submission.ts` | Reads the revision forms into the requests they make, and owns their state shapes. It holds no scheduling rule and collects no date and no reason. |
+| `revision/actions.ts` | The `"use server"` module holding the schedule and status paths. |
 | `planner/month.ts` | Resolving the learner's own calendar month from their stored timezone, the month's boundaries, and splitting the roadmap and the week into the month's dated days and the topics ahead of them. Plain functions taking the instant as an argument, so they are testable at fixed moments across zones without a running server. `learnerMonth` delegates to `today.ts` rather than converting again, so one conversion and one UTC fallback serve both screens. Month boundaries are computed from the month's own numbers rather than through a `Date`, and the leap-year rule is the full Gregorian one. Nothing here places work on a day: that is planning, and the backend owns it. |
 | `planner/today.ts` | Resolving the learner's own calendar date from their stored timezone, and splitting a weekly plan into today's work and work whose day has passed. Plain functions taking the instant as an argument, so they are testable at a fixed moment across zones without a running server. The overdue boundaries are mirrored from the domain rule `select_overdue`, which stays authoritative for what adaptation writes; nothing here writes anything. |
 | `planner/plan.ts` | Grouping a dated plan by day, and describing an estimate and an action the way a learner reads them. Plain functions, so they are testable without a running server. Dates are printed as the API's own ISO strings, for the reason `home/dates.ts` records. It also decides the classes an item carries and the words beside it, so every panel marks a settled one — completed, skipped, or postponed — the same way, reading the one frontend copy of the settled set in `types/study-plan.ts`. |
@@ -394,7 +406,7 @@ Frontend-only utilities, including the typed API client, request/error helpers, 
 | Path | Responsibility |
 | --- | --- |
 | `config.ts` | Resolves and validates `API_BASE_URL`. Takes the environment as a parameter so validation is testable without mutating `process.env`. |
-| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, study-goal, availability, topic-progress, and study-plan endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
+| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, study-goal, availability, topic-progress, study-plan, and revision endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
 
 When the API answers with a failure, `ApiError.code` is the API's own code from the closed catalogue
 in [API conventions](../api/conventions.md#error-codes). Two client-side codes cover what the
@@ -532,3 +544,4 @@ Local data locations are configured through environment variables and Docker vol
 - [CI/CD strategy](../deployment/ci-cd.md) — what the workflow files in `.github/` verify
 - [Engineering AI workflow](../ai/engineering-ai.md) — what the definitions in `.claude/` implement
 - [ADR-010: Deliver features through pull requests with automated gates](../adr/ADR-010-feature-delivery-workflow.md) — the decision that introduced `scripts/`, `.github/workflows/`, and the delivery skill
+- [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the `revisions` route, the second domain module, and the feature module behind them

@@ -14,12 +14,13 @@ at the foot of this module are what a test asks for.
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.application.dto.revision import RevisionTopic
 from app.application.ports.curriculum_seed_repository import (
     CurriculumVersionRecord,
     LearningProgramRecord,
@@ -27,20 +28,23 @@ from app.application.ports.curriculum_seed_repository import (
     TopicRecord,
     TopicRelationshipRecord,
 )
+from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_plans import ManageStudyPlans
 from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.composition.app_factory import create_app
 from app.presentation.api.dependencies import (
     READ_CURRICULUM_PROVIDER,
+    REVISIONS_PROVIDER,
     STUDY_PLANS_PROVIDER,
     TOPIC_PROGRESS_PROVIDER,
 )
 from tests.api.onboarding_fixtures import Onboarding, install_onboarding
 from tests.unit.fake_curriculum_repository import FakeCurriculumRepository
 from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
+from tests.unit.fake_revision_repository import FakeRevisionRepository
 from tests.unit.fake_topic_progress_repository import FakeTopicProgressRepository, topic
-from tests.unit.planning_fixtures import Planning
+from tests.unit.planning_fixtures import FixedClock, Planning
 
 PUBLISHED_AT = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
 
@@ -230,5 +234,59 @@ def planning_client(planning: Planning) -> Iterator[TestClient]:
         yield planning.planner()
 
     setattr(app.state, STUDY_PLANS_PROVIDER, provide)
+    with TestClient(app) as client:
+        yield client
+
+
+class Revising:
+    """A learner, the work they finished, and somewhere to put revisions.
+
+    The fixed instant is the one the planning fixtures use, so a due date asserted
+    in an API test is the same date the use-case tests assert.
+    """
+
+    def __init__(self) -> None:
+        self.learner = learner()
+        self.learners = FakeLearnerRepository((self.learner,))
+        self.topic_id = uuid.uuid4()
+        self.revisions = FakeRevisionRepository(
+            topics=[
+                RevisionTopic(
+                    id=self.topic_id,
+                    code=None,
+                    name="CPU scheduling",
+                    subject_id=uuid.uuid4(),
+                    subject_name="Operating Systems",
+                )
+            ],
+            completed_work=[(self.topic_id, uuid.uuid4(), date(2026, 8, 13))],
+        )
+        self.clock = FixedClock(datetime(2026, 8, 20, 9, 0, tzinfo=UTC))
+
+    def reviser(self) -> ManageRevisions:
+        return ManageRevisions(learners=self.learners, revisions=self.revisions, clock=self.clock)
+
+
+@pytest.fixture
+def revising() -> Revising:
+    """The learner and finished work the revision endpoints work from."""
+    return Revising()
+
+
+@pytest.fixture
+def revision_client(revising: Revising) -> Iterator[TestClient]:
+    """A client whose revision endpoints share one set of stores.
+
+    Shared across requests deliberately: a test can schedule over REV-004, list
+    over REV-001, and move one over REV-003, which is the sequence the revisions
+    screen performs.
+    """
+    app = create_app()
+
+    @contextmanager
+    def provide() -> Iterator[ManageRevisions]:
+        yield revising.reviser()
+
+    setattr(app.state, REVISIONS_PROVIDER, provide)
     with TestClient(app) as client:
         yield client

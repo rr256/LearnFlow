@@ -12,6 +12,14 @@
  */
 
 import { resolveApiBaseUrl } from "@/lib/config";
+import type {
+  Revision,
+  RevisionCollectionResponse,
+  RevisionResponse,
+  RevisionStatusChange,
+  ScheduledRevisions,
+  ScheduleRevisionsResponse,
+} from "@/types/revision";
 import type { ApiErrorDetail, ErrorEnvelope } from "@/types/api";
 import type {
   CurriculumTree,
@@ -631,4 +639,85 @@ export async function readPlanFeasibility(studyGoalId: string): Promise<PlanFeas
     );
   }
   return (body as PlanFeasibilityResponse).data;
+}
+
+/**
+ * REV-001 -- list the local learner's revisions, earliest due date first.
+ *
+ * That order is the order a learner works through them and is fixed by the
+ * backend, so this never re-sorts what it receives.
+ *
+ * Returns an empty list before setup has created a learner.
+ *
+ * @param dueOnly Only revisions nobody has settled yet.
+ */
+export async function listRevisions({
+  dueOnly = false,
+  limit = MAX_PAGE_SIZE,
+  offset = 0,
+}: { dueOnly?: boolean; limit?: number; offset?: number } = {}): Promise<Revision[]> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (dueOnly) {
+    query.set("due_only", "true");
+  }
+  const body = await requestJson(`/api/v1/revisions?${query.toString()}`);
+  unwrapCollection(body, "a revision collection");
+
+  return (body as RevisionCollectionResponse).data;
+}
+
+/**
+ * REV-003 -- record what became of one revision.
+ *
+ * Every move between `due`, `completed`, `skipped`, and `postponed` is allowed,
+ * from whichever the revision currently holds. Only the named revision moves:
+ * no other revision, no plan item, and no learning stage.
+ *
+ * @throws ApiError with `isNotFound` when no such revision is stored or it is
+ *   not the local learner's.
+ */
+export async function updateRevisionStatus(
+  revisionId: string,
+  status: RevisionStatusChange,
+): Promise<Revision> {
+  const body = await requestJson(`/api/v1/revisions/${encodeURIComponent(revisionId)}`, {
+    method: "PATCH",
+    body: { status },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed revision.", null);
+  }
+  return (body as RevisionResponse).data;
+}
+
+/**
+ * REV-004 -- schedule revisions for topics whose finished work is ready to return.
+ *
+ * The learner asks; nothing schedules on its own. Asking twice creates nothing
+ * the second time, so a repeated form submission cannot duplicate a review.
+ *
+ * Takes no request body: everything it reads is already stored.
+ *
+ * @throws ApiError with `isConflict` when no learner exists yet.
+ */
+export async function scheduleRevisions(): Promise<ScheduledRevisions> {
+  const body = await requestJson("/api/v1/revisions/schedule", { method: "POST", body: {} });
+  const data = unwrapData(body);
+
+  if (!isRecord(data) || !Array.isArray((data as Record<string, unknown>).created)) {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned a scheduling run without a `created` list.",
+      null,
+    );
+  }
+  const payload = (body as ScheduleRevisionsResponse).data;
+  return {
+    scheduled_on: payload.scheduled_on,
+    revisions: payload.created,
+    already_scheduled_topic_count: payload.already_scheduled_topic_count,
+    reason: payload.reason,
+  };
 }

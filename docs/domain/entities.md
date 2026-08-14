@@ -2,8 +2,9 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-11
+last_updated: 2026-08-13
 related:
+  - ../adr/ADR-028-revision-workflow.md
   - ../00-project-context.md
   - domain-model.md
   - terminology.md
@@ -206,6 +207,11 @@ Represents a revision recommendation and its outcome.
 
 **Key relationships:** belongs to a learner and topic; may link to a plan item, study activity, or assessment.
 
+**Implemented** by migration `20260813_01` with the code that reads it. Created only when the
+learner asks (REV-004), from a topic they completed planned work on, and dated by an interval the
+learning stage they recorded decides. It is not a plan item and survives the supersede adaptation
+performs on a plan. See [ADR-028](../adr/ADR-028-revision-workflow.md).
+
 ### Checkpoint Quiz
 
 Represents a topic-focused practice set created or selected for learning evidence.
@@ -318,3 +324,4 @@ Topic ── Learning Resource
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)
 - [Functional requirements](../requirements/functional.md)
+- [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the revision record this persists, and why it is not a plan item

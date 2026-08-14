@@ -1,9 +1,10 @@
-"""Persistence model for what a learner has recorded about one topic.
+"""Persistence models for what a learner has recorded, and what is due again.
 
-Implements the first table of the *Progress and revision* schema area of
-docs/database/schema.md:
+Implements the *Progress and revision* schema area of docs/database/schema.md
+except for ``study_activities``:
 
     learners + topics -> learner_topic_progress
+                      -> revision_records
 
 The area is created **partially**, per ADR-011 and ADR-017. Three columns
 docs/database/schema.md holds as an approved target are deliberately absent:
@@ -29,8 +30,18 @@ page load leaves 65 records behind.
 """
 
 import uuid
+from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.persistence.base import (
@@ -84,4 +95,88 @@ class LearnerTopicProgress(UuidPrimaryKeyMixin, TimestampMixin, Base):
             in_clause("stage_source", STAGE_SOURCES),
             name="stage_source_is_known",
         ),
+    )
+
+
+REVISION_STATUSES = ("due", "scheduled", "completed", "skipped", "postponed")
+"""The statuses `revision_records.status` accepts.
+
+Every revision is written `due`. **REV-003 moves one to `completed`, `skipped`,
+or `postponed`, and back again**: all four are things a learner says about their
+own review, and each is reversible. That is PLN-004's shape for a plan item, and
+a learner meeting both should not have to learn two sets of rules.
+
+`scheduled` is approved and **unwritten**, as `scheduled_for` below is. Naming a
+day for a revision is a second capability -- it raises what happens when that day
+passes, and whether the schedule or the learner owns the date -- and inventing it
+alongside the first would be two features in one change. The constraint carries
+it so that arrives as a use-case change rather than a migration, which is the
+argument ADR-020 made for `plan_items.status` and which paid off three times.
+"""
+
+REVISION_TRIGGERS = ("completed_plan_item", "completed_revision")
+"""Why a revision was created.
+
+`completed_plan_item` is a topic the learner finished planned work on;
+`completed_revision` is the same topic coming back after a review they completed,
+which is the *prior revision history* FR-006's fourth criterion names.
+
+docs/database/schema.md describes the column as holding "why revision was
+created, e.g. completion, low evidence, spaced schedule". Low evidence needs quiz
+and external-test records, which do not exist, so only the two triggers something
+actually writes are permitted here. A third arrives with the evidence that
+justifies it.
+"""
+
+SETTLED_REVISION_STATUSES = frozenset({"completed", "skipped", "postponed"})
+"""The statuses in which a revision is not offered as due again.
+
+The mirror of `SETTLED_STATUSES` for a plan item, and it means the same thing:
+something has already been said about this, so nothing should put it back in
+front of the learner on its own. `due` and `scheduled` are outside it.
+"""
+
+
+class RevisionRecord(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    """One topic coming back for review, and what became of it.
+
+    Created by the learner asking for revisions to be scheduled -- never as a
+    side effect of completing a plan item, which would move a record they did not
+    name and breach ADR-021's "only the named item moves".
+
+    ``plan_item_id`` records the completed work this revision came from, and is
+    nullable because a revision triggered by an earlier *revision* has no plan
+    item behind it. It is deliberately **not** a cascade: a plan item lives on a
+    plan that adaptation supersedes, and a revision must outlive that.
+
+    ``status`` records whether the review happened. Like a plan item's, it is
+    separate from the learner's long-term topic progress: completing a revision
+    is not a claim about understanding, which is rule 4 of the domain model, and
+    nothing here writes a learning stage.
+
+    ``scheduled_for`` is created and never written, for the reason
+    `REVISION_STATUSES` gives about `scheduled`.
+    """
+
+    __tablename__ = "revision_records"
+
+    learner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("learners.id"), nullable=False)
+    topic_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("topics.id"), nullable=False)
+    plan_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("plan_items.id"), nullable=True
+    )
+    due_on: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_for: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    recommendation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(in_clause("status", REVISION_STATUSES), name="status_is_known"),
+        CheckConstraint(in_clause("trigger_type", REVISION_TRIGGERS), name="trigger_type_is_known"),
+        # The access pattern docs/database/schema.md lists under Required
+        # Indexes: one learner's revisions, by the day they fall due and what has
+        # become of them.
+        Index("ix_revision_records_learner_id_due_on_status", "learner_id", "due_on", "status"),
     )
