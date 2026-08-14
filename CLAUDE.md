@@ -94,7 +94,8 @@ monthly study view by
 [`docs/adr/ADR-026-monthly-study-view.md`](docs/adr/ADR-026-monthly-study-view.md), and plan
 feasibility by [`docs/adr/ADR-027-plan-feasibility.md`](docs/adr/ADR-027-plan-feasibility.md), and the
 revision workflow by [`docs/adr/ADR-028-revision-workflow.md`](docs/adr/ADR-028-revision-workflow.md) —
-which is **proposed**, not accepted.
+which is **accepted** — and the progress overview by
+[`docs/adr/ADR-029-progress-overview.md`](docs/adr/ADR-029-progress-overview.md).
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -243,6 +244,24 @@ roadmap, week, day, and month views are unchanged. It needed **the first migrati
 `20260806_03`**, and `revision_records` carries a **`recommendation_reason` the approved table does
 not list**, so a due date computed from a stage cannot drift from the sentence explaining it.
 
+**The progress overview gathers where a learner's study stands** — `/progress`, which adds **no
+endpoint, no column, no migration, and no backend change at all**. It reads six existing contracts —
+LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, and REV-001 — and shows what each active plan covers,
+what today holds, whether the saved week reaches the date, what the learner has marked, and which
+topics are ready to review. **It writes nothing at all**: no status, generate, adapt, or scheduling
+control, and no `<button>` and no `<form>` — the read-only shape ADR-026 fixed, with every panel
+naming where its action lives and linking to it. **It counts nothing of its own.** The only figures
+on it are ones the API reported — a plan's `item_count`, and PLN-006's counts and durations — because
+terminology forbids counting skips, postponements, and reviews **by name**; what the learner has
+marked is **listed** under the words for each status, never tallied. No percentage, ratio, streak, or
+progress bar. Only the goal's **active** plans are read, since a superseded one cannot be written to.
+The date comes from the same `learnerToday` and `selectDailyWork` the daily view uses, so **no new
+timezone conversion and no new mirror of `select_overdue`** is written. **This is the screen the word
+*dashboard* was reserved for**; its canonical name is **progress overview**, and the home screen at
+`/` is unchanged and is still not a dashboard. **PRG-001 stays unimplemented**, waiting on the
+priority-focus evidence alone. **FR-011 is not met in full** — one of its four criteria is met; do not
+write that it is complete.
+
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
 keeps that name. See [`docs/domain/terminology.md`](docs/domain/terminology.md).
@@ -267,7 +286,9 @@ PLN-002 and PLN-003, takes the learner's date from LRN-001, and moves items over
 generating and adapting stay on `/plan`, where the learner asks for them — and a `/plan/month` monthly
 study view that reads both active plans over PLN-002 and PLN-003, takes the learner's month from
 LRN-001, and **writes nothing at all**, and a `/revisions` screen that reads the learner's reviews
-over REV-001, schedules them over REV-004, and records what became of each over REV-003. A goal response carries the saved study week
+over REV-001, schedules them over REV-004, and records what became of each over REV-003, and a
+`/progress` progress overview that gathers LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, and REV-001
+and **writes nothing at all** either. A goal response carries the saved study week
 and the saved planning preferences, so neither setup nor home calls anything extra to show them.
 
 The frontend serves its own static `/health` for the container health check, distinct from the

@@ -2,7 +2,7 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-13
+last_updated: 2026-08-14
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -21,6 +21,7 @@ related:
   - ../adr/ADR-026-monthly-study-view.md
   - ../adr/ADR-027-plan-feasibility.md
   - ../adr/ADR-028-revision-workflow.md
+  - ../adr/ADR-029-progress-overview.md
   - ../development/coding-standards.md
 ---
 
@@ -52,6 +53,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Confirmed** | A published schedule whose dates the examining body has confirmed. | Set it only on the examining body's word, never on age or proximity. |
 | **Learner setup** | The capability by which a learner establishes their profile, active learning program, and study goal before planning begins. | The canonical name for the capability, wherever it is named: requirements, API documentation, endpoint groupings, and UI copy. It is not only a first-time activity — a learner returns to it whenever their goal changes. |
 | **Home screen** | The application's landing screen, which shows the learner's saved learner setup — their profile, their study goal, and the published dates of the examination that goal aims at. | Read-only: it reports what is stored and links to *learner setup* to change it. It is not a *dashboard*; see the row below. Its UI heading is "Your study setup". |
+| **Progress overview** | The screen gathering where a learner's study stands: what their plan covers, what today holds, whether the study time they saved reaches their date, what they have marked, and which topics are ready to review. | The canonical name for the screen, and for the capability [FR-011](../requirements/functional.md#fr-011-progress-overview) describes. A **reading** of contracts that already exist, not a plan and not a new endpoint — PRG-001 stays unbuilt. **It writes nothing at all**: each panel names where its action lives and links to it, as the *monthly study view* does. **It counts nothing of its own** — the only figures on it are ones the API reported; see the rule below the avoid list. *Dashboard* is the reserved informal word for this content, never the screen's name, route, or heading. Its UI heading is "Where your study stands". See [ADR-029](../adr/ADR-029-progress-overview.md). |
 | **Study goal** | The learner's target outcome and deadline. | Aims at an examination cycle, a target completion date, or both — never at neither. |
 | **Target date** | A learner's own completion date, for a learner following no published examination. | Not a substitute for an examination window. Leave it empty rather than guessing a paper date. |
 | **Availability** | Time the learner can realistically allocate to study. | A planning input, not a measure of commitment or ability. Never presented as a target or a score, and never totalled except by the *plan feasibility* rule, which is the one place that arithmetic belongs. |
@@ -119,7 +121,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Exam date; examination date | Examination window; examination period | A body that publishes several sitting days has not named the learner's day. A single date presents a guess as a deadline. |
 | Exam; GATE date | Examination cycle; examination schedule | Keeps platform-core language reusable across learning programs. |
 | Onboarding | Learner setup | Use **learner setup** for the capability. **Onboarding** is permitted for one narrower thing only: the first-time UI flow a learner walks through before they have a profile or a goal. It never names the capability, its endpoints, or the ongoing ability to change a goal — a learner who edits an established goal is not being onboarded. |
-| Dashboard (for the home screen) | Home screen | **Dashboard** is reserved for the progress overview [FR-011](../requirements/functional.md#fr-011-progress-overview) describes and PRG-001 will serve: progress by subject and topic, upcoming work, revisions due, and priority focus areas. None of that is built. Calling the setup overview a dashboard would make one word mean two things, and would take the name before the screen that earns it exists. Use **home screen** for the landing screen; the word *dashboard* stays free for progress content. |
+| Dashboard (as a screen's name) | Progress overview; home screen | **The screen the word was reserved for now exists**, at `/progress`, and its canonical name is *progress overview* — FR-011's own title, and what a learner does there rather than what it looks like. *Dashboard* stays the reserved informal word for that content and names nothing: not the route, not the heading, not a component. It is still wrong for the landing screen, which is the **home screen** and shows the saved *learner setup*; calling that one a dashboard would make one word mean two things. **The overview does not deliver all of FR-011**: upcoming work and revisions due are shown, while progress by subject and topic, priority focus areas, and quiz and external-test history are not, and PRG-001 is still unbuilt. See [ADR-029](../adr/ADR-029-progress-overview.md). |
 | Weekly study hours; total available time | Weekly availability; the availability of one day | A total is planning arithmetic, and it invites a judgement about whether a week is *enough*. FR-003's planner is what should form that view, with the trade-offs visible — and since [ADR-027](../adr/ADR-027-plan-feasibility.md) it does, in the domain rule behind *plan feasibility*. **That rule is the one place a week is totalled and the one place that judgement is made.** Nowhere else adds a week up: not a goal response, not a plan, and not a screen of its own accord. The feasibility panel shows the durations that rule returned; it computes none of them. |
 | Plan priority (as a rank); most important topic | Plan item order; where an item falls in the plan | `plan_items.priority` is a position counted from 1, not a score. A topic later in a plan is later, not weaker — the same distinction the learning stages draw. Nothing in LearnFlow ranks two topics against each other. |
 | Study pace; intensity; study style | Planning preference; session length; topic order | *Pace* and *intensity* sound like settings but define nothing a planner can act on, and they invite a judgement about how hard a learner is working. Name the specific choice being made. |
@@ -162,6 +164,15 @@ of work into a measurement of a person, and every one of them invites the judgem
 [FR-005](../requirements/functional.md#fr-005-topic-progress-and-learning-evidence) refuses and the
 *weak topic* row above avoids.
 
+**A screen renders the figures it was given and derives none.** The rules above govern what may be
+*computed*, and the *progress overview* is where that distinction had to be settled, because
+gathering a learner's situation is exactly where a screen is tempted to add things up. It renders a
+plan's `item_count` and the counts and durations PLN-006 returned, and calculates nothing itself — no
+completion count, no skip or postponement tally, and no revision count, each forbidden by name above.
+What replaces them is a **list**: naming the topics a learner marked, with the plan and the reason,
+says more than a number and cannot be compared against last week, a target, or another learner, which
+is the third test. See [ADR-029](../adr/ADR-029-progress-overview.md).
+
 Three tests distinguish them:
 
 1. **What is the subject?** "This plan covers 55 topics" describes a plan. "You have completed 8%"
@@ -196,8 +207,9 @@ ratio has a denominator and a denominator invites the comparison the third test 
   `sunday` in the database and on the wire, because an index is the one form of a controlled value
   that can be read wrongly without any error appearing. Where an order is needed — Monday first — it
   is presentation, held in the application rather than stored.
-- Name a screen for what a learner does there, not for a UI genre. *Home screen* says where it sits;
-  *dashboard* would say what it looks like, and that word is already spoken for above.
+- Name a screen for what a learner does there, not for a UI genre. *Home screen* says where it sits
+  and *progress overview* says what a learner reads there; *dashboard* would say what each looks
+  like, and that word names no screen, as the row above records.
 - Two existing names retain **onboarding** and are not renamed, for the same reason the dated-span
   rule leaves `target_date` alone — a rename costs more than the inconsistency. The frontend module
   `frontend/features/onboarding/` holds the first-time flow, which the rule above permits; and
@@ -221,6 +233,7 @@ ratio has a denominator and a denominator invites the comparison the third test 
 - [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — *postponed* above, its two writers, and why it settles an item without moving it
 - [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the *monthly study view* above, and why a month mostly without dates says so rather than being filled in
 - [ADR-027: Report whether the saved week reaches the horizon, as a read-only planning rule](../adr/ADR-027-plan-feasibility.md) — *plan feasibility* above, the one place a week is totalled, and why the answer is counts rather than a ratio
+- [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — *progress overview* above, the screen the word *dashboard* was reserved for, and why it lists what a learner marked rather than counting it
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)
