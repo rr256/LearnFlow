@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ports.clock import Clock
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
+from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
 from app.application.use_cases.manage_study_plans import ManageStudyPlans
 from app.application.use_cases.manage_topic_progress import ManageTopicProgress
@@ -34,6 +35,7 @@ from app.infrastructure.persistence.examination_schedule_repository import (
     SqlAlchemyExaminationScheduleRepository,
 )
 from app.infrastructure.persistence.learner_repository import SqlAlchemyLearnerRepository
+from app.infrastructure.persistence.revision_repository import SqlAlchemyRevisionRepository
 from app.infrastructure.persistence.study_goal_management_repository import (
     SqlAlchemyStudyGoalManagementRepository,
 )
@@ -47,6 +49,7 @@ ReadExaminationSchedulesProvider = Callable[[], AbstractContextManager[ReadExami
 LearnerProfileProvider = Callable[[], AbstractContextManager[ManageLearnerProfile]]
 StudyGoalsProvider = Callable[[], AbstractContextManager[ManageStudyGoals]]
 StudyPlansProvider = Callable[[], AbstractContextManager[ManageStudyPlans]]
+RevisionsProvider = Callable[[], AbstractContextManager[ManageRevisions]]
 TopicProgressProvider = Callable[[], AbstractContextManager[ManageTopicProgress]]
 
 
@@ -160,6 +163,40 @@ def build_study_plans_provider(
                     curriculum=SqlAlchemyCurriculumRepository(session),
                     progress=SqlAlchemyTopicProgressRepository(session),
                     plans=SqlAlchemyStudyPlanRepository(session),
+                    clock=reads_the_clock,
+                )
+            except BaseException:
+                session.rollback()
+                raise
+            session.commit()
+
+    return provide
+
+
+def build_revisions_provider(
+    session_factory: sessionmaker[Session], *, clock: Clock | None = None
+) -> RevisionsProvider:
+    """Build the provider that hands the revision use case to one request.
+
+    Reads and writes through one repository bound to one session, so a scheduling
+    run that creates several revisions is a single unit of work: a learner cannot
+    end up with half a round scheduled.
+
+    Args:
+        session_factory: The application's shared session factory.
+        clock: Where "today" comes from, and where a completion's timestamp comes
+            from. Defaults to the system clock; a caller supplies one to fix the
+            date, which is what makes a revision's due date assertable.
+    """
+    reads_the_clock = clock or SystemClock()
+
+    @contextmanager
+    def provide() -> Iterator[ManageRevisions]:
+        with session_factory() as session:
+            try:
+                yield ManageRevisions(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    revisions=SqlAlchemyRevisionRepository(session),
                     clock=reads_the_clock,
                 )
             except BaseException:

@@ -4,6 +4,7 @@ status: approved
 owner: architecture-and-ai
 last_updated: 2026-08-13
 related:
+  - ../adr/ADR-028-revision-workflow.md
   - ../00-project-context.md
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
@@ -99,8 +100,10 @@ happened, [ADR-022](../adr/ADR-022-plan-adaptation.md). See
 
 Of the inputs above, four are read: the active study goal and its horizon, the availability slots and
 planning preferences, the curriculum structure and topic relationships, and topic progress. The other
-two are not, for different reasons. **Revision records and assessment evidence are not stored at
-all** — `revision_records`, `quiz_attempts`, and `mistake_evidence` do not exist. **Pending plan items are now read, but only by
+two are not, for different reasons. **Assessment evidence is not stored at all** — `quiz_attempts` and
+`mistake_evidence` do not exist. `revision_records` now does, per
+[ADR-028](../adr/ADR-028-revision-workflow.md), but it is deliberately **not** a planner input: a
+revision lives beside a plan rather than inside one. **Pending plan items are now read, but only by
 adaptation**: PLN-005 reads which topics the learner has completed and which items are overdue, and rebuilds the plan around both. PLN-001 still plans from the curriculum and the goal alone, so
 a first generation is unchanged — planning around outstanding work is what a learner asks for
 explicitly rather than what happens by default.
@@ -192,12 +195,12 @@ Identify, schedule, and track topic revisions.
 ### Outputs
 
 - Due/scheduled revision records.
-- Revision-related plan items.
+- Revision records, which are **not** plan items ([ADR-028](../adr/ADR-028-revision-workflow.md)).
 - Targeted resource or practice recommendations when available.
 
 ### Implementation direction
 
-Use explicit, configurable revision rules. AI can help create a revision summary but does not decide or silently complete revisions.
+Use explicit revision rules. **What is built today** ([ADR-028](../adr/ADR-028-revision-workflow.md)): a topic returns an interval after finished work, decided by the learning stage the learner recorded, and the learner asks before anything is scheduled. The intervals are LearnFlow's own and are **not** configurable; making them a planning preference is recorded there as a follow-up rather than a decision. AI can help create a revision summary but does not decide or silently complete revisions.
 
 ## Quiz Service
 

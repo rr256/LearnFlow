@@ -2,8 +2,9 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-06
+last_updated: 2026-08-13
 related:
+  - ../adr/ADR-028-revision-workflow.md
   - ../00-project-context.md
   - overview.md
   - schema.md
@@ -139,6 +140,7 @@ The applied revisions are:
 | `20260806_01` | `create_availability_slots_table` — the third learner-planning table, holding one day's available study time per study goal. Creates one empty table; adds nothing to an existing one. `day_of_week` holds a day *name* rather than the `smallint` [schema.md](schema.md#availability_slots) first documented, which retires the numbering convention rather than answering it. |
 | `20260806_02` | `add_study_goal_planning_preferences` — the learner's planning preferences, as `preferred_session_minutes` and `topic_sequencing` on `study_goals`, each guarded by a `CHECK`. Two nullable columns rather than the `planning_preferences jsonb` [schema.md](schema.md#study_goals) first documented, because no `CHECK` reaches a key inside JSON. Additive; safe on populated tables, and every goal already stored reads back with no preferences set. |
 | `20260806_03` | `create_study_plan_tables` — the last two learner-planning tables, `study_plans` and `plan_items`, completing that schema area. Creates two empty tables and both indexes [schema.md](schema.md#required-indexes) lists for them; adds nothing to an existing one. `plan_type`, `status`, and `action_type` are `varchar(32)` guarded by a `CHECK` rather than the `text` [schema.md](schema.md#study_plans) first documented, for the reason `day_of_week` and `topic_sequencing` already changed. |
+| `20260813_01` | `create_revision_records_table` — the second table of the progress area, holding one recommended or completed review per learner and topic. Creates one empty table and the index [schema.md](schema.md#required-indexes) lists for it; adds nothing to an existing one. `status` and `trigger_type` are `varchar(32)` guarded by a `CHECK` rather than the bare `text` [schema.md](schema.md#revision_records) first documented, and the table carries a `recommendation_reason` that document's row does not list, so a revision's stored date and its explanation cannot drift apart. See [ADR-028](../adr/ADR-028-revision-workflow.md). |
 
 ## What Requires a Migration
 
@@ -477,3 +479,4 @@ An AI assistant may propose or generate a migration, but it must not:
 - [Repository and folder structure](../development/folder-structure.md) — where the seed tooling lives
 - [Git workflow](../development/git-workflow.md)
 - [Architecture Decision Register](../architecture/decisions.md)
+- [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the decision behind `20260813_01`, its two departures from the approved table, and the values it leaves unwritten

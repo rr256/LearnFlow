@@ -125,7 +125,7 @@ export default function HomePage() {
       <h1>Your study setup</h1>
       <p className={styles.lead}>
         What LearnFlow has saved for you, and what you are working toward. Your study plan is built
-        from it; the mentor, quizzes, and revision are not built yet.
+        from it, and finished topics come back for review; the mentor and quizzes are not built yet.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading your study setup…</p>}>
@@ -142,6 +142,9 @@ export default function HomePage() {
           </li>
           <li>
             <Link href="/plan/month">Your month</Link>
+          </li>
+          <li>
+            <Link href="/revisions">Your reviews</Link>
           </li>
           <li>
             <Link href="/setup">Edit your setup</Link>

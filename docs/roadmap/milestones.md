@@ -28,6 +28,7 @@ related:
   - ../adr/ADR-025-learner-postponement.md
   - ../adr/ADR-026-monthly-study-view.md
   - ../adr/ADR-027-plan-feasibility.md
+  - ../adr/ADR-028-revision-workflow.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -242,10 +243,14 @@ FR-004's verbs are learner actions**. A **monthly study view** has since joined 
 `/plan/month`, built the same way — by reading the roadmap and the week rather than generating a
 `monthly` plan — which meets **FR-003's second acceptance criterion in full**.
 **Saying whether a learner's week can reach their horizon has since been delivered too**, over
-PLN-006 and a fourth domain rule, which closes FR-004 in full. What remains of this milestone is
-**revision**, which is unbuilt entirely; a generated `monthly` or `daily` **plan**, which keeps the
-plan-views item below open even though all four levels are now viewable; and the deterministic-tests
-item, which stays open for the revision half.
+PLN-006 and a fourth domain rule, which closes FR-004 in full. **Revision has now arrived as well**,
+over REV-001 to REV-004, `revision_records`, and a second domain module — which delivers the built
+part of [FR-006](../requirements/functional.md#fr-006-revision-guidance): revision scheduling, status
+updates, and a view of what is due. It is the last of this milestone's requirements to be started.
+**FR-006 is not met in full** — the resource-and-practice half of its second criterion is deferred to
+FR-007 and FR-009, which do not exist, and its fourth criterion considers three of its four inputs
+because no quiz or test evidence is stored. What remains of this milestone is a generated `monthly` or `daily` **plan**,
+which keeps the plan-views item below open even though all four levels are now viewable.
 
 ### Definition of Done
 
@@ -272,9 +277,10 @@ item, which stays open for the revision half.
   a `monthly` and a `daily` *plan* are approved `plan_type` values that nothing writes, and what each
   contains is deliberately still undecided, so each is a use-case change rather than a migration.
 - [x] Plan items link to topics and supported actions. Every generated item names a trackable topic
-  and carries `action_type = 'study'`; `practice`, `revise`, and `review_mistakes` are constrained and
-  unwritten, each waiting on the work it names — checkpoint quizzes, revision records, and mistake
-  evidence.
+  and carries `action_type = 'study'`; `practice` and `review_mistakes` are constrained and unwritten,
+  each waiting on the work it names — checkpoint quizzes and mistake evidence. **`revise` is
+  different**: `revision_records` now exists, and [ADR-028](../adr/ADR-028-revision-workflow.md)
+  decides a revision is *not* a plan item, so that value stays unwritten permanently.
 - [x] Learner can complete, skip, or postpone plan items. **All three are now learner actions.**
   PLN-004 marks an item `completed`, `skipped`, or `postponed` and puts any of them back to
   `planned`, writing `plan_items.status` and `completed_at` — the two columns `20260806_03` created
@@ -303,8 +309,20 @@ item, which stays open for the revision half.
   What FR-004's third criterion asks for — reporting that the
   learner's week cannot reach their horizon — has since been built, over PLN-006; see the
   insufficient-time item below.
-- [ ] Revision records are generated, listed, and updateable by learner action. `revision_records`
-  does not exist; nothing is built.
+- [x] Revision records are generated, listed, and updateable by learner action. **Done**: REV-004
+  schedules revisions for topics the learner completed planned work on, REV-001 and REV-002 read them
+  back, and REV-003 records what became of each — `completed`, `skipped`, `postponed`, or back to
+  `due`, every move reversible. `revision_records` arrives in migration `20260813_01`, the first
+  migration since `20260806_03`, creating one table and one index and altering nothing.
+  **The learner asks; nothing schedules on its own**, and asking twice creates nothing the second
+  time. A topic returns an interval after the work it follows, decided by the **learning stage the
+  learner recorded** — LearnFlow's own intervals, named as its own — and a **completed review
+  schedules the next**, which is FR-006's *prior revision history*. A revision is **not a plan item**:
+  it survives the supersede adaptation performs on every active plan, and `action_type = 'revise'`
+  stays unwritten. **Nothing writes a learning stage.** The screen is `/revisions`. This item is
+  complete, but **FR-006 is not met in full**: the resource-and-practice half of its second criterion
+  is deferred to FR-007 and FR-009, which do not exist. Contracted by
+  [ADR-028](../adr/ADR-028-revision-workflow.md).
 - [x] Planning works with deterministic rules when Ollama is unavailable. No AI provider is involved
   at all: the same goal, curriculum, week, preferences, and date produce the same plan every time, and
   the two rules that decide it — topic order and session placement — are pure functions in
@@ -321,7 +339,7 @@ item, which stays open for the revision half.
   It needed **no migration**. That closes **FR-004's third acceptance criterion**, so **all three of
   FR-004's criteria are now met**. Contracted by
   [ADR-027](../adr/ADR-027-plan-feasibility.md).
-- [ ] Core planning/revision rules have deterministic tests. **Covered for planning**: unit tests over
+- [x] Core planning/revision rules have deterministic tests. **Covered for planning**: unit tests over
   the domain rules with no database or clock, unit tests over the use case against fakes with a fixed
   clock, API tests over the real application factory, and PostgreSQL integration tests that generate a
   plan over the seeded GATE CSE curriculum and read it back. **Completion is covered on three of
@@ -351,8 +369,7 @@ item, which stays open for the revision half.
   repository's history — the verification ADR-021 recorded as outstanding is discharged. Docker
   Compose works since [the first local run](../deployment/docker.md#first-local-run-2026-08-08), so a
   disposable `learnflow_test` database was created beside the development one and the whole suite ran
-  green: **923 passed, none skipped**. The revision half arrives with the records that have it, so the
-  item stays open.
+  green: **923 passed, none skipped**. The revision half has since arrived; see the revision coverage below.
 
   **Skipping is covered on four levels**, one more than completion: the settled boundary is a pure
   domain test beside the overdue ones, and use-case, API, and PostgreSQL integration tests sit above
@@ -405,6 +422,16 @@ item, which stays open for the revision half.
   never reached PLN-001, PLN-004, or PLN-005, that the existing generate, adapt, and item controls
   are untouched, and that no API address appeared in any served page or client script. Contracted by
   [ADR-027](../adr/ADR-027-plan-feasibility.md).
+
+  **Revision is covered on five levels**, one more than any planning change: pure domain tests over
+  the intervals, the due-date arithmetic across month, year, and leap-day boundaries, and the three
+  due boundaries; use-case tests against fakes with a fixed clock, asserting that asking twice creates
+  nothing, that a completed review schedules the next, that a skipped or postponed one is left alone,
+  that nothing else moves, and that no wording describes the learner; API contract tests over the real
+  application factory for all four endpoints; **PostgreSQL integration tests over migration
+  `20260813_01`**, its upgrade, its downgrade, every documented status and trigger, the constraints it
+  refuses, and the index it creates; and frontend tests over the list, the control, the form parsing,
+  and the API client. Contracted by [ADR-028](../adr/ADR-028-revision-workflow.md).
 
 ## Milestone 4 — Resources, RAG, and Mentor
 
@@ -501,3 +528,4 @@ item, which stays open for the revision half.
 - [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the monthly half of the plan-views item above, which completes FR-003's second criterion, and why a `monthly` plan type stays unwritten
 - [ADR-027: Report whether the saved week reaches the horizon, as a read-only planning rule](../adr/ADR-027-plan-feasibility.md) — the trade-off item above, which closes FR-004's last criterion
 - [Deferred ideas](future-ideas.md)
+- [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the revision item this closes, and Milestone 3's last unbuilt requirement

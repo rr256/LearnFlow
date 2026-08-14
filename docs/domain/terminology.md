@@ -20,6 +20,7 @@ related:
   - ../adr/ADR-025-learner-postponement.md
   - ../adr/ADR-026-monthly-study-view.md
   - ../adr/ADR-027-plan-feasibility.md
+  - ../adr/ADR-028-revision-workflow.md
   - ../development/coding-standards.md
 ---
 
@@ -73,6 +74,8 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Daily study view** | The screen showing the work a learner's active weekly plan placed on their own calendar date, alongside work whose day has passed. | A **reading** of the weekly plan, not a plan of its own: no `daily` plan record is written or read, and that plan type stays unwritten. It changes nothing about the plan — saying what became of an item is the only write it offers, and rebuilding the plan stays on the plan screen, where the learner asks for it. "Today" is the learner's date from `learners.timezone`, never the server's. See [ADR-023](../adr/ADR-023-daily-study-view.md). |
 | **Monthly study view** | The screen showing where a learner's own calendar month sits in their plan: the days that month already has dated work on, and the roadmap topics their week has not dated. | A **reading** of the roadmap and the weekly plan, not a plan of its own: no `monthly` plan record is written or read, and that plan type stays unwritten. **It writes nothing at all** — marking an item stays in the daily study view and on the plan screen, and rebuilding the plan stays there too. A weekly plan dates seven days, so a month is mostly undated; the screen says so rather than spreading the roadmap across days nothing placed work on, because placing work is planning. The month is the learner's own, from `learners.timezone`, never the server's. See [ADR-026](../adr/ADR-026-monthly-study-view.md). |
 | **Plan feasibility** | Whether the study time a learner saved covers the work left on their active plan before their study goal's horizon. | A statement about **the plan and the time**, never about the learner: a week that cannot reach a date is arithmetic, not a verdict on effort. Reported as **counts and durations only** — never a percentage, ratio, or proportion — and with three answers, because *unknown* is honest when a goal aims at no date or no week is saved. A week saved and deliberately kept free is **not** unknown: that is zero minutes. Read live over PLN-006 and never stored, so it moves when the learner's week does. See [ADR-027](../adr/ADR-027-plan-feasibility.md). |
+| **Revision status** | What became of one review: `due`, `scheduled`, `completed`, `skipped`, or `postponed`. | Stored and sent as the `snake_case` value. The labels a learner reads are *Ready*, *Scheduled*, **Reviewed**, *Skipped*, and *Postponed* — a review is **reviewed**, not *completed*, because the subject is the review rather than the work. A learner may ask for four of the five, in any direction and reversibly, exactly as for a *plan item status*; `scheduled` is stored-only, because nothing collects the date it needs. A **settled** revision — reviewed, skipped, or postponed — is not offered again on its own. |
+| **Revision interval** | How long after finished work a topic comes back for review. | **LearnFlow's own**, never the learner's, and named as such wherever a revision explains itself: 7 days with no learning stage recorded, rising to 21 at *Strong understanding*. A longer interval is **not a better mark** — the stage says what the learner told us, and a topic they are confident with is worth seeing again later. Nothing here ranks two topics, scores a learner, or reorders a *plan*. |
 | **Recommendation reason** | The sentence a plan or a plan item gives for itself. | Written when the plan is generated and never rewritten, so a superseded plan still explains itself in the terms that produced it. A statement about the plan's reasoning, not about the learner. |
 | **Study activity** | A record of actual study, practice, or revision work completed by the learner. | May record duration and related resources/topics. |
 | **Learner topic progress** | The learner-specific state and evidence for one topic. | Combines several signals; it is not a single permanent score. |
@@ -84,8 +87,8 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Practice-ready** | The learner is ready for more topic-focused questions. | Not a guarantee of exam performance. Stored as `practice_ready`. |
 | **Strong understanding** | Recent evidence indicates consistent understanding; scheduled revision is still needed. | Do not call this permanent mastery. Stored as `strong_understanding`. |
 | **Stage source** | Whether a learning stage was set by the learner or derived from evidence. | Stored as `learner`, `derived`, or `mixed`. Everything recorded today is `learner`; nothing derives a stage yet. |
-| **Revision** | Intentional revisiting of a topic to reinforce retention and address errors. | A revision record tracks when it is due and what happened. |
-| **Revision due** | A topic currently recommended for revision. | A recommendation, not a failure notice. |
+| **Revision** | Intentional revisiting of a topic to reinforce retention and address errors. | A *revision record* tracks when it is due and what happened. Created only when the learner asks, from work they have finished — never automatically, and never as a plan item, so it survives the supersede adaptation performs on a plan. It records whether a **review happened**, never that a topic is understood: nothing here writes a learning stage. See [ADR-028](../adr/ADR-028-revision-workflow.md). |
+| **Revision due** | A topic currently recommended for revision. | A recommendation, not a failure notice. Its day has arrived or passed and nobody has answered about it — decided by a domain rule and reported by the API, so a screen never decides for itself. Unlike an *overdue* plan item, a revision dated today **is** due: the plan asks for work on a day, and a review is offered from one. Never say a learner is behind on revision, and never count a learner's revisions on a screen or across requests — the one permitted count is REV-004's report of what a single scheduling request left alone, described below. |
 | **Checkpoint quiz** | A short, topic-focused practice assessment. | Used to gather evidence after study or revision. |
 | **Question / assessment item** | One answerable prompt within a quiz or question bank. | May be AI-generated or from a verified source. |
 | **Quiz attempt** | A learner's submitted response to a checkpoint quiz. | Records answers, score, feedback, and mistakes. |
@@ -139,6 +142,19 @@ PLN-005 are these, and so is `item_count`. **`coverable_topic_count` on PLN-006 
 describes how far the time the learner saved reaches, which is a fact about their week and the
 plan rather than about them. It is stated **beside** `remaining_topic_count` as a second count and
 never as one over the other — the rule below applies to it exactly as to the others.
+
+**Permitted — a scheduling request describing what it just did.**
+`already_scheduled_topic_count` on REV-004 is how many finished topics **that request** passed over
+because they already had a review waiting or one the learner had settled. It is a neutral fact about
+**one scheduling request**, and it exists so that a run which writes nothing says why instead of
+appearing to fail.
+
+Its permission is deliberately narrow. It is **never learner progress**, and never a ratio, a
+percentage, a rate, or a score. It must not be presented as how much revision a learner has done,
+compared against how many topics they have finished, accumulated across requests, or shown on a
+screen as a standing figure — it describes an action the product just took, not the learner and not
+their history. **Nothing counts a learner's revisions**, and no revision count appears in the
+interface at all.
 
 **Forbidden — a number that rates the learner.** No percentage complete, no completion rate, no
 "14 of 60 done", no streak, no score, no total of a day, a week, or a plan. These turn a description

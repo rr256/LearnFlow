@@ -175,6 +175,9 @@ export default function MonthlyPlanPage() {
             <Link href="/plan">Your study plan</Link>
           </li>
           <li>
+            <Link href="/revisions">Your reviews</Link>
+          </li>
+          <li>
             <Link href="/">Your study setup</Link>
           </li>
           <li>
