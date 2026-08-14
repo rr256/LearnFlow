@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-13
+last_updated: 2026-08-14
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -26,6 +26,7 @@ related:
   - ../adr/ADR-026-monthly-study-view.md
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-027-plan-feasibility.md
+  - ../adr/ADR-029-progress-overview.md
   - ../domain/terminology.md
 ---
 
@@ -270,6 +271,12 @@ app/
 │       │                                   # and PLN-003 for the active goal's roadmap
 │       │                                   # and weekly plan; writes nothing at all
 │       └── page.module.css
+├── progress/
+│   ├── page.tsx                            # The progress overview: LRN-001 for the
+│   │                                       # learner's timezone, GOAL-002, PLN-002,
+│   │                                       # PLN-003, PLN-006, and REV-001; writes
+│   │                                       # nothing at all, and adds no endpoint
+│   └── page.module.css
 ├── revisions/
 │   ├── page.tsx                            # The revision screen: REV-001 for the
 │   │                                       # learner's reviews; writes REV-003 and
@@ -282,12 +289,13 @@ app/
                                             # GOAL-005, via server actions
 ```
 
-Every home, curriculum, setup, plan, and revision route sets `dynamic = "force-dynamic"`. The curriculum lives in the
+Every home, curriculum, setup, plan, progress, and revision route sets `dynamic = "force-dynamic"`. The curriculum lives in the
 database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
 goal are learner data that changes on submission — and the container build has no API to reach.
 `plan/today` needs it most strongly of all: it is a screen *about* the current date, so a cached copy
 would be wrong from the first midnight after it was built. `plan/month` needs it for the same reason,
-one period up: a cached copy would be wrong from the first month boundary after the build.
+one period up: a cached copy would be wrong from the first month boundary after the build, and
+`progress` needs it because it reports the same current date.
 
 `health/route.ts` is the one deliberate exception: it is `force-static`, because it exists to answer
 the container health check and must reach nothing. It asks only whether the frontend process is
@@ -370,6 +378,8 @@ onboarded — and it writes nothing.
 | `planner/submission.ts` | Reads the planner's three forms into the requests they make, and owns their state shapes. It reads no preference and no completion time: a plan is built from what the learner stored, and *when* they marked an item completed is the server's record, never what a client sends. Nothing records when an item was skipped, or why. |
 | `planner/AdaptPlanForm.tsx` | The button that asks for the plan to be rebuilt around what happened, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says what adapting will do — what is dropped, what is carried forward, and that the old plan is kept — before it is pressed, and it is rendered only when a plan exists. |
 | `planner/actions.ts` | The `"use server"` module holding the generate, plan-item status, and adapt paths. |
+| `progress/StudyProgressOverview.tsx` | The progress overview's five panels — what each active plan covers, today's work, whether the saved week reaches the horizon, what the learner has marked, and the reviews ready now — with its CSS Module. It renders `PlanFeasibility` unchanged and reuses `planner/plan.ts` and `planner/today.ts` rather than copying them. It carries **no control of any kind** and writes nothing: each panel names where its action lives and links to it. **It counts nothing of its own** — the only figures are ones the API reported. Contracted by [ADR-029](../adr/ADR-029-progress-overview.md). |
+| `progress/overview.ts` | Grouping the plan items a learner has settled under the words for each status, naming a plan type, and selecting the reviews the backend says are due. Plain functions, so they are testable without a running server. It derives no figure that reaches the screen, and `is_due` is read rather than recomputed — what counts as due is a domain rule. |
 | `progress/TopicStageControl.tsx` | The learning-stage control beside one trackable topic, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. |
 | `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
 | `progress/submission.ts` | Reads the stage form into the request it makes, and owns the control's state shape. |
@@ -536,6 +546,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-023: Show today's work as a reading of the weekly plan, not a daily plan](../adr/ADR-023-daily-study-view.md) — the `plan/today` route, the two planner modules behind it, and why it is force-dynamic
 - [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the `plan/month` route, the two planner modules behind it, and why it renders no control at all
 - [ADR-027: Report whether the saved week reaches the horizon, as a read-only planning rule](../adr/ADR-027-plan-feasibility.md) — the fourth domain rule, and the `/plan` panel that renders it
+- [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the `progress` route, the two modules behind it, and why it adds no endpoint
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-13
+last_updated: 2026-08-14
 related:
   - ../00-project-context.md
   - conventions.md
@@ -28,6 +28,7 @@ related:
   - ../adr/ADR-026-monthly-study-view.md
   - ../adr/ADR-027-plan-feasibility.md
   - ../adr/ADR-028-revision-workflow.md
+  - ../adr/ADR-029-progress-overview.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -771,7 +772,7 @@ Supports **FR-005 — Topic Progress and Learning Evidence** and **FR-011 — Pr
 
 | ID | Method and path | Purpose | Primary request/result | State |
 | --- | --- | --- | --- | --- |
-| PRG-001 | `GET /api/v1/progress/overview` | Read learner summary: progress, current plan, revisions due, and priority focus areas. | Dashboard-ready overview. | Not implemented |
+| PRG-001 | `GET /api/v1/progress/overview` | Read learner summary: progress, current plan, revisions due, and priority focus areas. | Overview-ready summary. | Not implemented |
 | PRG-002 | `GET /api/v1/progress/topics` | List the learner's recorded topic progress, filterable by curriculum version. | Topic progress collection. | Implemented |
 | PRG-003 | `GET /api/v1/progress/topics/{topic_id}` | Read detailed progress/evidence for one topic. | Progress summary, evidence, and next action. | Not implemented |
 | PRG-004 | `PATCH /api/v1/progress/topics/{topic_id}` | Record the learner's learning stage for a topic. | Updated topic progress. | Implemented |
@@ -856,11 +857,27 @@ is stored.
 
 Each waits on something that does not exist rather than on a decision:
 
-- **PRG-001** reports the current plan, revisions due, and priority focus areas. The current plan
-  now exists — `study_plans` and `plan_items` are created and PLN-002 reads them — so what remains is
-  `revision_records`, which arrives with
-  [Milestone 3](../roadmap/milestones.md#milestone-3-planning-and-revision), and the evidence a
-  priority focus area would be drawn from, which nothing stores.
+- **PRG-001** reports the current plan, revisions due, and priority focus areas. Two of those three
+  now exist — `study_plans` and `plan_items` are read by PLN-002 and PLN-003, and `revision_records`
+  by REV-001 — so what remains is the evidence a **priority focus area** would be drawn from, which
+  nothing stores and which would rank topics against each other, something
+  [terminology](../domain/terminology.md) refuses.
+
+  **The progress overview screen does not use it.** `/progress` is a *reading* of six existing
+  contracts — LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, and REV-001 — and adds **no endpoint, no
+  column, no migration, and no backend change at all**, which is the shape
+  [ADR-026](../adr/ADR-026-monthly-study-view.md) used for the monthly study view. It clears none of
+  [ADR-023](../adr/ADR-023-daily-study-view.md)'s bar for a new endpoint, because every fact it states
+  is already a field of a response. Fixing PRG-001's shape now would make it a public contract that
+  the half its own purpose promises would later break, so it stays uncontracted until the evidence
+  arrives. Contracted by [ADR-029](../adr/ADR-029-progress-overview.md).
+
+  Of [FR-011](../requirements/functional.md#fr-011-progress-overview)'s four acceptance criteria,
+  **one is met**: viewing upcoming study tasks and revisions due. Progress by subject and topic is
+  not — the recorded stages are read back by PRG-002 and shown beside each topic in the curriculum
+  view, and gathering them by subject was deliberately left out of that change. Priority focus areas
+  are not, for the reason above. Recent quiz history and external test results are not, because FR-009
+  and FR-010 do not exist. **FR-011 is not met in full.**
 - **PRG-003** promises a progress summary, evidence, and a next action. The only evidence stored is
   the stage itself, so today it would return exactly what PRG-002 returns per item.
 - **ACT-001** and **ACT-002** need `study_activities`, which is not created.
@@ -1062,9 +1079,11 @@ Implement in an order that enables one working learner flow:
    [ADR-019](../adr/ADR-019-study-goal-planning-preferences.md).
 3. Progress reads/updates and basic study activities. **Partly done** — PRG-002 and PRG-004 record a
    learning stage and read it back, contracted by
-   [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). PRG-001, PRG-003, ACT-001, and
-   ACT-002 wait on the revision and study-activity records described above; PRG-001 also reports the
-   current plan, which PLN-001 now generates.
+   [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). PRG-003, ACT-001, and ACT-002 wait on
+   the study-activity records described above. **PRG-001 waits on the priority-focus evidence
+   alone**, the plan and the revisions it also reports now both existing — and the `/progress` screen
+   that gathers them is a *reading* of six existing contracts rather than a consumer of it, per
+   [ADR-029](../adr/ADR-029-progress-overview.md).
 4. Plan generation/read/update. **Done** — PLN-001, PLN-002, and PLN-003 generate a plan and read
    it back, contracted by [ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 marks
    one of its items completed, contracted by
@@ -1109,3 +1128,4 @@ Implement in an order that enables one working learner flow:
 - [Database migrations](../database/migrations.md) — the seed that loads the rows the curriculum endpoints serve
 - [Delivery milestones](../roadmap/milestones.md) — which endpoints each milestone delivers
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the four revision contracts, and the one this catalogue did not hold
+- [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the screen that gathers six of these contracts and adds none, and why PRG-001 stays unimplemented

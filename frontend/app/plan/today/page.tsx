@@ -163,6 +163,9 @@ export default function DailyPlanPage() {
       <nav aria-label="Learner actions">
         <ul className={styles.actions}>
           <li>
+            <Link href="/progress">Where your study stands</Link>
+          </li>
+          <li>
             <Link href="/plan">Your study plan</Link>
           </li>
           <li>
