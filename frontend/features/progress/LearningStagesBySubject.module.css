@@ -1,0 +1,78 @@
+/*
+ * The panel matches the other five on the progress overview rather than
+ * introducing a shape of its own; the four rules below repeat
+ * `StudyProgressOverview.module.css` deliberately, because extracting a shared
+ * panel stylesheet is a refactor and this is a feature change.
+ */
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+.lead {
+  margin: 0 0 var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.subjects,
+.topics {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subjects {
+  gap: var(--space-4);
+}
+
+.topics {
+  gap: var(--space-2);
+}
+
+.subject {
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+.subjectHeading {
+  margin: 0 0 var(--space-2);
+  font-size: 0.9375rem;
+}
+
+.subjectCode,
+.topicCode {
+  color: var(--colour-text-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.topicName {
+  margin: 0;
+}
+
+/*
+ * Every stage is styled identically, deliberately.
+ *
+ * A colour scale, a bar, or a heavier weight for a later stage would order the
+ * five against each other, and nothing in LearnFlow compares two stages: a
+ * learner may move to any of them from any of them, including backwards. The
+ * word alone carries the meaning, so nothing here depends on colour being seen
+ * either.
+ */
+.stage {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
