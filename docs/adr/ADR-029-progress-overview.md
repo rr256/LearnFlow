@@ -2,7 +2,7 @@
 title: "ADR-029: Show the Progress Overview as a Reading of What Is Stored, Counting Nothing of Its Own"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-14
+last_updated: 2026-08-15
 related:
   - ../00-project-context.md
   - ADR-015-frontend-foundation-and-server-rendered-api-access.md
@@ -71,6 +71,30 @@ migration, and no backend change at all**.
 
 **FR-011 is not met in full**, and this record is explicit about which parts are not and why. See
 [What FR-011 asks, and what this meets](#what-fr-011-asks-and-what-this-meets).
+
+## Implementation status — 2026-08-15 (priority focus)
+
+*Note added 2026-08-15. The decision below is unchanged; this records what has since been built
+against one row of its FR-011 table.*
+
+**FR-011's priority-focus criterion is now partly met.** The row below reads "**Not met, and not
+buildable.** Nothing stores quiz outcomes, external test results, or mistake evidence, and ranking
+topics against each other is refused by terminology."
+[ADR-031](ADR-031-priority-focus-panel.md) supersedes that conclusion on a narrow ground and leaves
+the rest of this record intact: the ranking objection does not reach a design that **ranks nothing**,
+and plan dates, revision dates, and saved availability **are** stored evidence.
+
+`/progress` now leads with a priority focus panel gathering three facts a backend rule already
+decided — an item whose day has passed with nothing said about it, a review REV-001 reports as due,
+and a saved week PLN-006 says does not reach the horizon. Nothing is ordered by importance, numbered,
+capped, scored, or counted, and the recorded **learning stage is deliberately not a signal**, for the
+reason this record and ADR-030 both give: a learner may move to any of the five from any of them.
+
+**What has not changed.** Subject and topic progress stays separately delivered, by the stages panel
+[ADR-030](ADR-030-learning-stages-by-subject-panel.md) added. Quiz history and external test results
+remain **unbuilt**, because FR-009 and FR-010 do not exist. **FR-011 is still not met in full** — two
+of its four criteria are met and a third is partly met. The read-only shape, the counting rule, and
+the refusal to fix PRG-001's contract all stand, and this record's own decision text is untouched.
 
 ## Context
 

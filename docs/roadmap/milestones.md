@@ -31,6 +31,7 @@ related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-029-progress-overview.md
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
+  - ../adr/ADR-031-priority-focus-panel.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -130,8 +131,12 @@ contracts, so it needed no endpoint and no migration, and it writes and counts n
 [ADR-029](../adr/ADR-029-progress-overview.md). It has since gained a panel gathering the recorded
 learning stages under the subject each topic belongs to, joining PRG-002 to CUR-003 in the client and
 listing them rather than counting them, recorded in
-[ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md). Material status, study activities, and
-priority focus areas are what remain.
+[ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md). It now leads with a **priority focus**
+panel as well, gathering three facts backend rules already decided — work whose day has passed,
+reviews reported as due, and a saved week that falls short — with the reason each entry is there and
+**no ranking of any kind**, proposed in
+[ADR-031](../adr/ADR-031-priority-focus-panel.md). Material status, study activities, and the quiz,
+test, and mistake evidence a fuller priority focus would draw on are what remain.
 
 ### Definition of Done
 
@@ -219,11 +224,20 @@ priority focus areas are what remain.
   view, which it links to. What is gathered is the *learning stage* alone, since `material_status` is
   not created and `study_activities` does not exist. Recorded in
   [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md).
-  **The item stays open on its second count.** *Priority focus areas* are not built and are not
-  buildable: nothing stores the quiz, test, or mistake evidence one would be drawn from, and ranking
-  topics against each other is refused by terminology. **PRG-001 is therefore still not implemented**,
-  and now waits on that evidence alone. **FR-011 is not met in full** — two of its four acceptance
-  criteria are met, and
+  **The item's second count is now partly met.** *Priority focus areas* **are** built, at the head of
+  the same screen and as a third reading that adds no read at all: the panel gathers work whose day
+  has passed with nothing said about it, reviews REV-001 reports as due, and a saved week PLN-006 says
+  does not reach the horizon — three facts a **backend rule already decided** — and gives the reason
+  each entry is there, in the sentence the record itself carries. **It ranks nothing**: its groups sit
+  in a fixed presentation order that orders nothing, no entry is numbered or capped, and the recorded
+  *learning stage* is deliberately not a signal, because selecting some of the five stages would rank
+  them against each other. It writes nothing and counts nothing, as the rest of the screen does not.
+  Contracted by [ADR-031](../adr/ADR-031-priority-focus-panel.md).
+  **The item stays open** because the priority focus is drawn only from the evidence LearnFlow stores:
+  no quiz outcome, external test result, or mistake evidence exists to draw one from, and material
+  status and study activity are still not stored either. **PRG-001 is therefore still not
+  implemented**, and now waits on that quiz, test, and mistake evidence alone. **FR-011 is not met in
+  full** — two of its four acceptance criteria are met and a third is partly met, and
   [endpoints.md](../api/endpoints.md#prg-001-prg-003-act-001-and-act-002-not-implemented) carries
   the breakdown.
 - [x] Supportive learning-stage labels and next actions are used in UI. The stored values are
@@ -562,4 +576,5 @@ which keeps the plan-views item below open even though all four levels are now v
 - [Deferred ideas](future-ideas.md)
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the revision item this closes, and Milestone 3's last unbuilt requirement
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the Milestone 2 progress-overview item this advances, and the two counts on which it stays open
-- [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the first of those two counts, now met, and why the second stays open
+- [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the first of those two counts, now met, and why the second stayed open
+- [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the second count, now partly met, and the evidence the item still waits on

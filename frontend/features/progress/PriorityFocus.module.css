@@ -1,0 +1,87 @@
+/*
+ * The panel matches the others on the progress overview rather than introducing a
+ * shape of its own; the four rules below repeat `StudyProgressOverview.module.css`
+ * deliberately, because extracting a shared panel stylesheet is a refactor and
+ * this is a feature change — the call ADR-030's panel made about the same rules.
+ */
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+.lead {
+  margin: 0 0 var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.groups,
+.entries {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.groups {
+  gap: var(--space-4);
+}
+
+.entries {
+  gap: var(--space-2);
+}
+
+/*
+ * Every group is styled identically, deliberately.
+ *
+ * No group is more urgent than another, so nothing here sizes, colours, or orders
+ * one above the rest. Work whose day has passed, a review that is ready, and a
+ * week that falls short are three different kinds of fact about three different
+ * records, and the learner decides which to pick up. A heavier border or a
+ * warning colour on one of them would be a ranking drawn rather than written.
+ */
+.group {
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+.groupHeading {
+  margin: 0 0 var(--space-2);
+  font-size: 0.9375rem;
+}
+
+.entry {
+  margin: 0;
+}
+
+.title {
+  margin: 0;
+}
+
+.context,
+.fact,
+.why {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.why {
+  font-style: italic;
+}
+
+.action {
+  margin: var(--space-2) 0 0;
+  font-size: 0.9375rem;
+}

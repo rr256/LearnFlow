@@ -9,8 +9,10 @@ import {
 } from "@/features/planner/plan";
 import { selectDailyWork, weekHasPassed } from "@/features/planner/today";
 import { LearningStagesBySubject } from "@/features/progress/LearningStagesBySubject";
+import { PriorityFocus } from "@/features/progress/PriorityFocus";
 import styles from "@/features/progress/StudyProgressOverview.module.css";
 import { describePlanType, selectDueReviews, selectMarkedWork } from "@/features/progress/overview";
+import { selectPriorityFocus } from "@/features/progress/priority-focus";
 import { selectStagesBySubject } from "@/features/progress/subject-stages";
 import type { MarkedGroup } from "@/features/progress/overview";
 import type { RecordedStages } from "@/features/progress/subject-stages";
@@ -45,8 +47,9 @@ interface StudyProgressOverviewProps {
  * This is the **progress overview** [FR-011](docs/requirements/functional.md)
  * describes, and it is a **reading**: it consumes LRN-001, GOAL-002, PLN-002,
  * PLN-003, PLN-006, REV-001, PRG-002, and CUR-003 unchanged and adds no endpoint
- * of its own. PRG-001 stays unimplemented, because it also promises priority
- * focus areas and nothing stores the evidence one would be drawn from.
+ * of its own. PRG-001 stays unimplemented: the priority focus panel below is
+ * drawn from facts these eight reads already carry, and the quiz, test, and
+ * mistake evidence PRG-001's purpose also promises is still stored nowhere.
  *
  * **It writes nothing at all.** No status control, no generate control, no adapt
  * control, and no scheduling control — the read-only shape ADR-026 fixed for the
@@ -74,6 +77,16 @@ export function StudyProgressOverview({
 }: StudyProgressOverviewProps) {
   return (
     <>
+      {/*
+       * What needs attention comes before where things stand: a learner opening
+       * this screen is asking what to pick up, and the panels below answer where
+       * they are. Everything it names is drawn from the same reads the panels
+       * below render, so the two cannot disagree.
+       */}
+      <PriorityFocus
+        focus={selectPriorityFocus(week, today, revisions, feasibility)}
+        hasWeek={week !== null}
+      />
       <PlanStanding roadmap={roadmap} week={week} />
       <TodaysWork today={today} week={week} work={selectDailyWork(week, today)} />
       {/*

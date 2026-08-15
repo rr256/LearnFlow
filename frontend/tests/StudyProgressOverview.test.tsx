@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { StudyProgressOverview } from "@/features/progress/StudyProgressOverview";
@@ -162,6 +162,41 @@ function overview(overrides: Partial<Parameters<typeof StudyProgressOverview>[0]
 }
 
 describe("StudyProgressOverview", () => {
+  it("gathers what could use the learner's attention, above where things stand", () => {
+    /* A learner opening this screen is asking what to pick up, and the panels
+     * below answer where they are. Both readings come from the same eight reads,
+     * so the two cannot disagree. */
+    render(overview({ revisions: [revision()] }));
+
+    const headings = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(headings[0]).toBe("What could use your attention");
+    expect(headings).toContain("Where your plan stands");
+  });
+
+  it("says why a review is on the priority focus panel, in the backend's words", () => {
+    render(overview({ revisions: [revision()] }));
+
+    const panel = screen
+      .getByRole("heading", { name: "What could use your attention" })
+      .closest("section");
+    if (!panel) {
+      throw new Error("The priority focus panel was not rendered.");
+    }
+    expect(within(panel).getByRole("heading", { name: "Topics ready to come back" })).toBeDefined();
+    expect(within(panel).getByText(/ready to review since 2026-08-14/)).toBeDefined();
+    expect(
+      within(panel).getByText(/LearnFlow brings a topic back 7 days after finished study/),
+    ).toBeDefined();
+  });
+
+  it("says nothing is waiting when no record needs attention", () => {
+    render(overview({ revisions: [revision({ is_due: false })] }));
+
+    expect(screen.getByText(/Nothing is waiting on you right now/)).toBeDefined();
+  });
+
   it("says what each active plan covers, using the count the API reported", () => {
     render(overview());
 
@@ -265,10 +300,16 @@ describe("StudyProgressOverview", () => {
   it("lists the reviews the backend says are ready, with the reason each exists", () => {
     render(overview());
 
-    expect(screen.getByRole("heading", { name: "Ready to review" })).toBeDefined();
-    expect(screen.getByText("Deadlock")).toBeDefined();
+    /* Scoped to this panel, because a review that is ready is also named by the
+     * priority focus panel above -- the same fact gathered there and detailed
+     * here, which is what a summary panel is for. */
+    const panel = screen.getByRole("heading", { name: "Ready to review" }).closest("section");
+    if (!panel) {
+      throw new Error("The ready-to-review panel was not rendered.");
+    }
+    expect(within(panel).getByText("Deadlock")).toBeDefined();
     expect(
-      screen.getByText(/LearnFlow brings a topic back 7 days after finished study/),
+      within(panel).getByText(/LearnFlow brings a topic back 7 days after finished study/),
     ).toBeDefined();
   });
 
