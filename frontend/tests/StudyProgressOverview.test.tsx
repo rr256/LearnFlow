@@ -2,12 +2,14 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { StudyProgressOverview } from "@/features/progress/StudyProgressOverview";
+import type { RecordedStages } from "@/features/progress/subject-stages";
 import type { Revision } from "@/types/revision";
 import type { PlanFeasibility, PlanItem, StudyPlan } from "@/types/study-plan";
 
 afterEach(cleanup);
 
 const TODAY = "2026-08-14";
+const CURRICULUM_HREF = "/curriculum/programs/program-1";
 
 function item(overrides: Partial<PlanItem> = {}): PlanItem {
   return {
@@ -103,12 +105,55 @@ function revision(overrides: Partial<Revision> = {}): Revision {
   };
 }
 
+function stages(): RecordedStages {
+  return {
+    records: [
+      {
+        id: "progress-1",
+        learner_id: "learner-1",
+        learning_stage: "practice_ready",
+        stage_source: "learner",
+        topic: {
+          id: "topic-1",
+          code: null,
+          name: "CPU scheduling",
+          is_trackable: true,
+          subject_id: "subject-1",
+          curriculum_version_id: "version-1",
+        },
+      },
+    ],
+    subjects: [
+      {
+        id: "subject-1",
+        code: "CS-OS",
+        name: "Operating Systems",
+        description: null,
+        position: 1,
+        topics: [
+          {
+            id: "topic-1",
+            code: null,
+            name: "CPU scheduling",
+            description: null,
+            position: 1,
+            is_trackable: true,
+            subtopics: [],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function overview(overrides: Partial<Parameters<typeof StudyProgressOverview>[0]> = {}) {
   return (
     <StudyProgressOverview
+      curriculumHref={CURRICULUM_HREF}
       feasibility={feasibility()}
       revisions={[revision()]}
       roadmap={roadmap()}
+      stages={stages()}
       today={TODAY}
       week={week()}
       {...overrides}
@@ -346,6 +391,32 @@ describe("StudyProgressOverview", () => {
     render(overview({ revisions: [] }));
 
     expect(screen.getByText(/No reviews are scheduled yet/)).toBeDefined();
+  });
+
+  it("gathers the recorded learning stages under the subject each topic belongs to", () => {
+    render(overview());
+
+    expect(
+      screen.getByRole("heading", { name: "Learning stages you have recorded" }),
+    ).toBeDefined();
+    expect(screen.getByRole("heading", { name: /Operating Systems/ })).toBeDefined();
+    expect(screen.getByText("Practice-ready")).toBeDefined();
+  });
+
+  it("explains a learner who has recorded no learning stage at all", () => {
+    render(overview({ stages: { records: [], subjects: [] } }));
+
+    expect(screen.getByText(/have not recorded a learning stage for any topic yet/)).toBeDefined();
+  });
+
+  it("says when the recorded stages could not be read, without emptying the page", () => {
+    /* The other five panels state facts of their own, so an unreadable
+     * PRG-002 or CUR-003 costs the reader that panel rather than the screen. */
+    render(overview({ stages: null }));
+
+    expect(screen.getByText(/could not be read just now/)).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Where your plan stands" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Ready to review" })).toBeDefined();
   });
 
   it("points a learner at the screen where each thing is done", () => {

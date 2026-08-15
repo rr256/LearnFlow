@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-14
+last_updated: 2026-08-15
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -30,6 +30,7 @@ related:
   - ../adr/ADR-027-plan-feasibility.md
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-029-progress-overview.md
+  - ../adr/ADR-030-learning-stages-by-subject-panel.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -126,8 +127,11 @@ curriculum, over PRG-002. Contracted by
 what the learner's plan covers, what today holds, whether their saved week reaches their date, what
 they have marked, and which topics are ready to review — built as a *reading* of six existing
 contracts, so it needed no endpoint and no migration, and it writes and counts nothing. Contracted by
-[ADR-029](../adr/ADR-029-progress-overview.md). Material status, study activities, progress gathered
-by subject, and priority focus areas are what remain.
+[ADR-029](../adr/ADR-029-progress-overview.md). It has since gained a panel gathering the recorded
+learning stages under the subject each topic belongs to, joining PRG-002 to CUR-003 in the client and
+listing them rather than counting them, recorded in
+[ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md). Material status, study activities, and
+priority focus areas are what remain.
 
 ### Definition of Done
 
@@ -204,13 +208,22 @@ by subject, and priority focus areas are what remain.
   [terminology](../domain/terminology.md) forbids counting skips, postponements, and reviews by name,
   so what a learner has marked is listed rather than tallied. Contracted by
   [ADR-029](../adr/ADR-029-progress-overview.md).
-  **This item stays open on both of its counts.** *Subject/topic progress* is not gathered — the
-  recorded stages are read back by PRG-002 and shown beside each topic in the curriculum view, and a
-  stages-by-subject panel was deliberately left out of that change. *Priority focus areas* are not
-  built and are not buildable: nothing stores the quiz, test, or mistake evidence one would be drawn
-  from, and ranking topics against each other is refused by terminology. **PRG-001 is therefore still
-  not implemented**, and now waits on that evidence alone. **FR-011 is not met in full** — one of its
-  four acceptance criteria is met, and
+  **The first of this item's two counts is now met**, and the screen now reads **eight** contracts
+  rather than the six named above. *Subject/topic progress* **is** gathered: the
+  overview lists the learning stages the learner recorded under the subject each topic belongs to, by
+  joining PRG-002 to CUR-003 in the client — the join the curriculum view already performs, read the
+  other way round — so it needed no endpoint, no column, no migration, and no backend change either.
+  The panel **lists and never counts**: no figure beside a subject, no percentage of a subject
+  recorded, and no ordering, grouping, or colouring by stage, because a learner may move to any stage
+  from any stage. It **writes nothing**; recording a stage stays beside the topic in the curriculum
+  view, which it links to. What is gathered is the *learning stage* alone, since `material_status` is
+  not created and `study_activities` does not exist. Recorded in
+  [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md).
+  **The item stays open on its second count.** *Priority focus areas* are not built and are not
+  buildable: nothing stores the quiz, test, or mistake evidence one would be drawn from, and ranking
+  topics against each other is refused by terminology. **PRG-001 is therefore still not implemented**,
+  and now waits on that evidence alone. **FR-011 is not met in full** — two of its four acceptance
+  criteria are met, and
   [endpoints.md](../api/endpoints.md#prg-001-prg-003-act-001-and-act-002-not-implemented) carries
   the breakdown.
 - [x] Supportive learning-stage labels and next actions are used in UI. The stored values are
@@ -549,3 +562,4 @@ which keeps the plan-views item below open even though all four levels are now v
 - [Deferred ideas](future-ideas.md)
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the revision item this closes, and Milestone 3's last unbuilt requirement
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the Milestone 2 progress-overview item this advances, and the two counts on which it stays open
+- [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the first of those two counts, now met, and why the second stays open

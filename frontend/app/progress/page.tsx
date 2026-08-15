@@ -6,11 +6,14 @@ import { Notice } from "@/components/Notice";
 import { planOfType } from "@/features/planner/plan";
 import { learnerToday } from "@/features/planner/today";
 import { StudyProgressOverview } from "@/features/progress/StudyProgressOverview";
+import type { RecordedStages } from "@/features/progress/subject-stages";
 import {
   ApiError,
   listRevisions,
   listStudyGoals,
   listStudyPlans,
+  listTopicProgress,
+  readCurriculumTree,
   readLearnerProfile,
   readPlanFeasibility,
   readStudyPlan,
@@ -38,21 +41,60 @@ interface ProgressData {
   revisions: Revision[];
   /** The learner's own calendar date, resolved from their stored timezone. */
   today: string;
+  /** The recorded stages and the curriculum placing them, or null when unread. */
+  stages: RecordedStages | null;
+}
+
+/**
+ * PRG-002 and CUR-003 — the stages this learner recorded, and the subjects that
+ * place and order them.
+ *
+ * A failure here is deliberately **not fatal to the page**, which is the call the
+ * curriculum view already makes about this pair: the other five panels state
+ * facts of their own, and one unreadable read should cost the reader that panel
+ * rather than the screen. Returning null is what the panel renders as "could not
+ * be read", which it says apart from "you have recorded nothing".
+ *
+ * The two calls run together: neither addresses the other's result.
+ *
+ * `MAX_PAGE_SIZE` is not requested explicitly — the client already defaults
+ * PRG-002 to it, which covers the curated GATE CSE curriculum in one page. A
+ * curriculum large enough to exceed it would need paging here, and the
+ * `pagination` block is what would reveal that, exactly as ADR-017 recorded for
+ * the curriculum view.
+ */
+async function recordedStages(curriculumVersionId: string): Promise<RecordedStages | null> {
+  try {
+    const [records, tree] = await Promise.all([
+      listTopicProgress({ curriculumVersionId }),
+      readCurriculumTree(curriculumVersionId),
+    ]);
+    return { records, subjects: tree.subjects };
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    return null;
+  }
 }
 
 /**
  * Everything the overview states, in as few round trips as the contracts allow.
  *
- * Six existing reads and **no new endpoint**: LRN-001, GOAL-002, PLN-002,
- * PLN-003, PLN-006, and REV-001. PRG-001 — the catalogued
+ * Eight existing reads and **no new endpoint**: LRN-001, GOAL-002, PLN-002,
+ * PLN-003, PLN-006, REV-001, PRG-002, and CUR-003. PRG-001 — the catalogued
  * `GET /api/v1/progress/overview` — stays unimplemented, because it also promises
  * priority focus areas and nothing stores the evidence one would be drawn from.
  *
  * The profile and the goals are independent, so they run together; the plans
  * cannot, because which goal's plans to read depends on the goal. PLN-002 lists
  * the active plans without their items, so the two that exist are opened with
- * PLN-003, and the feasibility reading and the revisions join them — both are
- * reads, so they cost a round trip and change nothing.
+ * PLN-003, and the feasibility reading, the revisions, and the recorded stages
+ * join them — all are reads, so they cost a round trip and change nothing.
+ *
+ * The stages are addressed by the goal's own `curriculum_version.id`, so nothing
+ * extra is read to find it, and PRG-002 is filtered to the version the learner is
+ * working through rather than to every version they have ever recorded against.
  *
  * **The date comes from the learner's stored timezone, not this server's**, by
  * the same `learnerToday` the daily and monthly views use, with the same UTC
@@ -71,19 +113,28 @@ async function readProgressData(): Promise<ProgressData> {
   // all the learner has.
   const goal = goals.find((candidate) => candidate.status === "active") ?? goals[0] ?? null;
   if (!goal) {
-    return { goal: null, roadmap: null, week: null, feasibility: null, revisions: [], today };
+    return {
+      goal: null,
+      roadmap: null,
+      week: null,
+      feasibility: null,
+      revisions: [],
+      today,
+      stages: null,
+    };
   }
 
   const active = await listStudyPlans({ studyGoalId: goal.id, status: "active" });
   const summaries = { roadmap: planOfType(active, "roadmap"), week: planOfType(active, "weekly") };
-  const [roadmap, week, feasibility, revisions] = await Promise.all([
+  const [roadmap, week, feasibility, revisions, stages] = await Promise.all([
     summaries.roadmap ? readStudyPlan(summaries.roadmap.id) : Promise.resolve(null),
     summaries.week ? readStudyPlan(summaries.week.id) : Promise.resolve(null),
     readPlanFeasibility(goal.id),
     listRevisions(),
+    recordedStages(goal.curriculum_version.id),
   ]);
 
-  return { goal, roadmap, week, feasibility, revisions, today };
+  return { goal, roadmap, week, feasibility, revisions, today, stages };
 }
 
 /**
@@ -138,9 +189,14 @@ async function StudyProgressSection() {
 
   return (
     <StudyProgressOverview
+      // Where a stage is recorded: the program page carries the control beside
+      // each trackable topic, so the panel links there rather than to the
+      // program list a learner would then have to choose from.
+      curriculumHref={`/curriculum/programs/${data.goal.learning_program.id}`}
       feasibility={data.feasibility}
       revisions={data.revisions}
       roadmap={data.roadmap}
+      stages={data.stages}
       today={data.today}
       week={data.week}
     />
@@ -151,9 +207,10 @@ async function StudyProgressSection() {
  * The progress overview: where the learner's study stands, from what is stored.
  *
  * This is the screen [FR-011](docs/requirements/functional.md) describes, built
- * as a **reading** of six existing contracts rather than as PRG-001. It shows
+ * as a **reading** of eight existing contracts rather than as PRG-001. It shows
  * what the plan covers, what today holds, whether the saved week reaches the
- * date, what the learner has marked, and which topics are ready to review.
+ * date, what the learner has marked, the learning stage they recorded for each
+ * topic under its subject, and which topics are ready to review.
  *
  * **It writes nothing at all** — no status control, no generate control, no adapt
  * control, no scheduling control — which is the read-only shape ADR-026 fixed for
@@ -173,8 +230,9 @@ export default function ProgressPage() {
       <p className={styles.lead}>
         Everything LearnFlow has recorded about where you are, in one place: what your plan covers,
         what today holds, whether the study time you saved reaches the date you are working toward,
-        what you have marked, and which topics are ready to come back. Nothing here changes
-        anything — each panel links to the screen where you act on it.
+        what you have marked, the learning stage you recorded for each topic, and which topics are
+        ready to come back. Nothing here changes anything — each panel links to the screen where you
+        act on it.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading where your study stands…</p>}>

@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-14
+last_updated: 2026-08-15
 related:
   - ../00-project-context.md
   - conventions.md
@@ -29,6 +29,7 @@ related:
   - ../adr/ADR-027-plan-feasibility.md
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-029-progress-overview.md
+  - ../adr/ADR-030-learning-stages-by-subject-panel.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -818,7 +819,11 @@ page rather than a failure. An unknown `curriculum_version_id` returns an empty 
 `subject_id` and `learning_stage` filters, which this catalogue's original intent line also named,
 are **not** accepted. They are compatible additions under
 [versioning](versioning.md#compatible-changes-within-a-major-version) and arrive with the screen that
-needs them.
+needs them. **Neither screen reading this endpoint has needed one.** The curriculum view and the
+progress overview's stages-by-subject panel both want the collection in full and join it to CUR-003
+by topic identifier, so a filter would narrow a read they want whole — see
+[ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md), which also records why no subject name
+is added to this response.
 
 Errors: `422` `validation_error` for a `limit`, `offset`, or `curriculum_version_id` outside those
 bounds or shapes; `409` `conflict` when more than one learner is stored.
@@ -863,21 +868,24 @@ Each waits on something that does not exist rather than on a decision:
   nothing stores and which would rank topics against each other, something
   [terminology](../domain/terminology.md) refuses.
 
-  **The progress overview screen does not use it.** `/progress` is a *reading* of six existing
-  contracts — LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, and REV-001 — and adds **no endpoint, no
-  column, no migration, and no backend change at all**, which is the shape
+  **The progress overview screen does not use it.** `/progress` is a *reading* of eight existing
+  contracts — LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, REV-001, PRG-002, and CUR-003 — and adds
+  **no endpoint, no column, no migration, and no backend change at all**, which is the shape
   [ADR-026](../adr/ADR-026-monthly-study-view.md) used for the monthly study view. It clears none of
   [ADR-023](../adr/ADR-023-daily-study-view.md)'s bar for a new endpoint, because every fact it states
   is already a field of a response. Fixing PRG-001's shape now would make it a public contract that
   the half its own purpose promises would later break, so it stays uncontracted until the evidence
-  arrives. Contracted by [ADR-029](../adr/ADR-029-progress-overview.md).
+  arrives. Contracted by [ADR-029](../adr/ADR-029-progress-overview.md), and extended by
+  [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md).
 
   Of [FR-011](../requirements/functional.md#fr-011-progress-overview)'s four acceptance criteria,
-  **one is met**: viewing upcoming study tasks and revisions due. Progress by subject and topic is
-  not — the recorded stages are read back by PRG-002 and shown beside each topic in the curriculum
-  view, and gathering them by subject was deliberately left out of that change. Priority focus areas
-  are not, for the reason above. Recent quiz history and external test results are not, because FR-009
-  and FR-010 do not exist. **FR-011 is not met in full.**
+  **two are met**: viewing upcoming study tasks and revisions due, and viewing progress by subject and
+  topic — the recorded stages, gathered under each topic's subject on `/progress` by joining PRG-002
+  to CUR-003 in the client, and still shown beside each topic in the curriculum view where they are
+  recorded. That second one is met **for the progress LearnFlow stores**, which is the learning stage
+  alone: `material_status` is not created and `study_activities` does not exist. Priority focus areas
+  are not met, for the reason above. Recent quiz history and external test results are not, because
+  FR-009 and FR-010 do not exist. **FR-011 is not met in full.**
 - **PRG-003** promises a progress summary, evidence, and a next action. The only evidence stored is
   the stage itself, so today it would return exactly what PRG-002 returns per item.
 - **ACT-001** and **ACT-002** need `study_activities`, which is not created.
@@ -1082,8 +1090,10 @@ Implement in an order that enables one working learner flow:
    [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). PRG-003, ACT-001, and ACT-002 wait on
    the study-activity records described above. **PRG-001 waits on the priority-focus evidence
    alone**, the plan and the revisions it also reports now both existing — and the `/progress` screen
-   that gathers them is a *reading* of six existing contracts rather than a consumer of it, per
-   [ADR-029](../adr/ADR-029-progress-overview.md).
+   that gathers them is a *reading* of eight existing contracts rather than a consumer of it, per
+   [ADR-029](../adr/ADR-029-progress-overview.md) and
+   [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md), the second of which made PRG-002 one
+   of the eight without changing it.
 4. Plan generation/read/update. **Done** — PLN-001, PLN-002, and PLN-003 generate a plan and read
    it back, contracted by [ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 marks
    one of its items completed, contracted by
@@ -1128,4 +1138,5 @@ Implement in an order that enables one working learner flow:
 - [Database migrations](../database/migrations.md) — the seed that loads the rows the curriculum endpoints serve
 - [Delivery milestones](../roadmap/milestones.md) — which endpoints each milestone delivers
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the four revision contracts, and the one this catalogue did not hold
-- [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the screen that gathers six of these contracts and adds none, and why PRG-001 stays unimplemented
+- [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the screen that gathered six of these contracts and added none, and why PRG-001 stays unimplemented
+- [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the seventh and eighth contracts that screen reads, PRG-002 and CUR-003, and why neither gains a filter or a field

@@ -8,9 +8,12 @@ import {
   itemClassName,
 } from "@/features/planner/plan";
 import { selectDailyWork, weekHasPassed } from "@/features/planner/today";
+import { LearningStagesBySubject } from "@/features/progress/LearningStagesBySubject";
 import styles from "@/features/progress/StudyProgressOverview.module.css";
 import { describePlanType, selectDueReviews, selectMarkedWork } from "@/features/progress/overview";
+import { selectStagesBySubject } from "@/features/progress/subject-stages";
 import type { MarkedGroup } from "@/features/progress/overview";
+import type { RecordedStages } from "@/features/progress/subject-stages";
 import type { Revision } from "@/types/revision";
 import type { DailyWork } from "@/features/planner/today";
 import type { PlanItem, PlanFeasibility as PlanFeasibilityReading, StudyPlan } from "@/types/study-plan";
@@ -26,6 +29,14 @@ interface StudyProgressOverviewProps {
   feasibility: PlanFeasibilityReading | null;
   /** Every revision the learner has, in the order the backend returned them. */
   revisions: Revision[];
+  /**
+   * The learner's recorded stages and the curriculum that places them, or null
+   * when either read failed. Null is not an empty study history, and the panel
+   * says which of the two it is looking at.
+   */
+  stages: RecordedStages | null;
+  /** The curriculum screen where a learning stage is recorded and changed. */
+  curriculumHref: string;
 }
 
 /**
@@ -33,9 +44,9 @@ interface StudyProgressOverviewProps {
  *
  * This is the **progress overview** [FR-011](docs/requirements/functional.md)
  * describes, and it is a **reading**: it consumes LRN-001, GOAL-002, PLN-002,
- * PLN-003, PLN-006, and REV-001 unchanged and adds no endpoint of its own.
- * PRG-001 stays unimplemented, because it also promises priority focus areas and
- * nothing stores the evidence one would be drawn from.
+ * PLN-003, PLN-006, REV-001, PRG-002, and CUR-003 unchanged and adds no endpoint
+ * of its own. PRG-001 stays unimplemented, because it also promises priority
+ * focus areas and nothing stores the evidence one would be drawn from.
  *
  * **It writes nothing at all.** No status control, no generate control, no adapt
  * control, and no scheduling control — the read-only shape ADR-026 fixed for the
@@ -58,6 +69,8 @@ export function StudyProgressOverview({
   today,
   feasibility,
   revisions,
+  stages,
+  curriculumHref,
 }: StudyProgressOverviewProps) {
   return (
     <>
@@ -70,6 +83,17 @@ export function StudyProgressOverview({
        */}
       <PlanFeasibility reading={feasibility} />
       <MarkedWork groups={selectMarkedWork([week, roadmap])} />
+      {/*
+       * What the learner said about the *topics*, beside what they said about
+       * the plan. Both are their own statements, so the two sit together; the
+       * plan item records whether work happened and the stage records how far
+       * along they judge themselves to be, and nothing derives either from the
+       * other.
+       */}
+      <LearningStagesBySubject
+        curriculumHref={curriculumHref}
+        groups={stages ? selectStagesBySubject(stages.records, stages.subjects) : null}
+      />
       <ReadyToReview due={selectDueReviews(revisions)} hasAny={revisions.length > 0} />
     </>
   );
