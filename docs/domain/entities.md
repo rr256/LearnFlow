@@ -284,7 +284,7 @@ The following are important, but are not domain entities in this document:
 
 - **PDF chunks, embeddings, and vector records:** RAG/infrastructure implementation details.
 - **AI provider, storage provider, and vector provider:** architecture interfaces/adapters.
-- **Dashboard priority focus:** a calculated learner-facing view derived from evidence, not necessarily stored as its own entity.
+- **Priority focus area:** a learner-facing *gathering* of records that already exist — an item whose day has passed, a review reported as due, a saved week that falls short — rather than a stored entity. Nothing is calculated, scored, or ranked to produce one; see [terminology](terminology.md) and [ADR-031](../adr/ADR-031-priority-focus-panel.md).
 - **Authentication credentials and roles:** future identity/security concerns; not part of the local single-learner MVP domain behavior.
 
 ## Relationship Summary

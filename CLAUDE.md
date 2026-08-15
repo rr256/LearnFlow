@@ -98,7 +98,9 @@ which is **accepted** — and the progress overview by
 [`docs/adr/ADR-029-progress-overview.md`](docs/adr/ADR-029-progress-overview.md), and its
 learning-stages-by-subject panel by
 [`docs/adr/ADR-030-learning-stages-by-subject-panel.md`](docs/adr/ADR-030-learning-stages-by-subject-panel.md),
-which changes no contract.
+which changes no contract, and its priority-focus panel by
+[`docs/adr/ADR-031-priority-focus-panel.md`](docs/adr/ADR-031-priority-focus-panel.md), which is
+**accepted** and changes no contract either.
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -249,7 +251,8 @@ not list**, so a due date computed from a stage cannot drift from the sentence e
 
 **The progress overview gathers where a learner's study stands** — `/progress`, which adds **no
 endpoint, no column, no migration, and no backend change at all**. It reads eight existing contracts —
-LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, REV-001, and PRG-002 with CUR-003 — and shows what each
+LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, REV-001, and PRG-002 with CUR-003 — and shows what
+could use the learner's attention and why, what each
 active plan covers, what today holds, whether the saved week reaches the date, what the learner has
 marked, the learning stages they recorded gathered **by subject**, and which topics are ready to
 review. **It writes nothing at all**: no status, generate, adapt, scheduling, or stage
@@ -263,8 +266,8 @@ The date comes from the same `learnerToday` and `selectDailyWork` the daily view
 timezone conversion and no new mirror of `select_overdue`** is written. **This is the screen the word
 *dashboard* was reserved for**; its canonical name is **progress overview**, and the home screen at
 `/` is unchanged and is still not a dashboard. **PRG-001 stays unimplemented**, waiting on the
-priority-focus evidence alone. **FR-011 is not met in full** — two of its four criteria are met; do not
-write that it is complete.
+quiz, external-test, and mistake evidence alone. **FR-011 is not met in full** — two of its four criteria are met and a third is
+partly met; do not write that it is complete.
 
 **The stages panel is a reading of PRG-002 and CUR-003, joined in the client** — the join the
 curriculum view already performs, read the other way round, so **no filter and no subject name is
@@ -277,6 +280,26 @@ stage from any stage. The order is the **curriculum's own**, arrived at by walki
 rather than sorting PRG-002's newest-first list. An unreadable read empties **that panel alone**, said
 apart from "you have recorded nothing". Contracted by
 [`docs/adr/ADR-030-learning-stages-by-subject-panel.md`](docs/adr/ADR-030-learning-stages-by-subject-panel.md).
+
+**The priority focus panel leads the overview and ranks nothing** — a third reading, adding **no
+endpoint, no read, no column, no migration, and no backend change**. It gathers exactly three facts a
+**backend rule already decided**: a plan item whose day has passed with nothing said about it (through
+`selectDailyWork`, so `select_overdue` gains no second frontend mirror), a review REV-001 reports
+`is_due`, and PLN-006's `insufficient` or `unknown` verdict — a `sufficient` verdict and a verdict this
+build does not recognise both yield nothing. Each entry carries a neutral fact naming the record and
+then **the sentence the backend wrote**, rendered unchanged. **The recorded learning stage is
+deliberately not a signal**: selecting some of the five stages as priorities ranks them against each
+other, which ADR-017 and ADR-030 both refuse; where a stage explains an item it is already inside that
+item's frozen `recommendation_reason`. **Priorities are named items and reviews, never subjects** — a
+subject-level claim needs a count or a comparison. **Nothing is ranked**: the groups sit in a fixed
+presentation order that orders nothing and the copy says so, no entry is numbered, no group is styled
+as more urgent, and the list is **never capped**, because choosing which few to show is a ranking.
+**Nothing is counted** and **nothing is written**. An unreadable feasibility check is reported **apart
+from** a week that reaches the date. This **partly meets** FR-011's third criterion — for the evidence
+LearnFlow stores — and **supersedes ADR-029's and ADR-030's "not buildable" row on that narrow
+ground**, leaving everything else in both intact. **PRG-001 now waits on quiz, external-test, and
+mistake evidence alone.** Do not write that FR-011 is complete. Proposed by
+[`docs/adr/ADR-031-priority-focus-panel.md`](docs/adr/ADR-031-priority-focus-panel.md).
 
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
@@ -304,7 +327,8 @@ study view that reads both active plans over PLN-002 and PLN-003, takes the lear
 LRN-001, and **writes nothing at all**, and a `/revisions` screen that reads the learner's reviews
 over REV-001, schedules them over REV-004, and records what became of each over REV-003, and a
 `/progress` progress overview that gathers LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, REV-001, and
-PRG-002 with CUR-003 for the recorded learning stages by subject, and **writes nothing at all** either. A goal response carries the saved study week
+PRG-002 with CUR-003 for the recorded learning stages by subject, leads with a priority focus panel
+drawn from those same reads, and **writes nothing at all** either. A goal response carries the saved study week
 and the saved planning preferences, so neither setup nor home calls anything extra to show them.
 
 The frontend serves its own static `/health` for the container health check, distinct from the

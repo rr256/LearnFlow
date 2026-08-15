@@ -83,8 +83,9 @@ async function recordedStages(curriculumVersionId: string): Promise<RecordedStag
  *
  * Eight existing reads and **no new endpoint**: LRN-001, GOAL-002, PLN-002,
  * PLN-003, PLN-006, REV-001, PRG-002, and CUR-003. PRG-001 — the catalogued
- * `GET /api/v1/progress/overview` — stays unimplemented, because it also promises
- * priority focus areas and nothing stores the evidence one would be drawn from.
+ * `GET /api/v1/progress/overview` — stays unimplemented: the priority focus panel
+ * is drawn from facts these eight already carry, and the quiz, test, and mistake
+ * evidence PRG-001's purpose also promises is still stored nowhere.
  *
  * The profile and the goals are independent, so they run together; the plans
  * cannot, because which goal's plans to read depends on the goal. PLN-002 lists
@@ -208,9 +209,10 @@ async function StudyProgressSection() {
  *
  * This is the screen [FR-011](docs/requirements/functional.md) describes, built
  * as a **reading** of eight existing contracts rather than as PRG-001. It shows
- * what the plan covers, what today holds, whether the saved week reaches the
- * date, what the learner has marked, the learning stage they recorded for each
- * topic under its subject, and which topics are ready to review.
+ * what could use the learner's attention and why, what the plan covers, what
+ * today holds, whether the saved week reaches the date, what the learner has
+ * marked, the learning stage they recorded for each topic under its subject, and
+ * which topics are ready to review.
  *
  * **It writes nothing at all** — no status control, no generate control, no adapt
  * control, no scheduling control — which is the read-only shape ADR-026 fixed for
@@ -228,11 +230,11 @@ export default function ProgressPage() {
     <>
       <h1>Where your study stands</h1>
       <p className={styles.lead}>
-        Everything LearnFlow has recorded about where you are, in one place: what your plan covers,
-        what today holds, whether the study time you saved reaches the date you are working toward,
-        what you have marked, the learning stage you recorded for each topic, and which topics are
-        ready to come back. Nothing here changes anything — each panel links to the screen where you
-        act on it.
+        Everything LearnFlow has recorded about where you are, in one place: what could use your
+        attention and why, what your plan covers, what today holds, whether the study time you saved
+        reaches the date you are working toward, what you have marked, the learning stage you
+        recorded for each topic, and which topics are ready to come back. Nothing here changes
+        anything — each panel links to the screen where you act on it.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading where your study stands…</p>}>

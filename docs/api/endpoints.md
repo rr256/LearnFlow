@@ -30,6 +30,7 @@ related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-029-progress-overview.md
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
+  - ../adr/ADR-031-priority-focus-panel.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -862,11 +863,12 @@ is stored.
 
 Each waits on something that does not exist rather than on a decision:
 
-- **PRG-001** reports the current plan, revisions due, and priority focus areas. Two of those three
-  now exist — `study_plans` and `plan_items` are read by PLN-002 and PLN-003, and `revision_records`
-  by REV-001 — so what remains is the evidence a **priority focus area** would be drawn from, which
-  nothing stores and which would rank topics against each other, something
-  [terminology](../domain/terminology.md) refuses.
+- **PRG-001** reports the current plan, revisions due, and priority focus areas. All three now have
+  stored facts behind them — `study_plans` and `plan_items` are read by PLN-002 and PLN-003,
+  `revision_records` by REV-001, and the *priority focus area* panel is drawn from a plan item whose
+  day has passed, a review REV-001 reports as due, and PLN-006's verdict. What PRG-001 still waits on
+  is the **quiz, external-test, and mistake evidence** its purpose also implies, which FR-009 and
+  FR-010 would store and which does not exist.
 
   **The progress overview screen does not use it.** `/progress` is a *reading* of eight existing
   contracts — LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, REV-001, PRG-002, and CUR-003 — and adds
@@ -876,16 +878,22 @@ Each waits on something that does not exist rather than on a decision:
   is already a field of a response. Fixing PRG-001's shape now would make it a public contract that
   the half its own purpose promises would later break, so it stays uncontracted until the evidence
   arrives. Contracted by [ADR-029](../adr/ADR-029-progress-overview.md), and extended by
-  [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md).
+  [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md) and
+  [ADR-031](../adr/ADR-031-priority-focus-panel.md), neither of which changed a contract here.
 
   Of [FR-011](../requirements/functional.md#fr-011-progress-overview)'s four acceptance criteria,
-  **two are met**: viewing upcoming study tasks and revisions due, and viewing progress by subject and
-  topic — the recorded stages, gathered under each topic's subject on `/progress` by joining PRG-002
-  to CUR-003 in the client, and still shown beside each topic in the curriculum view where they are
-  recorded. That second one is met **for the progress LearnFlow stores**, which is the learning stage
-  alone: `material_status` is not created and `study_activities` does not exist. Priority focus areas
-  are not met, for the reason above. Recent quiz history and external test results are not, because
-  FR-009 and FR-010 do not exist. **FR-011 is not met in full.**
+  **two are met and a third is partly met**. Met: viewing upcoming study tasks and revisions due, and
+  viewing progress by subject and topic — the recorded stages, gathered under each topic's subject on
+  `/progress` by joining PRG-002 to CUR-003 in the client, and still shown beside each topic in the
+  curriculum view where they are recorded. That second one is met **for the progress LearnFlow
+  stores**, which is the learning stage alone: `material_status` is not created and `study_activities`
+  does not exist. **Partly met:** priority focus areas, gathered from the three stored facts above and
+  explained, and **ranking nothing**, per [ADR-031](../adr/ADR-031-priority-focus-panel.md) — the
+  recorded learning stage is deliberately not a signal,
+  because selecting some of the five stages would rank them against each other. It is partial because
+  no priority is drawn from quiz, test, or mistake evidence, none of which is stored. **Not met:**
+  recent quiz history and external test results, because FR-009 and FR-010 do not exist. **FR-011 is
+  not met in full.**
 - **PRG-003** promises a progress summary, evidence, and a next action. The only evidence stored is
   the stage itself, so today it would return exactly what PRG-002 returns per item.
 - **ACT-001** and **ACT-002** need `study_activities`, which is not created.
@@ -1088,12 +1096,14 @@ Implement in an order that enables one working learner flow:
 3. Progress reads/updates and basic study activities. **Partly done** — PRG-002 and PRG-004 record a
    learning stage and read it back, contracted by
    [ADR-017](../adr/ADR-017-topic-progress-api-and-schema.md). PRG-003, ACT-001, and ACT-002 wait on
-   the study-activity records described above. **PRG-001 waits on the priority-focus evidence
-   alone**, the plan and the revisions it also reports now both existing — and the `/progress` screen
-   that gathers them is a *reading* of eight existing contracts rather than a consumer of it, per
-   [ADR-029](../adr/ADR-029-progress-overview.md) and
-   [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md), the second of which made PRG-002 one
-   of the eight without changing it.
+   the study-activity records described above. **PRG-001 waits on the quiz, external-test, and
+   mistake evidence alone** — the plan, the revisions, and now a priority focus drawn from stored
+   dates and statuses all exist without it — and the `/progress` screen that gathers them is a
+   *reading* of eight existing contracts rather than a consumer of it, per
+   [ADR-029](../adr/ADR-029-progress-overview.md),
+   [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md) — which made PRG-002 one of the
+   eight without changing it — and [ADR-031](../adr/ADR-031-priority-focus-panel.md), which added no
+   read at all.
 4. Plan generation/read/update. **Done** — PLN-001, PLN-002, and PLN-003 generate a plan and read
    it back, contracted by [ADR-020](../adr/ADR-020-initial-study-plan-generation.md); PLN-004 marks
    one of its items completed, contracted by
@@ -1140,3 +1150,4 @@ Implement in an order that enables one working learner flow:
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the four revision contracts, and the one this catalogue did not hold
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the screen that gathered six of these contracts and added none, and why PRG-001 stays unimplemented
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the seventh and eighth contracts that screen reads, PRG-002 and CUR-003, and why neither gains a filter or a field
+- [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the panel that added no read and no contract, and what PRG-001 waits on now
