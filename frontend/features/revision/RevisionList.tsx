@@ -1,7 +1,10 @@
 import Link from "next/link";
 
 import styles from "@/features/revision/RevisionList.module.css";
+import { TopicResources } from "@/features/resources/TopicResources";
+import { resourcesFor } from "@/features/resources/by-topic";
 import { RevisionStatusControl } from "@/features/revision/RevisionStatusControl";
+import type { LearningResource } from "@/types/resource";
 import {
   REVISION_SETTLED_LABELS,
   REVISION_TRIGGER_LABELS,
@@ -12,6 +15,12 @@ import {
 
 interface RevisionListProps {
   revisions: Revision[];
+  /**
+   * The learner's catalogued material, keyed by the topics it covers, or null
+   * when it could not be read. Null renders the reviews without it, which costs
+   * the reader the material rather than the list of what is due.
+   */
+  resources?: Map<string, LearningResource[]> | null;
 }
 
 /**
@@ -33,8 +42,15 @@ interface RevisionListProps {
  * **Whether a revision is due is read, not derived.** `is_due` comes from the
  * backend, where `select_due` owns the rule; a screen computing its own could
  * disagree with the record it is rendering.
+ *
+ * **The material beside a review is the learner's own, and nothing suggests
+ * any.** It is what they linked to that topic in their catalogue, listed
+ * read-only; LearnFlow holds no material of its own and recommends none, so a
+ * topic with nothing linked shows nothing. That is the *resource suggestions*
+ * half of FR-006's second criterion, met for the material a learner has
+ * registered; practice suggestions still wait on FR-009.
  */
-export function RevisionList({ revisions }: RevisionListProps) {
+export function RevisionList({ revisions, resources = null }: RevisionListProps) {
   const due = revisions.filter((revision) => revision.is_due);
   const later = revisions.filter((revision) => !revision.is_due);
 
@@ -52,7 +68,7 @@ export function RevisionList({ revisions }: RevisionListProps) {
             </p>
             <ul className={styles.items}>
               {due.map((revision) => (
-                <RevisionLine key={revision.id} revision={revision} />
+                <RevisionLine key={revision.id} resources={resources} revision={revision} />
               ))}
             </ul>
           </>
@@ -68,7 +84,7 @@ export function RevisionList({ revisions }: RevisionListProps) {
           </p>
           <ul className={styles.items}>
             {later.map((revision) => (
-              <RevisionLine key={revision.id} revision={revision} />
+              <RevisionLine key={revision.id} resources={resources} revision={revision} />
             ))}
           </ul>
         </section>
@@ -78,7 +94,13 @@ export function RevisionList({ revisions }: RevisionListProps) {
 }
 
 /** One revision, as both lists show it. */
-function RevisionLine({ revision }: { revision: Revision }) {
+function RevisionLine({
+  revision,
+  resources,
+}: {
+  revision: Revision;
+  resources: Map<string, LearningResource[]> | null;
+}) {
   const settled = REVISION_SETTLED_LABELS[revision.status as RevisionStatus];
 
   return (
@@ -94,6 +116,17 @@ function RevisionLine({ revision }: { revision: Revision }) {
       {settled ? <p className={styles.settledLabel}>{settled}</p> : null}
       {revision.recommendation_reason ? (
         <p className={styles.why}>{revision.recommendation_reason}</p>
+      ) : null}
+      {/*
+        The learner's own material for this topic, read-only: adding it and
+        putting it aside live on the catalogue screen. Nothing is suggested --
+        this is what they linked, and a topic with nothing linked shows nothing.
+      */}
+      {resources && revision.topic ? (
+        <TopicResources
+          resources={resourcesFor(resources, revision.topic.id)}
+          topicName={revision.topic.name}
+        />
       ) : null}
       <RevisionStatusControl
         revisionId={revision.id}

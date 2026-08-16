@@ -2,9 +2,10 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-13
+last_updated: 2026-08-16
 related:
   - ../adr/ADR-028-revision-workflow.md
+  - ../adr/ADR-032-learning-resource-catalogue.md
   - ../00-project-context.md
   - overview.md
   - ../domain/domain-model.md
@@ -47,7 +48,7 @@ tables arrive in more than one migration.
 | Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
 | Learner planning | Implemented — `learners` and `study_goals` arrive in migration `20260801_01`, `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots), `study_goals`' planning preferences in `20260806_02`, as two typed columns rather than the `planning_preferences jsonb` documented [below](#study_goals), and `study_plans` and `plan_items` in `20260806_03`, whose controlled columns are `varchar(32)` guarded by a `CHECK` rather than the `text` documented [below](#study_plans). |
 | Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `revision_records` arrives in `20260813_01` with the revision code that reads it, per [ADR-028](../adr/ADR-028-revision-workflow.md). `study_activities` still arrives with the code that records study work. |
-| Resources and RAG metadata | Not implemented — arrives with Milestone 4. |
+| Resources and RAG metadata | Partly implemented — `resources` and `resource_topic_links` arrive in migration `20260816_01` with the catalogue code that reads them (RES-001 to RES-004), per [ADR-032](../adr/ADR-032-learning-resource-catalogue.md); two columns of `resources` are deliberately not created, and `resource_ingestions` arrives with the extractor and vector index it tracks. See [below](#resources). |
 | Assessment | Not implemented — arrives with Milestone 5. |
 | External evidence | Not implemented — arrives with Milestone 5. |
 
@@ -600,20 +601,56 @@ learner has acted on must survive that.
 
 Stores resource metadata, not the primary file binary.
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | uuid PK | Resource identifier. |
-| `owner_learner_id` | uuid FK nullable | References `learners.id`; null for curated/shared future content. |
-| `resource_type` | text | `pdf`, `note`, `pyq`, `formula_sheet`, `video_reference`, `image`, or `attachment`. |
-| `title` | text | Learner-facing title. |
-| `source_label` | text nullable | Optional source attribution. |
-| `storage_key` | text nullable | Opaque storage-provider reference. |
-| `external_reference` | text nullable | Local video/reference metadata, not a provider credential. |
-| `metadata` | jsonb nullable | File-specific metadata. |
-| `status` | text | `registered`, `processing`, `ready`, `failed`, or `archived`. |
-| `created_at`, `updated_at` | timestamptz | Audit timestamps. |
+| Column | Type | Notes | State |
+| --- | --- | --- | --- |
+| `id` | uuid PK | Resource identifier. | Implemented |
+| `owner_learner_id` | uuid FK nullable | References `learners.id`; null for curated/shared future content. | Implemented |
+| `resource_type` | varchar(32) | `pdf`, `note`, `pyq`, `formula_sheet`, or `video_reference` today; `image` and `attachment` name uploaded files and are not permitted yet. | Implemented |
+| `title` | text | Learner-facing title. | Implemented |
+| `source_label` | text nullable | Where the material is, in the learner's own words. | Implemented |
+| `storage_key` | text nullable | Opaque storage-provider reference. | **Not created** |
+| `external_reference` | text nullable | An `http` or `https` address. Never a local path; see below. | Implemented |
+| `metadata` | jsonb nullable | File-specific metadata. | **Not created** |
+| `status` | varchar(32) | `registered` or `archived` today; `processing`, `ready`, and `failed` are ingestion states and are not permitted yet. | Implemented |
+| `created_at`, `updated_at` | timestamptz | Audit timestamps. | Implemented |
 
-**Constraints:** require at least one of `storage_key` or `external_reference`.
+**Constraints:** at least one of `source_label` and `external_reference` is non-null, enforced by
+`ck_resources_names_a_location`; `resource_type` and `status` are each constrained to the values
+permitted above. **Index:** `resources(owner_learner_id, status)`, as
+[Required Indexes](#required-indexes) lists.
+
+Migration `20260816_01` creates every documented column except `storage_key` and `metadata`, with
+the code that reads the rest, per [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) and
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md). Four points where the created table differs
+from the rows above:
+
+- **`storage_key` and `metadata` are not created.** Both describe a stored file, and nothing uploads
+  one: this catalogue records **where material is**, not the material. Creating either now would fix
+  a storage provider before one exists, which is the trap ADR-011 avoids and the reason
+  [`learner_topic_progress`](#learner_topic_progress) was created without three of its columns. Each
+  arrives with the ingestion change.
+- **The approved "at least one of `storage_key` or `external_reference`" constraint is expressed over
+  `source_label` or `external_reference`.** The invariant is the same — a resource must say where its
+  material is — read for a catalogue that stores no files.
+- **`external_reference` holds a web address alone.** The application refuses any other scheme, so no
+  absolute local filesystem path is stored, which is what keeps
+  [endpoints.md](../api/endpoints.md#resource-and-ingestion-endpoints)'s rule that no resource
+  endpoint returns one true by construction rather than by filtering. Material that is not on the web
+  is described by `source_label`.
+- **`resource_type` and `status` are `varchar(32)` guarded by a `CHECK`** rather than the bare `text`
+  above, which is this document's own *Conventions* rule and the departure `day_of_week`,
+  `topic_sequencing`, the study-plan columns, and the revision columns each made. Each permits only
+  the values something writes: the two absent types name uploaded files, and the three absent
+  statuses are ingestion lifecycle states a resource could enter and never leave.
+
+`owner_learner_id` is nullable as approved, so curated or shared content has somewhere to live later.
+**Nothing writes an ownerless row today**: the application requires an owner on every write, because
+a resource belonging to nobody would be invisible to every learner-scoped read.
+
+**Nothing deletes a resource.** A learner puts material aside by moving `status` to `archived`, which
+is reversible, so the coordinated cleanup of file storage and vector records that
+[the lifecycle notes](#referential-integrity-and-lifecycle-notes) require has nothing to coordinate
+yet. See [ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
 
 ### `resource_topic_links`
 
@@ -623,14 +660,39 @@ Links a resource to curriculum topics.
 | --- | --- | --- |
 | `resource_id` | uuid FK | References `resources.id`. |
 | `topic_id` | uuid FK | References `topics.id`. |
-| `relationship_type` | text | `primary`, `supporting`, `practice`, or `revision`. |
+| `relationship_type` | varchar(32) | `primary`, `supporting`, `practice`, or `revision`. Only `primary` is written. |
 | `created_at` | timestamptz | Creation timestamp. |
 
 **Primary key:** `(resource_id, topic_id, relationship_type)`.
 
+**Constraints:** `relationship_type` is constrained to the four documented values. **Index:**
+`resource_topic_links(topic_id, resource_id)`, as [Required Indexes](#required-indexes) lists.
+
+Implemented by migration `20260816_01`. It carries `created_at` alone, as
+[`topic_relationships`](#topic_relationships) does: a link is write-once reference data, and changing
+its role means a different link. A learner editing what a resource covers replaces the whole set.
+
+**All four roles are permitted although only `primary` is written**, which is the opposite of the
+choice `resources.status` makes and deliberately so: choosing between these needs no storage that
+does not exist, so offering them later is a use-case change rather than a migration — the argument
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md) made for `plan_items.status`. A learner
+links material to a topic and is not asked to grade how central it is.
+
+**A link may name any stored topic, including one that only groups subtopics.** That is deliberately
+unlike [`learner_topic_progress`](#learner_topic_progress), which the application restricts to a
+trackable topic: a stage claims something about understanding a unit of work, while a textbook may
+genuinely cover a whole heading.
+
+**There is no subject equivalent.** A resource is linked to topics and subtopics, which are the same
+table; [FR-007](../requirements/functional.md#fr-007-learning-resource-organization)'s "one or more
+subjects, topics, or subtopics" is therefore met for two of the three, and a subject-level link is a
+table no requirement has yet constrained.
+
 ### `resource_ingestions`
 
 Tracks extraction and indexing of eligible resources.
+
+**Not implemented.** It arrives with the extractor and the vector index that give it something to track, which is why `resources.status` permits neither `processing`, `ready`, nor `failed` today. See [ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -834,8 +896,8 @@ the migration that creates its table; the three marked below are implemented tod
 - `plan_items(study_plan_id, scheduled_for, status)` — implemented
 - `revision_records(learner_id, due_on, status)` — implemented
 - `study_activities(learner_id, topic_id, created_at desc)`
-- `resource_topic_links(topic_id, resource_id)`
-- `resources(owner_learner_id, status)`
+- `resource_topic_links(topic_id, resource_id)` — implemented
+- `resources(owner_learner_id, status)` — implemented
 - `resource_ingestions(resource_id, status)`
 - `checkpoint_quiz_topics(topic_id, checkpoint_quiz_id)`
 - `quiz_attempts(learner_id, checkpoint_quiz_id, created_at desc)`
@@ -1347,6 +1409,67 @@ One input remains pending, and it belongs to a table this review does not cover,
 **partly reviewed** for `learner_topic_progress` and unreviewed for the two tables that do not exist
 yet.
 
+### Resources and RAG metadata area — partial review 2026-08-16
+
+This review covers only `resources` and `resource_topic_links`, the two tables migration
+`20260816_01` creates, and only the eight of `resources`' ten documented columns that migration
+creates. `resource_ingestions` is unreviewed and unimplemented. The decision it rests on is
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
+
+Covered by this review:
+
+- The first API contracts — RES-001 to RES-004, fixed by ADR-032.
+- The planned SQLAlchemy mapping strategy.
+- Database constraints supported by the selected PostgreSQL and Alembic versions.
+- The final GATE CSE curriculum seed structure, since a link references `topics.id`.
+
+**No schema change resulted beyond the two tables this migration creates.** What the review settled:
+
+- `resource_type` and `status` are `snake_case` text guarded by a `CHECK`, in `varchar(32)`. The
+  longest values in use, `video_reference` and `registered`, are 15 and 10 characters. This follows
+  the controlled-value convention ADR-011 chose rather than a PostgreSQL enum, so permitting `image`,
+  `attachment`, or an ingestion state later stays an ordinary constraint change.
+- **Two values are carried and five are not**, and the line between them is the one this document
+  already draws for `plan_items.status` and `revision_records.trigger_type`. A value a later
+  *use-case* change alone could write is carried: all four of
+  `resource_topic_links.relationship_type`. A value that needs storage which does not exist is left
+  out: `image` and `attachment` need a file, and `processing`, `ready`, and `failed` need
+  `resource_ingestions`.
+- `ck_resources_names_a_location` expresses the approved *at least one of `storage_key` or
+  `external_reference`* invariant over the two columns this catalogue has. Both are `text` and
+  nullable, so the check is the only thing that makes a resource say where its material is.
+- "A link must be an `http` or `https` address" is **not** a database constraint. A `CHECK` over a
+  scheme could be written, but the rule is about what the product accepts rather than what the
+  column can hold, and a `422` naming the field is a better answer than an integrity error — the
+  position this document takes on `topics.is_trackable`.
+- Two columns are deliberately not created. Each is a nullable additive change when its writer
+  arrives, so nothing here forecloses them.
+- `resource_topic_links` is keyed on `(resource_id, topic_id, relationship_type)` as approved, which
+  is what lets one resource cover many topics and one topic be covered by many resources. It carries
+  `created_at` alone, as `topic_relationships` does.
+- Neither foreign key cascades. Curriculum rows are reference data this document forbids deleting
+  casually, and nothing deletes a resource at all, so a cascade would describe a deletion path that
+  does not exist.
+- Both required indexes were created with their tables. `resources(owner_learner_id, status)` serves
+  the catalogue's own reads, and `resource_topic_links(topic_id, resource_id)` serves the topic
+  filter the curriculum and revision screens depend on.
+- The identifier-length precedent was checked: the longest name here,
+  `ix_resource_topic_links_topic_id_resource_id`, is 44 characters, comfortably inside PostgreSQL's
+  63-character limit. The unit test guarding that limit covers both tables.
+- **No seed accompanies these tables.** Study material is the learner's own, so there is no natural
+  key to reconcile and no reference data to load; the reconciliation rules
+  [ADR-012](../adr/ADR-012-curriculum-seed-and-reconciliation.md) fixes do not apply here.
+
+**Remaining review inputs:**
+
+| Review input | State |
+| --- | --- |
+| The actual revision-scheduling rules | Not applicable to this area. A revision names a topic, never a resource. |
+| Numeric precision for score and marks columns | Not applicable to this area. |
+
+One table of this area does not exist yet, so it stays **partly reviewed** for the two created and
+unreviewed for `resource_ingestions`.
+
 ## Related Documents
 
 - [Project context](../00-project-context.md)
@@ -1370,4 +1493,5 @@ yet.
 - [Domain model](../domain/domain-model.md)
 - [Functional requirements](../requirements/functional.md)
 - [API endpoints](../api/endpoints.md)
+- [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the two resource tables above, the two columns they leave uncreated, and why a link is a web address
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — `revision_records`, its two departures from the table above, and the revision-scheduling rules this document held pending

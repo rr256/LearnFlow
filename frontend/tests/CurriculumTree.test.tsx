@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CurriculumTree as CurriculumTreeData, Subject, Topic } from "@/types/curriculum";
 import type { LearningStage } from "@/types/progress";
+import type { LearningResource } from "@/types/resource";
 
 // The tree renders the stage control, which imports the server action and so
 // pulls in `next/cache`. The control's own markup is covered by
@@ -223,5 +224,84 @@ describe("CurriculumTree with recorded progress", () => {
 
     expect(screen.getByText("CPU scheduling")).toBeDefined();
     expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  const material = (overrides: Partial<LearningResource> = {}): LearningResource => ({
+    id: `resource-${Math.random()}`,
+    owner_learner_id: "learner-1",
+    resource_type: "note",
+    title: "Process scheduling notes",
+    source_label: "Blue binder",
+    external_reference: null,
+    status: "registered",
+    topics: [],
+    ...overrides,
+  });
+
+  it("shows the learner's own material beside the topic it covers", () => {
+    render(
+      <CurriculumTree
+        resources={new Map([["t1", [material()]]])}
+        tree={withTopics([topic({ id: "t1", name: "CPU scheduling" })])}
+      />,
+    );
+
+    expect(screen.getByRole("list", { name: "Your material for CPU scheduling" })).toBeDefined();
+    expect(screen.getByText("Process scheduling notes")).toBeDefined();
+  });
+
+  it("shows material beside a grouping topic too, unlike the stage control", () => {
+    render(
+      <CurriculumTree
+        resources={new Map([["t1", [material({ title: "Whole-subject textbook" })]]])}
+        stages={stages([])}
+        tree={withTopics([
+          topic({
+            id: "t1",
+            name: "Memory management",
+            is_trackable: false,
+            subtopics: [topic({ id: "t2", name: "Virtual memory" })],
+          }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByText("Whole-subject textbook")).toBeDefined();
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
+  });
+
+  it("shows nothing beside a topic the learner has linked no material to", () => {
+    render(
+      <CurriculumTree
+        resources={new Map()}
+        tree={withTopics([topic({ id: "t1", name: "CPU scheduling" })])}
+      />,
+    );
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.queryByText(/Your material/)).toBeNull();
+  });
+
+  it("offers no control for material: adding it lives on the catalogue screen", () => {
+    render(
+      <CurriculumTree
+        resources={new Map([["t1", [material()]]])}
+        tree={withTopics([topic({ id: "t1", name: "CPU scheduling" })])}
+      />,
+    );
+
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("still renders the syllabus when material could not be read", () => {
+    render(
+      <CurriculumTree
+        resources={null}
+        tree={withTopics([topic({ id: "t1", name: "CPU scheduling" })])}
+      />,
+    );
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.queryByText(/Your material/)).toBeNull();
   });
 });

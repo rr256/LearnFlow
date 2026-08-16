@@ -1,0 +1,45 @@
+/*
+ * Material sits under the topic it covers, indented so it reads as belonging to
+ * that topic rather than as another topic beside it.
+ */
+.material {
+  margin: var(--space-2) 0 0;
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.items {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+/*
+ * The kind of material, in words. Nothing here is emphasised over anything
+ * else: this is what the learner linked, not a recommendation.
+ */
+.kind {
+  color: var(--colour-text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.title {
+  color: var(--colour-text);
+}
+
+.where {
+  color: var(--colour-text-muted);
+}

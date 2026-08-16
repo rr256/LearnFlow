@@ -7,14 +7,17 @@ import styles from "@/app/curriculum/programs/[programId]/page.module.css";
 import { Notice } from "@/components/Notice";
 import { CurriculumTree } from "@/features/curriculum/CurriculumTree";
 import { stagesByTopicId } from "@/features/progress/stages";
+import { resourcesByTopicId } from "@/features/resources/by-topic";
 import {
   ApiError,
+  listResources,
   listTopicProgress,
   readCurriculumTree,
   readLearningProgram,
 } from "@/lib/api-client";
 import type { CurriculumTree as CurriculumTreeData, LearningProgram } from "@/types/curriculum";
 import type { LearningStage } from "@/types/progress";
+import type { LearningResource } from "@/types/resource";
 
 export const metadata: Metadata = {
   title: "Learning program",
@@ -80,24 +83,50 @@ async function recordedStages(
 }
 
 /**
- * CUR-003 and PRG-002 -- the version's subjects and topics, with the learner's
- * recorded stage beside each trackable one.
+ * RES-002 -- the study material this learner has catalogued, by topic.
+ *
+ * A failure here is not fatal either, for the reason the stages give: material
+ * is one learner's, and losing it should cost the reader that list rather than
+ * the whole syllabus. Returning null renders the tree without it.
+ *
+ * The whole catalogue is read and joined here rather than asked for a topic at a
+ * time: a page showing sixty topics would otherwise make sixty requests. That is
+ * the join the stages already perform, and the reason RES-002 returns each
+ * resource with its topics.
+ */
+async function catalogued(): Promise<Map<string, LearningResource[]> | null> {
+  try {
+    return resourcesByTopicId(await listResources());
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    return null;
+  }
+}
+
+/**
+ * CUR-003, PRG-002, and RES-002 -- the version's subjects and topics, with the
+ * learner's recorded stage beside each trackable one and their own material
+ * beside each topic it covers.
  *
  * Suspended by the page below, so the program's own details appear before the
  * tree arrives. Only this half is suspended: a boundary over the program lookup
  * would commit a `200` before that lookup could call `notFound()`, and a
  * mistyped program id would answer `200` instead of `404`.
  *
- * The two calls run together rather than in sequence: neither addresses the
- * other's result, so the page waits once instead of twice.
+ * The three calls run together rather than in sequence: none addresses another's
+ * result, so the page waits once instead of three times.
  */
 async function CurriculumTreeSection({ curriculumVersionId }: { curriculumVersionId: string }) {
   let tree: CurriculumTreeData;
   let stages: Map<string, LearningStage> | null;
+  let resources: Map<string, LearningResource[]> | null;
   try {
-    [tree, stages] = await Promise.all([
+    [tree, stages, resources] = await Promise.all([
       readCurriculumTree(curriculumVersionId),
       recordedStages(curriculumVersionId),
+      catalogued(),
     ]);
   } catch (error) {
     if (!(error instanceof ApiError)) {
@@ -105,7 +134,7 @@ async function CurriculumTreeSection({ curriculumVersionId }: { curriculumVersio
     }
     return <LoadFailure error={error} />;
   }
-  return <CurriculumTree stages={stages} tree={tree} />;
+  return <CurriculumTree resources={resources} stages={stages} tree={tree} />;
 }
 
 /**
@@ -166,6 +195,16 @@ export default async function LearningProgramPage({ params }: ProgramPageProps) 
       ) : null}
 
       <h2>Subjects and topics</h2>
+      {/*
+        The tree shows the learner's own material beside the topics it covers but
+        offers no control for it: adding material and putting it aside live on
+        the catalogue screen, which this names and links to -- the shape ADR-026
+        and ADR-029 both use for a screen that reports rather than writes.
+      */}
+      <p className={styles.materialNote}>
+        Study material you add on <Link href="/resources">your study material</Link> appears here,
+        beside each topic it covers.
+      </p>
       {version ? (
         <Suspense fallback={<p role="status">Loading subjects and topics…</p>}>
           <CurriculumTreeSection curriculumVersionId={version.id} />

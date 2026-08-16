@@ -2,8 +2,11 @@ import { Notice } from "@/components/Notice";
 import styles from "@/features/curriculum/CurriculumTree.module.css";
 import { TopicStageControl } from "@/features/progress/TopicStageControl";
 import { stageFor } from "@/features/progress/stages";
+import { TopicResources } from "@/features/resources/TopicResources";
+import { resourcesFor } from "@/features/resources/by-topic";
 import type { CurriculumTree as CurriculumTreeData, Subject, Topic } from "@/types/curriculum";
 import type { LearningStage } from "@/types/progress";
+import type { LearningResource } from "@/types/resource";
 
 /**
  * Collect every topic in the tree by id, at any depth.
@@ -38,9 +41,15 @@ interface TopicListProps {
    * keeps the tree usable before a learner has completed setup.
    */
   stages: Map<string, LearningStage> | null;
+  /**
+   * The learner's catalogued material, keyed by the topics it covers. Null when
+   * it could not be read, which costs the reader the material rather than the
+   * syllabus -- the call this view already makes about the stages.
+   */
+  resources: Map<string, LearningResource[]> | null;
 }
 
-function TopicList({ topics, stages }: TopicListProps) {
+function TopicList({ topics, stages, resources }: TopicListProps) {
   return (
     <ul className={styles.topics}>
       {topics.map((topic) => (
@@ -67,8 +76,21 @@ function TopicList({ topics, stages }: TopicListProps) {
               topicName={topic.name}
             />
           ) : null}
+          {/*
+            The material the learner linked to this topic, read-only: adding it
+            and putting it aside live on the catalogue screen. A grouping topic
+            gets it too, unlike the stage control, because a textbook may cover a
+            whole heading. A topic with nothing linked renders nothing rather
+            than a suggestion LearnFlow cannot support.
+          */}
+          {resources ? (
+            <TopicResources
+              resources={resourcesFor(resources, topic.id)}
+              topicName={topic.name}
+            />
+          ) : null}
           {topic.subtopics.length > 0 ? (
-            <TopicList stages={stages} topics={topic.subtopics} />
+            <TopicList resources={resources} stages={stages} topics={topic.subtopics} />
           ) : null}
         </li>
       ))}
@@ -85,19 +107,28 @@ interface CurriculumTreeProps {
    * rather than the whole syllabus.
    */
   stages?: Map<string, LearningStage> | null;
+  /**
+   * The learner's catalogued material, keyed by the topics it covers, or null to
+   * render the tree without it. Null is what a caller passes when it cannot
+   * reach the resource endpoint, so unreadable material costs the reader that
+   * list rather than the whole syllabus.
+   */
+  resources?: Map<string, LearningResource[]> | null;
 }
 
 /**
  * One curriculum version's subjects, topics, and subtopics, as CUR-003 returns
- * them, with the learner's recorded stage beside each trackable topic.
+ * them, with the learner's recorded stage and their own study material beside
+ * each topic.
  *
  * Nothing is sorted or filtered here. Subjects and topics arrive ordered by the
  * position the syllabus teaches them in, and reordering them in the browser
  * would put a curriculum rule in the frontend. No stage is calculated either:
  * `stages` holds what PRG-002 returned, and a topic absent from it has recorded
- * nothing.
+ * nothing. **No material is recommended**: `resources` holds what RES-002
+ * returned, and a topic with nothing linked shows nothing.
  */
-export function CurriculumTree({ tree, stages = null }: CurriculumTreeProps) {
+export function CurriculumTree({ tree, stages = null, resources = null }: CurriculumTreeProps) {
   if (tree.subjects.length === 0) {
     return (
       <Notice title="This curriculum version has no subjects yet">
@@ -123,7 +154,7 @@ export function CurriculumTree({ tree, stages = null }: CurriculumTreeProps) {
               <p className={styles.subjectDescription}>{subject.description}</p>
             ) : null}
             {subject.topics.length > 0 ? (
-              <TopicList stages={stages} topics={subject.topics} />
+              <TopicList resources={resources} stages={stages} topics={subject.topics} />
             ) : (
               <p className={styles.empty}>No topics are recorded for this subject yet.</p>
             )}

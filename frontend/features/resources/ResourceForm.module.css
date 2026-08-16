@@ -1,0 +1,93 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  max-width: var(--measure);
+}
+
+.form h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.hint {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field input,
+.field select {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--colour-surface);
+  color: var(--colour-text);
+  font: inherit;
+  /* A long address or a long topic name shrinks the control rather than the page. */
+  max-width: 100%;
+}
+
+/*
+ * The topic list keeps a monospaced font so the indent marking a subtopic lines
+ * up. The depth itself is carried by no-break spaces inside each label rather
+ * than by any rule here, so it survives being read aloud as well as being seen —
+ * and it does not depend on this stylesheet having loaded.
+ */
+.field select[multiple] {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.875rem;
+}
+
+.note {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.form button[type="submit"] {
+  align-self: start;
+  border: 1px solid var(--colour-accent);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--colour-accent);
+  color: var(--colour-accent-contrast);
+  font: inherit;
+  cursor: pointer;
+}
+
+.form button[type="submit"]:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/*
+ * Both outcomes carry their meaning in words as well as colour, so neither
+ * depends on being seen (docs/development/coding-standards.md).
+ */
+.saved {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.failed {
+  margin: 0;
+  border-left: 3px solid var(--colour-notice-border);
+  padding-left: var(--space-2);
+  color: var(--colour-text);
+  font-size: 0.875rem;
+}

@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-15
+last_updated: 2026-08-16
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -29,6 +29,7 @@ related:
   - ../adr/ADR-029-progress-overview.md
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
   - ../adr/ADR-031-priority-focus-panel.md
+  - ../adr/ADR-032-learning-resource-catalogue.md
   - ../domain/terminology.md
 ---
 
@@ -253,8 +254,9 @@ app/
 │   ├── page.tsx                            # CUR-001, the learning-program list
 │   ├── error.tsx                           # Last-resort render boundary
 │   └── programs/[programId]/
-│       ├── page.tsx                        # CUR-002, CUR-003, and PRG-002;
-│       │                                   # writes PRG-004 via a server action
+│       ├── page.tsx                        # CUR-002, CUR-003, PRG-002, and
+│       │                                   # RES-002; writes PRG-004 via a server
+│       │                                   # action, and no resource control
 │       └── page.module.css
 ├── plan/
 │   ├── page.tsx                            # PLN-002 and PLN-003 over the learner's
@@ -283,8 +285,16 @@ app/
 │   └── page.module.css
 ├── revisions/
 │   ├── page.tsx                            # The revision screen: REV-001 for the
-│   │                                       # learner's reviews; writes REV-003 and
-│   │                                       # REV-004 via server actions
+│   │                                       # learner's reviews and RES-002 for the
+│   │                                       # material each topic has; writes REV-003
+│   │                                       # and REV-004 via server actions
+│   └── page.module.css
+├── resources/
+│   ├── page.tsx                            # The learning-resource catalogue: RES-002
+│   │                                       # for the learner's material, GOAL-002 and
+│   │                                       # CUR-003 for the topics it may cover;
+│   │                                       # adds over RES-001, and edits or archives
+│   │                                       # over RES-004, via server actions
 │   └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
@@ -293,7 +303,8 @@ app/
                                             # GOAL-005, via server actions
 ```
 
-Every home, curriculum, setup, plan, progress, and revision route sets `dynamic = "force-dynamic"`. The curriculum lives in the
+Every home, curriculum, setup, plan, progress, revision, and resource route sets
+`dynamic = "force-dynamic"`. The curriculum lives in the
 database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
 goal are learner data that changes on submission — and the container build has no API to reach.
 `plan/today` needs it most strongly of all: it is a screen *about* the current date, so a cached copy
@@ -337,7 +348,17 @@ quizzes/
 external-tests/
 ```
 
-Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, and `revision/` exist today.
+Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, and `resources/` exist today.
+
+`resources/` holds the **learning-resource catalogue**, which supports **add, edit, and archive**:
+`ResourceCatalogue.tsx` for the screen and `ResourceForm.tsx` for both the add and the edit form —
+one component, since both ask for the same six fields and differ only in whether they start filled
+and which endpoint they reach — `ResourceStatusControl.tsx` for putting material aside and back,
+`TopicResources.tsx` for the read-only list the curriculum view and the revision screen show
+beside a topic, `by-topic.ts` and `topic-options.ts` for the joins and the topic picker,
+`actions.ts` for the three writes, and `submission.ts` for the form state — which lives apart from
+the actions because a `"use server"` module may export only async functions. See
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
 
 `onboarding/` holds the **learner setup** capability's screen. The module keeps the narrower name
 because a module directory names a UI flow, which is the one use
@@ -424,7 +445,7 @@ Frontend-only utilities, including the typed API client, request/error helpers, 
 | Path | Responsibility |
 | --- | --- |
 | `config.ts` | Resolves and validates `API_BASE_URL`. Takes the environment as a parameter so validation is testable without mutating `process.env`. |
-| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, study-goal, availability, topic-progress, study-plan, and revision endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
+| `api-client.ts` | Typed calls to the curriculum, learner, examination-schedule, study-goal, availability, topic-progress, study-plan, revision, and learning-resource endpoints. Checks each response against the documented envelope and raises `ApiError`. Runs on the server only, including for writes, which reach it from a server action. |
 
 When the API answers with a failure, `ApiError.code` is the API's own code from the closed catalogue
 in [API conventions](../api/conventions.md#error-codes). Two client-side codes cover what the

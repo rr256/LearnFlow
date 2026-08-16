@@ -2,9 +2,10 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-13
+last_updated: 2026-08-16
 related:
   - ../adr/ADR-028-revision-workflow.md
+  - ../adr/ADR-032-learning-resource-catalogue.md
   - ../00-project-context.md
   - overview.md
   - schema.md
@@ -141,6 +142,7 @@ The applied revisions are:
 | `20260806_02` | `add_study_goal_planning_preferences` — the learner's planning preferences, as `preferred_session_minutes` and `topic_sequencing` on `study_goals`, each guarded by a `CHECK`. Two nullable columns rather than the `planning_preferences jsonb` [schema.md](schema.md#study_goals) first documented, because no `CHECK` reaches a key inside JSON. Additive; safe on populated tables, and every goal already stored reads back with no preferences set. |
 | `20260806_03` | `create_study_plan_tables` — the last two learner-planning tables, `study_plans` and `plan_items`, completing that schema area. Creates two empty tables and both indexes [schema.md](schema.md#required-indexes) lists for them; adds nothing to an existing one. `plan_type`, `status`, and `action_type` are `varchar(32)` guarded by a `CHECK` rather than the `text` [schema.md](schema.md#study_plans) first documented, for the reason `day_of_week` and `topic_sequencing` already changed. |
 | `20260813_01` | `create_revision_records_table` — the second table of the progress area, holding one recommended or completed review per learner and topic. Creates one empty table and the index [schema.md](schema.md#required-indexes) lists for it; adds nothing to an existing one. `status` and `trigger_type` are `varchar(32)` guarded by a `CHECK` rather than the bare `text` [schema.md](schema.md#revision_records) first documented, and the table carries a `recommendation_reason` that document's row does not list, so a revision's stored date and its explanation cannot drift apart. See [ADR-028](../adr/ADR-028-revision-workflow.md). |
+| `20260816_01` | `create_learning_resource_tables` — the first two tables of the *Resources and RAG metadata* area, `resources` and `resource_topic_links`, holding where a learner's study material is and which topics it covers. Creates two empty tables and both indexes [schema.md](schema.md#required-indexes) lists for them; adds nothing to an existing one. `storage_key`, `metadata`, and `resource_ingestions` are deliberately **not** created, because nothing uploads or indexes a file; the approved *at least one of `storage_key` or `external_reference`* constraint is expressed over `source_label` or `external_reference` instead; and the controlled columns are `varchar(32)` guarded by a `CHECK`, each permitting only the values something writes. See [ADR-032](../adr/ADR-032-learning-resource-catalogue.md). |
 
 ## What Requires a Migration
 
@@ -234,6 +236,12 @@ database with reference data, but no learner-owned data exists yet to migrate ag
 ## Seed Data vs Migrations
 
 Schema migrations create and evolve database structure. They should not become a general-purpose content-loading mechanism.
+
+**No seed accompanies the learning-resource tables.** Study material is the learner's own, and
+LearnFlow has none of its own to distribute, so the catalogue starts empty and holds only what
+the learner registers — there is no data file, no seed command, and no fourth step in the
+environment workflow below. See
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
 
 The curated GATE CSE curriculum is reference data. Manage it through explicit, idempotent seed/import tooling that:
 
@@ -480,3 +488,4 @@ An AI assistant may propose or generate a migration, but it must not:
 - [Git workflow](../development/git-workflow.md)
 - [Architecture Decision Register](../architecture/decisions.md)
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the decision behind `20260813_01`, its two departures from the approved table, and the values it leaves unwritten
+- [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the decision behind `20260816_01`, the columns it leaves uncreated, and why no seed accompanies it

@@ -2,7 +2,7 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-13
+last_updated: 2026-08-16
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../00-project-context.md
@@ -18,6 +18,7 @@ related:
   - ../adr/ADR-024-plan-item-skipping.md
   - ../adr/ADR-025-learner-postponement.md
   - ../database/schema.md
+  - ../adr/ADR-032-learning-resource-catalogue.md
 ---
 
 # LearnFlow Domain Entities
@@ -78,11 +79,19 @@ Represents a meaningful relationship between two topics, such as prerequisite, r
 
 ### Learning Resource
 
-Represents a learner-owned or curated study reference, such as a PDF, notes, PYQs, short notes, formula sheets, or a reference to a local video.
+Represents a learner-owned or curated study reference, such as a PDF, notes, PYQs, short notes, formula sheets, or a reference to a video.
 
 **Responsible for:** describing the resource, its source location, resource type, and curriculum links.
 
-**Key relationships:** may link to multiple subjects, topics, or subtopics; may later be ingested into the knowledge base.
+**Key relationships:** may link to multiple topics and subtopics; may later be ingested into the knowledge base.
+
+It records **where the material is, never the material**: nothing is uploaded, extracted, or indexed
+today. A source location is a web link, a *source label* in the learner's own words, or both, and a
+resource carries at least one of the two — **no location on the learner's own machine is stored**.
+A resource is put aside rather than deleted, and a topic's resources are the ones the learner linked
+to it rather than any LearnFlow recommends. Subject-level links are not stored; a resource names
+topics and subtopics, which are the same record. See
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
 
 ### Examination Schedule
 
@@ -324,4 +333,5 @@ Topic ── Learning Resource
 - [Terminology](terminology.md)
 - [Database schema](../database/schema.md)
 - [Functional requirements](../requirements/functional.md)
-- [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the revision record this persists, and why it is not a plan item
+- [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md)
+- [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — what a *learning resource* records today, and what it deliberately does not — the revision record this persists, and why it is not a plan item

@@ -49,3 +49,13 @@
   margin: 0;
   font-weight: 500;
 }
+
+/*
+ * Where the material beside each topic comes from. Styled as a note rather than
+ * a panel: it names where the action lives and offers no control of its own.
+ */
+.materialNote {
+  margin: 0 0 var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}

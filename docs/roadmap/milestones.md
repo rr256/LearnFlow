@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-15
+last_updated: 2026-08-16
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -32,6 +32,7 @@ related:
   - ../adr/ADR-029-progress-overview.md
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
   - ../adr/ADR-031-priority-focus-panel.md
+  - ../adr/ADR-032-learning-resource-catalogue.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -483,16 +484,51 @@ which keeps the plan-views item below open even though all four levels are now v
 
 **Outcome:** learner-owned GATE CSE notes become usable, grounded mentor context.
 
+This milestone has been **opened** by the learning-resource catalogue: a learner can record where
+their own study material is and which topics it covers, and find it again from the curriculum and
+from a review. That is the first item below, and deliberately no more of the milestone — nothing is
+uploaded, extracted, indexed, or retrieved, and no mentor exists. It also supplies the **resource
+half** of [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
+[ADR-028](../adr/ADR-028-revision-workflow.md) deferred; the practice half still waits on FR-009, so
+**FR-006 is still not met in full**. Contracted by
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md), with migration `20260816_01` creating
+`resources` and `resource_topic_links`.
+
 ### Definition of Done
 
-- [ ] Learner can register/link supported local resources to topics.
+- [ ] Learner can register/link supported local resources to topics. **Registering and linking are
+  done**: RES-001 to RES-004 record a title, a kind, where the material is, and the topics it covers,
+  and `/resources` supports **add, edit, and archive** while the curriculum view and `/revisions`
+  show a topic's material read-only. Material put aside is read-only until it is put back. A resource may cover **any** topic, including a heading that groups subtopics, which is
+  where this differs from the learning-stage control. **Nothing is recommended, ranked, or counted**,
+  and **nothing is deleted** — material is put aside reversibly, so RES-005 stays unimplemented.
+  **The item stays open on the word *local***: `external_reference` accepts an `http` or `https`
+  address alone, because [endpoints.md](../api/endpoints.md#resource-and-ingestion-endpoints)
+  forbids a resource endpoint returning an absolute local filesystem path, and material that is not
+  on the web is described in the learner's own words instead. A **path** to a local file arrives with
+  the storage change below, which gives a file somewhere to live and an opaque `storage_key` to name
+  it. **FR-007 is not met in full**;
+  [endpoints.md](../api/endpoints.md#fr-007-acceptance-criteria) carries the count.
 - [ ] Supported text-based PDF can be extracted and indexed.
-- [ ] Ingestion shows queued/processing/completed/failed status.
+- [ ] Ingestion shows queued/processing/completed/failed status. `resource_ingestions` is not
+  created, and `resources.status` therefore permits neither `processing`, `ready`, nor `failed`: a
+  resource could enter one and never leave it.
 - [ ] Mentor retrieves authorized relevant excerpts before grounded answers.
 - [ ] Mentor response shows useful source references when retrieval succeeds.
 - [ ] No-source and provider-unavailable states are honest and understandable.
-- [ ] Original files, resource metadata, and derived vectors are stored separately.
+- [ ] Original files, resource metadata, and derived vectors are stored separately. **Metadata is
+  stored** and is deliberately all that is: `storage_key` and `metadata` are not created, and nothing
+  holds a file or a vector, so the separation is not yet tested by anything.
 - [ ] Retrieval is tested with representative GATE CSE resources/queries.
+- [ ] Catalogue behaviour has API/domain/persistence/frontend tests. **Done for the catalogue**:
+  use-case tests against fakes, API contract tests over the real application factory, PostgreSQL
+  integration tests over migration `20260816_01` — its upgrade, its downgrade, every permitted type,
+  status, and link role, the constraints it refuses, its foreign keys, and both indexes — and the
+  catalogue read back over HTTP against the seeded GATE CSE curriculum; plus frontend tests over the
+  catalogue, the per-topic list, the form parsing, the topic grouping, and the API client. There is
+  deliberately **no domain-level test**: nothing here is a planning or scheduling calculation, and
+  `backend/app/domain/` is untouched. **The item stays open** for the rest of this milestone: no
+  extraction, ingestion, or retrieval exists to test.
 
 ## Milestone 5 — Quiz and External Test Evidence
 
@@ -578,3 +614,4 @@ which keeps the plan-views item below open even though all four levels are now v
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the Milestone 2 progress-overview item this advances, and the two counts on which it stays open
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the first of those two counts, now met, and why the second stayed open
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the second count, now partly met, and the evidence the item still waits on
+- [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the Milestone 4 item this opens, and the reasons the rest of that milestone stays closed

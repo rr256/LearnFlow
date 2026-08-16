@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ports.clock import Clock
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
+from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
 from app.application.use_cases.manage_study_plans import ManageStudyPlans
@@ -35,6 +36,7 @@ from app.infrastructure.persistence.examination_schedule_repository import (
     SqlAlchemyExaminationScheduleRepository,
 )
 from app.infrastructure.persistence.learner_repository import SqlAlchemyLearnerRepository
+from app.infrastructure.persistence.resource_repository import SqlAlchemyResourceRepository
 from app.infrastructure.persistence.revision_repository import SqlAlchemyRevisionRepository
 from app.infrastructure.persistence.study_goal_management_repository import (
     SqlAlchemyStudyGoalManagementRepository,
@@ -50,6 +52,7 @@ LearnerProfileProvider = Callable[[], AbstractContextManager[ManageLearnerProfil
 StudyGoalsProvider = Callable[[], AbstractContextManager[ManageStudyGoals]]
 StudyPlansProvider = Callable[[], AbstractContextManager[ManageStudyPlans]]
 RevisionsProvider = Callable[[], AbstractContextManager[ManageRevisions]]
+ResourcesProvider = Callable[[], AbstractContextManager[ManageResources]]
 TopicProgressProvider = Callable[[], AbstractContextManager[ManageTopicProgress]]
 
 
@@ -198,6 +201,36 @@ def build_revisions_provider(
                     learners=SqlAlchemyLearnerRepository(session),
                     revisions=SqlAlchemyRevisionRepository(session),
                     clock=reads_the_clock,
+                )
+            except BaseException:
+                session.rollback()
+                raise
+            session.commit()
+
+    return provide
+
+
+def build_resources_provider(
+    session_factory: sessionmaker[Session],
+) -> ResourcesProvider:
+    """Build the provider that hands the learning-resource use case to one request.
+
+    It writes, so it owns the transaction like the other learner-owned providers.
+    Registering a resource and linking it to several topics is one unit of work:
+    a learner cannot end up with material in the catalogue that covers none of
+    the topics they chose, or with links to a resource that was never written.
+
+    It reads no clock and no configuration. Nothing about a resource depends on
+    the date, so there is no timezone to resolve and no `Clock` port to bind.
+    """
+
+    @contextmanager
+    def provide() -> Iterator[ManageResources]:
+        with session_factory() as session:
+            try:
+                yield ManageResources(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    resources=SqlAlchemyResourceRepository(session),
                 )
             except BaseException:
                 session.rollback()
