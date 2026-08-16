@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-15
+last_updated: 2026-08-16
 related:
   - ../00-project-context.md
   - conventions.md
@@ -31,6 +31,7 @@ related:
   - ../adr/ADR-029-progress-overview.md
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
   - ../adr/ADR-031-priority-focus-panel.md
+  - ../adr/ADR-032-learning-resource-catalogue.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -1029,20 +1030,192 @@ is stored.
 
 ## Resource and Ingestion Endpoints
 
-Supports **FR-007 — Learning Resource Organization**.
+Supports **FR-007 — Learning Resource Organization**, which these four endpoints begin and do not
+complete, and supplies the **resource half** of
+[FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
+[ADR-028](../adr/ADR-028-revision-workflow.md) deferred. The practice half still waits on FR-009.
 
-| ID | Method and path | Purpose | Primary request/result |
-| --- | --- | --- | --- |
-| RES-001 | `POST /api/v1/resources` | Register resource metadata and upload/store an eligible source file or reference. | Resource record. |
-| RES-002 | `GET /api/v1/resources` | List learner-accessible resources, filterable by type, topic, subject, or status. | Resource collection. |
-| RES-003 | `GET /api/v1/resources/{resource_id}` | Read resource metadata, topic links, and ingestion status. | Resource details. |
-| RES-004 | `PATCH /api/v1/resources/{resource_id}` | Update title, source label, metadata, or topic links. | Updated resource. |
-| RES-005 | `DELETE /api/v1/resources/{resource_id}` | Request safe removal of a resource and related derived artifacts. | `204` or accepted cleanup operation. |
-| RES-006 | `POST /api/v1/resources/{resource_id}/ingestions` | Start/retry text extraction and indexing. | `202` + ingestion reference. |
-| RES-007 | `GET /api/v1/resources/{resource_id}/ingestions` | List ingestion attempts/statuses. | Ingestion collection. |
-| RES-008 | `GET /api/v1/resource-ingestions/{ingestion_id}` | Read a single ingestion status/failure message. | Ingestion details. |
+| ID | Method and path | Purpose | Primary request/result | State |
+| --- | --- | --- | --- | --- |
+| RES-001 | `POST /api/v1/resources` | Register where a piece of study material is, and which topics it covers. | Resource record. | Implemented |
+| RES-002 | `GET /api/v1/resources` | List the learner's material, filterable by topic, type, and status. | Resource collection. | Implemented |
+| RES-003 | `GET /api/v1/resources/{resource_id}` | Read one resource and its topic links. | Resource details. | Implemented |
+| RES-004 | `PATCH /api/v1/resources/{resource_id}` | Update title, resource type, source label, link, topic links, or status. | Updated resource. | Implemented |
+| RES-005 | `DELETE /api/v1/resources/{resource_id}` | Request safe removal of a resource and related derived artifacts. | `204` or accepted cleanup operation. | Not implemented |
+| RES-006 | `POST /api/v1/resources/{resource_id}/ingestions` | Start/retry text extraction and indexing. | `202` + ingestion reference. | Not implemented |
+| RES-007 | `GET /api/v1/resources/{resource_id}/ingestions` | List ingestion attempts/statuses. | Ingestion collection. | Not implemented |
+| RES-008 | `GET /api/v1/resource-ingestions/{ingestion_id}` | Read a single ingestion status/failure message. | Ingestion details. | Not implemented |
 
-Resource endpoints expose safe metadata only. They must not return absolute local filesystem paths or provider credentials.
+RES-001 to RES-004 are implemented and contracted by
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md). None of them accepts a `learner_id`: the
+effective learner is resolved server-side, per the [identity assumption](#identity-assumption) above.
+All four are synchronous and read and write through the `ManageResources` application use case.
+
+**Resource endpoints expose safe metadata only. They must not return absolute local filesystem paths
+or provider credentials.** That rule is kept by **refusing the input**: `external_reference` accepts
+an `http` or `https` address and nothing else, so no local path is stored, and none can therefore be
+returned. Material that is not on the web is described by `source_label`, in the learner's own words.
+
+**A resource is metadata, never the material.** Nothing here uploads, downloads, extracts, embeds, or
+indexes anything: `storage_key`, `metadata`, and `resource_ingestions` are all absent, and each
+arrives with the code that maintains it, per
+[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md). RES-006 to RES-008 wait on that
+same table and an extractor.
+
+**Nothing is deleted.** RES-005 is not implemented: a learner puts material aside with
+`status: archived` through RES-004, which is reversible and destroys nothing — the position
+[ADR-022](../adr/ADR-022-plan-adaptation.md) took for a superseded plan. RES-005 arrives with the
+files and vectors its stated purpose exists to clean up.
+
+**Nothing is recommended, ranked, or counted.** A topic's material is the material the learner linked
+to it, in the order this API returns it. No resource is suggested for a topic, promoted above
+another, or counted on any response or screen.
+
+### RES-001 — `POST /api/v1/resources`
+
+Request body: `resource_type`, `title`, `source_label` (a string or `null`), `external_reference` (a
+string or `null`), and `topic_ids` (a list of UUIDs, empty by default). An unknown field is rejected.
+Returns `201` with the resource under `data`.
+
+There is deliberately **no `status`**: every resource is written `registered`, and putting one aside
+is a later statement made through RES-004 — the shape PLN-004 uses for a plan item, whose status is
+likewise not a creation field.
+
+**This endpoint's original intent line also named "upload/store an eligible source file", which is
+not implemented.** Nothing is uploaded: the request is metadata alone, and a file gains somewhere to
+live with the storage and ingestion change. Adding it later is a compatible addition under
+[versioning](versioning.md#compatible-changes-within-a-major-version), because nothing was ever
+accepted for it.
+
+- `resource_type` is one of `pdf`, `note`, `pyq`, `formula_sheet`, or `video_reference`. `image` and
+  `attachment` are approved values this build does not accept: both name an uploaded file, and
+  nothing uploads one.
+- `title` is what the learner calls the material, and is required.
+- `source_label` is where the material is, in the learner's own words — a book and chapter, a folder
+  they keep, a lecture series. **This is what carries material that is not on the web.**
+- `external_reference` must be a full `http` or `https` address. Any other scheme, a bare path, or an
+  address naming no host is a `422`.
+- **At least one of `source_label` and `external_reference` is required**, so a record can always
+  lead the learner back to the material. That is the approved *at least one of `storage_key` or
+  `external_reference`* constraint, read for a catalogue that stores no files.
+- `topic_ids` may name **any stored topic**, including one that only groups subtopics. That is
+  deliberately unlike [PRG-004](#prg-004-patch-apiv1progresstopicstopic_id), which refuses a stage on
+  a grouping topic: a stage claims something about understanding a unit of work, while a textbook may
+  genuinely cover a whole heading. At most 100 may be named, and a topic named twice is refused
+  rather than collapsed — the rule GOAL-005 applies to a day named twice.
+
+A resource response carries `id`, `owner_learner_id`, `resource_type`, `title`, `source_label`,
+`external_reference`, `status`, and `topics` — each topic's `id`, `code`, `name`, `subject_id`, and
+`subject_name`. `owner_learner_id` is `null` only for curated or shared content, which nothing writes.
+
+Errors: `422` `validation_error` when the type is not one of the five, the title is empty, neither a
+label nor a link is given, the link is not an `http` or `https` address, a topic is not stored, a
+topic is named twice, more than 100 topics are named, or the request names an unknown field —
+`details` names the offending field and never echoes the rejected value. `409` `conflict` when no
+learner exists yet to own the resource, or when more than one learner is stored.
+
+### RES-002 — `GET /api/v1/resources`
+
+Query parameters `topic_id` (a UUID, optional), `resource_type` (optional), `status` (optional),
+`limit` (1–100, default 25), and `offset` (0 or greater, default 0). Returns `200` with the `data`
+array and the `pagination` block, **newest first** — the order every learner-owned collection uses.
+
+`topic_id` is what answers **FR-007's fourth acceptance criterion**, finding the material associated
+with a topic, without a client holding the whole collection to filter it. A resource covering a topic
+appears once however many links it holds.
+
+**`topics` is filled on a listed resource**, unlike a study plan's `items` under
+[PLN-002](#pln-002-get-apiv1study-plans). A link set is bounded at 100 and naming what a resource
+covers is the point of the catalogue, where a page of plans each carrying every item would be an
+unbounded payload inside a paginated one.
+
+**No status is assumed.** A caller wanting only what is in the catalogue asks for `registered`, and
+one wanting what has been put aside asks for `archived`, which is how PLN-002 and REV-001 treat their
+own statuses.
+
+A `topic_id` that matches nothing returns an empty page rather than `404`: a filter that matches
+nothing is an empty result, not a missing record. An unknown `resource_type` or `status` is different
+and is refused — a client asking for `status=ready` has misread the contract, and returning nothing
+would let it keep doing so.
+
+There is deliberately **no `subject_id` filter**, which this catalogue's original intent line named.
+It is a compatible addition under
+[versioning](versioning.md#compatible-changes-within-a-major-version) and arrives with a screen that
+needs one; neither screen reading this endpoint does, because both want the collection whole and join
+it by topic identifier — the position [PRG-002](#prg-002-get-apiv1progresstopics) takes.
+
+An installation where setup has not run has no learner and therefore no resources, which is an empty
+page. Errors: `422` `validation_error` for a `limit`, `offset`, or `topic_id` outside those bounds or
+shapes, or for a `resource_type` or `status` outside the documented values — `details` names
+`query.resource_type` or `query.status`; `409` `conflict` when more than one learner is stored.
+
+### RES-003 — `GET /api/v1/resources/{resource_id}`
+
+`resource_id` is a UUID. Returns `200` with one resource under `data`, in the shape RES-001 returns.
+
+Errors: `404` `not_found` when no such resource is stored *or it belongs to another learner*; `422`
+`validation_error` when the path segment is not a UUID; `409` `conflict` when more than one learner
+is stored.
+
+### RES-004 — `PATCH /api/v1/resources/{resource_id}`
+
+`resource_id` is a UUID. Request body: `title`, `resource_type`, `source_label`,
+`external_reference`, `status`, and `topic_ids`. All optional; an unknown field is rejected. Returns
+`200` with the updated resource.
+
+A field the request omits is left alone; an explicit `null` clears `source_label` or
+`external_reference`. `title: null`, `resource_type: null`, and `status: null` are rejected: a
+resource always has all three, the rule LRN-002 applies to a timezone and GOAL-004 to a status. The
+result must still name a location, so clearing the last of the two is a `422`.
+
+**A supplied `topic_ids` replaces the whole link set**, so a topic left out of one is unlinked and an
+empty list — or an explicit `null` — unlinks everything. Omitting the field leaves the links alone.
+That is GOAL-005's whole-week replacement applied to a link set, and for the same reason: a form
+shows every topic at once, so a topic the learner cleared has to reach the API as a clearance.
+
+**`status` accepts `registered` and `archived` only.** `processing`, `ready`, and `failed` are
+approved values this build refuses: each is an ingestion lifecycle state, and `resource_ingestions`
+does not exist, so a resource could enter one and never leave it. **Archiving is reversible**, and it
+destroys nothing.
+
+Sending the values already stored is accepted and writes nothing, as it is under GOAL-004, GOAL-005,
+PLN-004, PRG-004, and REV-003.
+
+**Only the named resource moves.** No other resource, no learning stage, no plan, no plan item, and
+no revision — a resource says where material is, never that a topic is understood or that work
+happened.
+
+The `/resources` screen calls this endpoint two ways, deliberately kept apart: an **edit** form
+sends the five describing fields and never `status`, and an **archive** control sends `status`
+alone. Correcting a typo and deciding to stop using something are different statements, so neither
+control can make the other by accident.
+
+Errors: `404` `not_found` as for RES-003; `422` `validation_error` when the update names no field to
+change, names an unknown type or status, clears the last location, or breaks any rule RES-001
+documents; `409` `conflict` when more than one learner is stored.
+
+Related entities: [learning resource](../domain/entities.md#learning-resource) and
+[topic](../domain/entities.md#topic). Related tables:
+[resources and RAG metadata schema area](../database/schema.md#schema-areas).
+
+### FR-007 acceptance criteria
+
+**Two of [FR-007](../requirements/functional.md#fr-007-learning-resource-organization)'s four
+acceptance criteria are met in full and two are partly met.** This section is authoritative for
+the count.
+
+- *"The learner can register PDFs, notes, PYQs, and references/paths to local video resources"* —
+  **partly met.** Each of those kinds can be registered and described. A **path** to a local file
+  cannot: `external_reference` accepts a web address alone, because this catalogue must not return an
+  absolute local filesystem path. Material that is not on the web is carried by `source_label`. The
+  local-file half arrives with the storage and ingestion change that gives a file somewhere to live.
+- *"A resource can be linked to one or more subjects, topics, or subtopics"* — **met for topics and
+  subtopics**, which are the same table. Subject-level linking is not storable:
+  [schema.md](../database/schema.md#resource_topic_links) has no subject equivalent.
+- *"LearnFlow records basic resource metadata, including title, type, source location, and linked
+  curriculum areas"* — **met in full.**
+- *"The learner can find resources associated with a topic"* — **met in full**, by RES-002's
+  `topic_id` filter, and on the `/resources`, curriculum, and `/revisions` screens.
 
 ## Mentor Endpoints
 
@@ -1116,7 +1289,7 @@ Implement in an order that enables one working learner flow:
    third criterion — is **now built too**, over PLN-006, so **all three of FR-004's acceptance
    criteria are met**.
 5. Revision reads/updates. **Done** — REV-001 to REV-004, per [ADR-028](../adr/ADR-028-revision-workflow.md).
-6. Resource registration and ingestion status.
+6. Resource registration and ingestion status. **Partly done** — RES-001 to RES-004 catalogue the learner's own study material and link it to topics, contracted by [ADR-032](../adr/ADR-032-learning-resource-catalogue.md), with migration `20260816_01` creating `resources` and `resource_topic_links`. RES-005 to RES-008 wait on file storage and an extractor, neither of which exists; **RES-005 also waits on a reason to delete**, since archiving through RES-004 is reversible and destroys nothing.
 7. Mentor questions and grounded retrieval.
 8. Checkpoint quizzes and attempts.
 9. External test result entry and analysis.
@@ -1151,3 +1324,4 @@ Implement in an order that enables one working learner flow:
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the screen that gathered six of these contracts and added none, and why PRG-001 stays unimplemented
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the seventh and eighth contracts that screen reads, PRG-002 and CUR-003, and why neither gains a filter or a field
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the panel that added no read and no contract, and what PRG-001 waits on now
+- [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the four resource contracts above, why the other four stay unimplemented, and what a resource may point at

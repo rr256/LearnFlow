@@ -8,6 +8,7 @@ vi.mock("@/features/revision/actions", () => ({ saveRevisionStatus: vi.fn() }));
 
 const { RevisionList } = await import("@/features/revision/RevisionList");
 
+import type { LearningResource } from "@/types/resource";
 import type { Revision } from "@/types/revision";
 
 afterEach(cleanup);
@@ -187,5 +188,43 @@ describe("RevisionList", () => {
     const page = (document.body.textContent ?? "").toLowerCase();
     expect(page).not.toContain("weak");
     expect(page).not.toContain("mastered");
+  });
+
+  const material = (overrides: Partial<LearningResource> = {}): LearningResource => ({
+    id: `resource-${Math.random()}`,
+    owner_learner_id: "learner-1",
+    resource_type: "pyq",
+    title: "Scheduling PYQs",
+    source_label: null,
+    external_reference: "https://example.test/pyq.pdf",
+    status: "registered",
+    topics: [],
+    ...overrides,
+  });
+
+  it("shows the learner's own material for the topic being reviewed", () => {
+    render(
+      <RevisionList
+        resources={new Map([["topic-1", [material()]]])}
+        revisions={[revision()]}
+      />,
+    );
+
+    expect(screen.getByRole("list", { name: "Your material for CPU scheduling" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Scheduling PYQs" })).toBeDefined();
+  });
+
+  it("suggests no material of its own for a topic nothing is linked to", () => {
+    render(<RevisionList resources={new Map()} revisions={[revision()]} />);
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.queryByText(/Your material/)).toBeNull();
+  });
+
+  it("still lists the reviews when material could not be read", () => {
+    render(<RevisionList resources={null} revisions={[revision()]} />);
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.queryByText(/Your material/)).toBeNull();
   });
 });

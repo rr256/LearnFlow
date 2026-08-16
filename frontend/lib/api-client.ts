@@ -13,6 +13,13 @@
 
 import { resolveApiBaseUrl } from "@/lib/config";
 import type {
+  LearningResource,
+  LearningResourceCollectionResponse,
+  LearningResourceResponse,
+  LearningResourceUpdate,
+  NewLearningResource,
+} from "@/types/resource";
+import type {
   Revision,
   RevisionCollectionResponse,
   RevisionResponse,
@@ -690,6 +697,100 @@ export async function updateRevisionStatus(
     throw new ApiError("malformed_response", "The API returned a malformed revision.", null);
   }
   return (body as RevisionResponse).data;
+}
+
+/**
+ * RES-002 -- list the learner's study material, newest first.
+ *
+ * No status is assumed by the API, so a caller wanting only what is in the
+ * catalogue asks for `registered` and one wanting what has been put aside asks
+ * for `archived`.
+ *
+ * Returns an empty list before setup has created a learner.
+ *
+ * @param topicId Only material linked to this topic, which is how a screen finds
+ *   what covers a topic without holding the whole collection.
+ * @param status Only material in this state.
+ */
+export async function listResources({
+  topicId,
+  status,
+  limit = MAX_PAGE_SIZE,
+  offset = 0,
+}: {
+  topicId?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<LearningResource[]> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (topicId) {
+    query.set("topic_id", topicId);
+  }
+  if (status) {
+    query.set("status", status);
+  }
+  const body = await requestJson(`/api/v1/resources?${query.toString()}`);
+  unwrapCollection(body, "a learning resource collection");
+
+  return (body as LearningResourceCollectionResponse).data;
+}
+
+/**
+ * RES-001 -- record where one piece of study material is, and what it covers.
+ *
+ * A resource is a record of where material is, never the material: nothing is
+ * uploaded here, and a link must be an http or https address, so no location on
+ * the learner's own machine is ever sent.
+ *
+ * @throws ApiError with a `validation_error` when the material names no
+ *   location, names a topic that is not stored, or carries a link the API will
+ *   not store, or `isConflict` when setup has not created a learner yet.
+ */
+export async function registerResource(
+  resource: NewLearningResource,
+): Promise<LearningResource> {
+  const body = await requestJson("/api/v1/resources", { method: "POST", body: resource });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned a malformed learning resource.",
+      null,
+    );
+  }
+  return (body as LearningResourceResponse).data;
+}
+
+/**
+ * RES-004 -- correct what a resource says, or put it aside.
+ *
+ * A field left out of `changes` is not modified; a supplied `topic_ids`
+ * replaces the whole link set. Archiving is reversible and destroys nothing —
+ * there is no delete.
+ *
+ * @throws ApiError with `isNotFound` when no such resource is stored or it is
+ *   not the local learner's.
+ */
+export async function updateResource(
+  resourceId: string,
+  changes: LearningResourceUpdate,
+): Promise<LearningResource> {
+  const body = await requestJson(`/api/v1/resources/${encodeURIComponent(resourceId)}`, {
+    method: "PATCH",
+    body: changes,
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned a malformed learning resource.",
+      null,
+    );
+  }
+  return (body as LearningResourceResponse).data;
 }
 
 /**

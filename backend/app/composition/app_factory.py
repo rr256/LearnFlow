@@ -16,6 +16,7 @@ from app.composition.providers import (
     build_learner_profile_provider,
     build_read_curriculum_provider,
     build_read_examination_schedules_provider,
+    build_resources_provider,
     build_revisions_provider,
     build_study_goals_provider,
     build_study_plans_provider,
@@ -26,6 +27,7 @@ from app.presentation.api.dependencies import (
     LEARNER_PROFILE_PROVIDER,
     READ_CURRICULUM_PROVIDER,
     READ_EXAMINATION_SCHEDULES_PROVIDER,
+    RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
     STUDY_GOALS_PROVIDER,
     STUDY_PLANS_PROVIDER,
@@ -39,6 +41,7 @@ from app.presentation.api.routes import (
     learner,
     plan_items,
     progress,
+    resources,
     revisions,
     study_goals,
     study_plans,
@@ -102,6 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     setattr(app.state, STUDY_GOALS_PROVIDER, build_study_goals_provider(session_factory))
     setattr(app.state, STUDY_PLANS_PROVIDER, build_study_plans_provider(session_factory))
     setattr(app.state, REVISIONS_PROVIDER, build_revisions_provider(session_factory))
+    setattr(app.state, RESOURCES_PROVIDER, build_resources_provider(session_factory))
     setattr(app.state, TOPIC_PROGRESS_PROVIDER, build_topic_progress_provider(session_factory))
 
     # Registered before the routers so every failure -- including a 404 for a
@@ -118,4 +122,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(plan_items.router)
     app.include_router(progress.router)
     app.include_router(revisions.router)
+    app.include_router(resources.router)
     return app

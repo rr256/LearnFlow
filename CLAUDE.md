@@ -62,8 +62,10 @@ Migrations are never applied automatically, by startup or by a container entrypo
 migrated one area per milestone; the curriculum tables, the examination schedule tables, `learners`
 and `study_goals` — including its two planning-preference columns — `learner_topic_progress`,
 `availability_slots`, `study_plans`, and `plan_items` exist today, which completes the
-learner-planning area, and `revision_records` arrives with `20260813_01` — the first migration since
-`20260806_03`, creating one table and one index and altering nothing. Curated content is loaded by idempotent seeds, not by
+learner-planning area, `revision_records` arrives with `20260813_01` — the first migration since
+`20260806_03`, creating one table and one index and altering nothing — and `resources` and
+`resource_topic_links` arrive with `20260816_01`, the first two tables of the resource area,
+creating two tables and two indexes and altering nothing. Curated content is loaded by idempotent seeds, not by
 migrations — each matches records on a natural key and never deletes, so both are safe to repeat.
 Run them in the order above; each refuses to run ahead of its predecessor. See
 [`docs/database/migrations.md`](docs/database/migrations.md).
@@ -100,7 +102,9 @@ learning-stages-by-subject panel by
 [`docs/adr/ADR-030-learning-stages-by-subject-panel.md`](docs/adr/ADR-030-learning-stages-by-subject-panel.md),
 which changes no contract, and its priority-focus panel by
 [`docs/adr/ADR-031-priority-focus-panel.md`](docs/adr/ADR-031-priority-focus-panel.md), which is
-**accepted** and changes no contract either.
+**accepted** and changes no contract either, and the learning-resource catalogue by
+[`docs/adr/ADR-032-learning-resource-catalogue.md`](docs/adr/ADR-032-learning-resource-catalogue.md),
+which is **accepted** and adds RES-001 to RES-004 with migration `20260816_01`.
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -301,6 +305,30 @@ ground**, leaving everything else in both intact. **PRG-001 now waits on quiz, e
 mistake evidence alone.** Do not write that FR-011 is complete. Proposed by
 [`docs/adr/ADR-031-priority-focus-panel.md`](docs/adr/ADR-031-priority-focus-panel.md).
 
+**RES-001 to RES-004 catalogue the learner's own study material against topics** — the first change to
+open **Milestone 4**, and it opens **that milestone's first item only**: nothing is uploaded,
+downloaded, extracted, embedded, indexed, or retrieved, and no mentor exists. **A resource is a record
+of where material is, never the material.** `storage_key`, `metadata`, and `resource_ingestions` are
+all **absent**, each waiting on the code that would maintain it. **No location on the learner's own
+machine is stored**: `external_reference` accepts an `http` or `https` address and nothing else,
+because a resource endpoint may never return an absolute local filesystem path — the path is refused
+on the way in rather than filtered on the way out. Material that is not on the web is carried by
+`source_label`, in the learner's own words, and a resource must name **at least one** of the two.
+**FR-007's "references/paths to local video resources" is therefore only partly met**; do not write
+that FR-007 is complete. **Nothing curated ships** — no seed, no data file, no external content in the
+repository — and `owner_learner_id` stays nullable for curated content nothing writes yet. **Nothing
+is deleted**: RES-005 is unimplemented, and a learner puts material aside with `status: archived`,
+reversibly. **Nothing is recommended, ranked, or counted**: a topic's material is what the learner
+linked to it, in the API's order, and no figure appears beside a subject, a topic, or a review. Only
+`primary` of the four link roles is written, though the `CHECK` carries all four; `resource_type`
+permits five of seven and `status` two of five, because the missing values need storage that does not
+exist. **A resource may cover any stored topic, including a grouping heading** — deliberately unlike
+PRG-004, which refuses a stage on one. **Writing lives on `/resources` alone** — add, edit, and archive — while the curriculum view
+and `/revisions` show a topic's material **read-only** and link there. This supplies the **resource
+half** of FR-006's second criterion, which ADR-028 deferred — the **practice half still waits on
+FR-009**, so **FR-006 is still not met in full**. Contracted by
+[`docs/adr/ADR-032-learning-resource-catalogue.md`](docs/adr/ADR-032-learning-resource-catalogue.md).
+
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
 keeps that name. See [`docs/domain/terminology.md`](docs/domain/terminology.md).
@@ -328,7 +356,13 @@ LRN-001, and **writes nothing at all**, and a `/revisions` screen that reads the
 over REV-001, schedules them over REV-004, and records what became of each over REV-003, and a
 `/progress` progress overview that gathers LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, REV-001, and
 PRG-002 with CUR-003 for the recorded learning stages by subject, leads with a priority focus panel
-drawn from those same reads, and **writes nothing at all** either. A goal response carries the saved study week
+drawn from those same reads, and **writes nothing at all** either, and a `/resources`
+learning-resource catalogue that lists the learner's own study material over RES-002, registers it
+over RES-001, and **corrects** it or puts it aside and back over RES-004 — reading GOAL-002 and
+CUR-003 to offer the topics it may be linked to. It supports **add, edit, and archive**; material
+put aside is read-only, so a learner puts it back before correcting it, and the edit form never
+sends `status` while the archive control sends nothing else. The curriculum view and `/revisions` also read RES-002 and show a
+topic's material **read-only**, linking to `/resources` for every change. A goal response carries the saved study week
 and the saved planning preferences, so neither setup nor home calls anything extra to show them.
 
 The frontend serves its own static `/health` for the container health check, distinct from the

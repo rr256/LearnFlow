@@ -3,9 +3,11 @@ import { Suspense } from "react";
 
 import styles from "@/app/revisions/page.module.css";
 import { Notice } from "@/components/Notice";
+import { resourcesByTopicId } from "@/features/resources/by-topic";
 import { RevisionList } from "@/features/revision/RevisionList";
 import { ScheduleRevisionsForm } from "@/features/revision/ScheduleRevisionsForm";
-import { ApiError, listRevisions } from "@/lib/api-client";
+import { ApiError, listResources, listRevisions } from "@/lib/api-client";
+import type { LearningResource } from "@/types/resource";
 import type { Revision } from "@/types/revision";
 
 /**
@@ -18,14 +20,44 @@ import type { Revision } from "@/types/revision";
 export const dynamic = "force-dynamic";
 
 /**
- * The learner's revisions, earliest due date first.
+ * RES-002 — the study material this learner has catalogued, by topic.
  *
- * One read. The order and the `is_due` flag both come from the backend, so this
- * neither sorts nor re-decides what it receives — what counts as due is a domain
- * rule, and a screen computing its own could disagree with the record.
+ * A failure here is deliberately **not fatal**: the reviews are what this screen
+ * is for, and unreadable material should cost the reader that list rather than
+ * the list of what is due. Returning null renders the reviews without it.
+ *
+ * The whole catalogue is read once and joined here rather than asked for a topic
+ * at a time, which is what the curriculum view does with the same call.
  */
-async function readRevisions(): Promise<Revision[]> {
-  return listRevisions();
+async function catalogued(): Promise<Map<string, LearningResource[]> | null> {
+  try {
+    return resourcesByTopicId(await listResources());
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    return null;
+  }
+}
+
+/**
+ * The learner's revisions, earliest due date first, and their own material for
+ * the topics each names.
+ *
+ * The order and the `is_due` flag both come from the backend, so this neither
+ * sorts nor re-decides what it receives — what counts as due is a domain rule,
+ * and a screen computing its own could disagree with the record. **No material
+ * is suggested either**: what appears beside a review is what the learner linked
+ * to that topic.
+ *
+ * The two calls run together: neither addresses the other's result.
+ */
+async function readRevisions(): Promise<{
+  revisions: Revision[];
+  resources: Map<string, LearningResource[]> | null;
+}> {
+  const [revisions, resources] = await Promise.all([listRevisions(), catalogued()]);
+  return { revisions, resources };
 }
 
 /**
@@ -38,9 +70,9 @@ async function readRevisions(): Promise<Revision[]> {
  * `notFound()` turns a `404` into a `200`.
  */
 async function RevisionSection() {
-  let revisions: Revision[];
+  let read: { revisions: Revision[]; resources: Map<string, LearningResource[]> | null };
   try {
-    revisions = await readRevisions();
+    read = await readRevisions();
   } catch (error) {
     if (!(error instanceof ApiError)) {
       throw error;
@@ -66,7 +98,7 @@ async function RevisionSection() {
     );
   }
 
-  return <RevisionList revisions={revisions} />;
+  return <RevisionList resources={read.resources} revisions={read.revisions} />;
 }
 
 /**
@@ -113,6 +145,9 @@ export default function RevisionsPage() {
           </li>
           <li>
             <Link href="/">Your study setup</Link>
+          </li>
+          <li>
+            <Link href="/resources">Your study material</Link>
           </li>
           <li>
             <Link href="/curriculum">Browse the curriculum</Link>

@@ -56,6 +56,12 @@ from app.infrastructure.persistence.progress import (
     LearnerTopicProgress,
     RevisionRecord,
 )
+from app.infrastructure.persistence.resources import (
+    RESOURCE_TOPIC_ROLES,
+    RESOURCE_TYPES,
+    Resource,
+    ResourceTopicLink,
+)
 
 CURRICULUM_TABLES = (
     "learning_programs",
@@ -80,7 +86,15 @@ LEARNER_PLANNING_TABLES = (
 
 PROGRESS_TABLES = ("learner_topic_progress", "revision_records")
 
-MAPPED_TABLES = CURRICULUM_TABLES + EXAMINATION_TABLES + LEARNER_PLANNING_TABLES + PROGRESS_TABLES
+RESOURCE_TABLES = ("resources", "resource_topic_links")
+
+MAPPED_TABLES = (
+    CURRICULUM_TABLES
+    + EXAMINATION_TABLES
+    + LEARNER_PLANNING_TABLES
+    + PROGRESS_TABLES
+    + RESOURCE_TABLES
+)
 
 
 def compiled(table_name: str) -> str:
@@ -94,7 +108,7 @@ def constraint_names(table_name: str) -> set[str]:
 
 
 def test_only_the_migrated_tables_are_mapped():
-    """Resource, assessment, and the remaining planning tables arrive with their milestones."""
+    """Assessment, study activities, and resource ingestion arrive with their milestones."""
     assert set(Base.metadata.tables) == set(MAPPED_TABLES)
 
 
@@ -229,15 +243,16 @@ def test_topic_ordering_and_trackability_use_the_documented_types():
 
 def test_the_remaining_schema_areas_are_absent():
     """Guards the agreed scope. `study_plans` and `plan_items` arrived with the
-    planning code that reads them, completing the learner-planning area, and
-    `revision_records` has since arrived with the revision code that reads it.
-    `study_activities` is what the progress area still lacks, and the resource and
-    assessment areas follow with their own milestones. Each waits for the code
-    that reads it, so no column fixes a shape before a requirement constrains
-    it."""
+    planning code that reads them, completing the learner-planning area,
+    `revision_records` arrived with the revision code, and `resources` and
+    `resource_topic_links` have since arrived with the catalogue code that reads
+    them. `study_activities` is what the progress area still lacks,
+    `resource_ingestions` what the resource area lacks, and the assessment area
+    follows with its own milestone. Each waits for the code that reads it, so no
+    column fixes a shape before a requirement constrains it."""
     for table_name in (
         "study_activities",
-        "resources",
+        "resource_ingestions",
         "checkpoint_quizzes",
     ):
         assert table_name not in Base.metadata.tables
@@ -757,3 +772,101 @@ def test_the_revision_index_matches_the_documented_access_pattern():
     )
 
     assert [column.name for column in index.columns] == ["learner_id", "due_on", "status"]
+
+
+# -- learning resources ------------------------------------------------------
+
+
+def test_resource_type_is_constrained_to_what_this_build_catalogues():
+    """Five of the seven documented kinds. `image` and `attachment` name uploaded
+    files, and nothing uploads one."""
+    ddl = compiled("resources")
+
+    assert "ck_resources_resource_type_is_known" in ddl
+    for resource_type in RESOURCE_TYPES:
+        assert f"'{resource_type}'" in ddl
+    assert "'attachment'" not in ddl
+
+
+def test_resource_status_is_constrained_to_what_a_learner_can_reach():
+    """`processing`, `ready`, and `failed` are ingestion states, and
+    `resource_ingestions` does not exist, so a resource could enter one and never
+    leave it."""
+    ddl = compiled("resources")
+
+    assert "ck_resources_status_is_known" in ddl
+    assert "'registered'" in ddl
+    assert "'archived'" in ddl
+    assert "'processing'" not in ddl
+
+
+def test_a_resource_must_say_where_its_material_is():
+    """schema.md's "at least one of storage_key or external_reference", read for a
+    catalogue that stores no files."""
+    ddl = compiled("resources")
+
+    assert "ck_resources_names_a_location" in ddl
+    assert "source_label IS NOT NULL OR external_reference IS NOT NULL" in ddl
+
+
+def test_a_resource_may_belong_to_no_learner():
+    """Reserved for curated or shared content; nothing writes an ownerless row."""
+    assert Resource.__table__.columns["owner_learner_id"].nullable is True
+
+
+def test_no_file_columns_are_created():
+    """`storage_key` and `metadata` describe a stored file, and nothing uploads
+    one. Each arrives with the ingestion change that maintains it."""
+    columns = set(Resource.__table__.columns.keys())
+
+    assert "storage_key" not in columns
+    assert "metadata" not in columns
+
+
+def test_the_resource_index_matches_the_documented_access_pattern():
+    """One learner's material, and whether it is put aside."""
+    index = next(
+        index
+        for index in Resource.__table__.indexes
+        if index.name == "ix_resources_owner_learner_id_status"
+    )
+
+    assert [column.name for column in index.columns] == ["owner_learner_id", "status"]
+
+
+def test_a_resource_topic_link_is_keyed_on_resource_topic_and_role():
+    key = ResourceTopicLink.__table__.primary_key
+
+    assert [column.name for column in key.columns] == [
+        "resource_id",
+        "topic_id",
+        "relationship_type",
+    ]
+
+
+def test_every_documented_link_role_is_permitted_although_one_is_written():
+    """Unlike the resource statuses: choosing between these needs no storage that
+    is missing, so offering them later is a use-case change, not a migration."""
+    ddl = compiled("resource_topic_links")
+
+    assert "ck_resource_topic_links_relationship_type_is_known" in ddl
+    for role in RESOURCE_TOPIC_ROLES:
+        assert f"'{role}'" in ddl
+
+
+def test_a_resource_topic_link_records_creation_only():
+    """Write-once, as `topic_relationships` is: a changed role is a different link."""
+    assert "updated_at" not in ResourceTopicLink.__table__.columns
+    assert "created_at" in ResourceTopicLink.__table__.columns
+
+
+def test_the_resource_topic_link_index_matches_the_documented_access_pattern():
+    """Which resources cover a topic, which is how the curriculum and revision
+    screens read this table."""
+    index = next(
+        index
+        for index in ResourceTopicLink.__table__.indexes
+        if index.name == "ix_resource_topic_links_topic_id_resource_id"
+    )
+
+    assert [column.name for column in index.columns] == ["topic_id", "resource_id"]

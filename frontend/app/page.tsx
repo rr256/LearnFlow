@@ -150,6 +150,9 @@ export default function HomePage() {
             <Link href="/revisions">Your reviews</Link>
           </li>
           <li>
+            <Link href="/resources">Your study material</Link>
+          </li>
+          <li>
             <Link href="/setup">Edit your setup</Link>
           </li>
           <li>

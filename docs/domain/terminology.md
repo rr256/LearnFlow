@@ -2,7 +2,7 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-15
+last_updated: 2026-08-16
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -24,6 +24,7 @@ related:
   - ../adr/ADR-029-progress-overview.md
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
   - ../adr/ADR-031-priority-focus-panel.md
+  - ../adr/ADR-032-learning-resource-catalogue.md
   - ../development/coding-standards.md
 ---
 
@@ -45,7 +46,11 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Topic** | A teachable and trackable unit within a subject. | Primary anchor for plans, resources, progress, quizzes, and revision. |
 | **Subtopic** | A smaller unit within a topic. | Use only when finer detail is necessary. |
 | **Topic relationship** | A link between topics, such as prerequisite or recommended-before. | Used for learning order and planning. |
-| **Learning resource** | A learner-owned or curated study reference. | Includes PDFs, notes, PYQs, formula sheets, and local video references. |
+| **Learning resource** | A learner-owned or curated study reference, recorded as **where the material is** rather than as the material itself. | Includes PDFs, notes, PYQs, formula sheets, and video references. A record carries a title, a *resource type*, where it is — a web link, a *source label* in the learner's own words, or both — and the topics it covers. **Nothing is uploaded or held**, and **no location on the learner's own machine is stored**: a link is an `http` or `https` address, and anything offline is described in words. **Nothing is recommended**: a topic's material is what the learner linked to it, and LearnFlow suggests none of its own. See [ADR-032](../adr/ADR-032-learning-resource-catalogue.md). |
+| **Resource type** | What kind of study material a learning resource is: `pdf`, `note`, `pyq`, `formula_sheet`, or `video_reference`. | Stored and sent as the `snake_case` value; the labels a learner reads are *PDF*, *Notes*, *PYQs*, *Formula sheet*, and *Video*. `image` and `attachment` are approved values nothing writes, because each names an uploaded file. |
+| **Source label** | Where a learning resource's material is, in the learner's own words. | "Blue binder, chapter 3"; "the lecture series on the external drive". This is what carries material that is not on the web, and it exists so that **no filesystem path has to be stored**. A resource names at least one of a source label and a link. |
+| **Resource status** | Whether a learning resource is in the catalogue or put aside: `registered` or `archived`. | Stored and sent as the `snake_case` value. **Nothing deletes a resource**: *put aside* is reversible, and archived material stays in the catalogue while dropping out of the curriculum and revision screens. `processing`, `ready`, and `failed` are approved values nothing writes, because no ingestion exists to move a resource through them. |
+| **Learning-resource catalogue** | The screen where a learner records their own study material, corrects it, and puts it aside. | The canonical name for the screen at `/resources`; its UI heading is "Your study material". The **only** place material is written — the curriculum view and the revision screen show a topic's material read-only and link here, the shape the *monthly study view* and the *progress overview* use. It supports **add, edit, and archive**; material put aside is read-only, so a learner puts it back before correcting it. |
 | **PYQ** | Previous-year question. | A verified historical exam question; distinguish it from AI-generated practice. |
 | **Examination schedule** | The dated calendar an examining body publishes for one cycle of a learning program, such as GATE 2027. | Reference data with a named source, not learner data. Every learner aiming at that cycle reads the same dates. |
 | **Examination cycle** | One occurrence of a recurring examination, identified by a label such as `2027`. | A learning program has many cycles over time; each has its own schedule. |
@@ -129,6 +134,9 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Study pace; intensity; study style | Planning preference; session length; topic order | *Pace* and *intensity* sound like settings but define nothing a planner can act on, and they invite a judgement about how hard a learner is working. Name the specific choice being made. |
 | Default session length; recommended topic order | An unset planning preference | A preference the learner has not set has no value, and presenting one as a default would report a decision they did not make. Say it is unset, and let the planner choose visibly — which it does, naming the choice as its own. |
 | Time slot; study session (for availability) | Availability slot | An availability slot is a quantity of minutes on a day, not a booking between two clock times. Nothing stores a time of day. |
+| Recommended resource; suggested material; best book for a topic | The learner's material for a topic | LearnFlow holds no study material and has assessed none, so it recommends none. A topic's material is what the learner linked to it, in the order the API returned; a topic with nothing linked shows nothing rather than an invented suggestion. A curated list is a ranking whether or not it is presented as one. |
+| Upload; attach a file; a resource's contents | Register a resource; where the material is | A *learning resource* is a record of **where material is**, never the material: nothing is uploaded, downloaded, extracted, or indexed. Wording that implies LearnFlow holds a copy describes a capability that does not exist. |
+| Delete a resource; remove material | Put material aside; archive | **Nothing implemented today deletes a learner's record**, and the catalogue is no exception: putting material aside is reversible and it stays in the catalogue, which is what *superseded plan* and *skipped* each establish for their own records. RES-005 and EXT-005 are catalogued `DELETE` endpoints that nothing implements; say *put aside* of a resource unless one of them is built. |
 | Test integration | Manual external test result entry | The MVP does not connect to third-party test platforms. |
 | AI memory | Learner progress, resource retrieval, or conversation context | Store durable facts in the application/database, not in model memory. |
 | GATE topic | Topic in the GATE CSE learning program | Keeps platform-core language reusable. |
@@ -257,6 +265,7 @@ ratio has a denominator and a denominator invites the comparison the third test 
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — *progress overview* above, the screen the word *dashboard* was reserved for, and why it lists what a learner marked rather than counting it
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the stages panel the overview gained, and why a subject may not carry a count or an order over the five stages
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — *priority focus area* above, the three stored facts it is gathered from, and why the recorded stage is not one of them
+- [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — *learning resource*, *resource type*, *source label*, and *resource status* above, and why nothing is recommended, uploaded, or deleted
 - [Domain model](domain-model.md)
 - [Domain entities](entities.md)
 - [Functional requirements](../requirements/functional.md)

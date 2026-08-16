@@ -1,0 +1,90 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+.lead {
+  margin: 0 0 var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.items {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Every piece of material is styled identically. Nothing is emphasised over
+ * anything else: the catalogue holds what the learner chose, and highlighting
+ * one piece would be a recommendation this product does not make.
+ */
+.item {
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+.title {
+  margin: 0;
+}
+
+/*
+ * The kind of material, carried in words rather than an icon, so nothing
+ * depends on the styling being seen.
+ */
+.kind {
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.where,
+.topics {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.link {
+  margin: var(--space-1) 0 0;
+  font-size: 0.875rem;
+  /* A long address wraps rather than widening the panel past the viewport. */
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The edit form, behind a native disclosure. `details` needs no JavaScript, so
+ * the form is reachable on a page that never hydrates -- which is the rule every
+ * write path in this product follows.
+ */
+.edit {
+  margin-top: var(--space-2);
+}
+
+.edit summary {
+  cursor: pointer;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+/* The form inside sits flush with the item rather than adding a second border. */
+.edit > form {
+  margin-top: var(--space-3);
+  border: 0;
+  padding: 0;
+}

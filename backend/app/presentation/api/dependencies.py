@@ -20,6 +20,7 @@ from collections.abc import Iterator
 from fastapi import Request
 
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
+from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
 from app.application.use_cases.manage_study_plans import ManageStudyPlans
@@ -35,6 +36,7 @@ LEARNER_PROFILE_PROVIDER = "learner_profile_provider"
 STUDY_GOALS_PROVIDER = "study_goals_provider"
 STUDY_PLANS_PROVIDER = "study_plans_provider"
 REVISIONS_PROVIDER = "revisions_provider"
+RESOURCES_PROVIDER = "resources_provider"
 TOPIC_PROGRESS_PROVIDER = "topic_progress_provider"
 
 
@@ -80,6 +82,13 @@ def provide_study_plans(request: Request) -> Iterator[ManageStudyPlans]:
 def provide_revisions(request: Request) -> Iterator[ManageRevisions]:
     """Yield the revision use case bound to this request's unit of work."""
     provider = getattr(request.app.state, REVISIONS_PROVIDER)
+    with provider() as use_case:
+        yield use_case
+
+
+def provide_resources(request: Request) -> Iterator[ManageResources]:
+    """Yield the learning-resource use case bound to this request's unit of work."""
+    provider = getattr(request.app.state, RESOURCES_PROVIDER)
     with provider() as use_case:
         yield use_case
 

@@ -20,6 +20,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.application.dto.resource import ResourceTopic
 from app.application.dto.revision import RevisionTopic
 from app.application.ports.curriculum_seed_repository import (
     CurriculumVersionRecord,
@@ -28,6 +29,7 @@ from app.application.ports.curriculum_seed_repository import (
     TopicRecord,
     TopicRelationshipRecord,
 )
+from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_plans import ManageStudyPlans
 from app.application.use_cases.manage_topic_progress import ManageTopicProgress
@@ -35,6 +37,7 @@ from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.composition.app_factory import create_app
 from app.presentation.api.dependencies import (
     READ_CURRICULUM_PROVIDER,
+    RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
     STUDY_PLANS_PROVIDER,
     TOPIC_PROGRESS_PROVIDER,
@@ -42,6 +45,7 @@ from app.presentation.api.dependencies import (
 from tests.api.onboarding_fixtures import Onboarding, install_onboarding
 from tests.unit.fake_curriculum_repository import FakeCurriculumRepository
 from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
+from tests.unit.fake_resource_repository import FakeResourceRepository
 from tests.unit.fake_revision_repository import FakeRevisionRepository
 from tests.unit.fake_topic_progress_repository import FakeTopicProgressRepository, topic
 from tests.unit.planning_fixtures import FixedClock, Planning
@@ -288,5 +292,61 @@ def revision_client(revising: Revising) -> Iterator[TestClient]:
         yield revising.reviser()
 
     setattr(app.state, REVISIONS_PROVIDER, provide)
+    with TestClient(app) as client:
+        yield client
+
+
+class Cataloguing:
+    """A learner, a topic to link material to, and somewhere to put resources.
+
+    The grouping topic is beside the trackable one deliberately: a resource may
+    cover either, which is where RES-001 differs from PRG-004.
+    """
+
+    def __init__(self) -> None:
+        self.learner = learner()
+        self.learners = FakeLearnerRepository((self.learner,))
+        self.subject_id = uuid.uuid4()
+        self.topic = ResourceTopic(
+            id=uuid.uuid4(),
+            code=None,
+            name="CPU scheduling",
+            subject_id=self.subject_id,
+            subject_name="Operating Systems",
+        )
+        self.heading = ResourceTopic(
+            id=uuid.uuid4(),
+            code=None,
+            name="Operating Systems",
+            subject_id=self.subject_id,
+            subject_name="Operating Systems",
+        )
+        self.resources = FakeResourceRepository(topics=[self.topic, self.heading])
+
+    def cataloguer(self) -> ManageResources:
+        return ManageResources(learners=self.learners, resources=self.resources)
+
+
+@pytest.fixture
+def cataloguing() -> Cataloguing:
+    """The learner and topics the resource endpoints work from."""
+    return Cataloguing()
+
+
+@pytest.fixture
+def resource_client(cataloguing: Cataloguing) -> Iterator[TestClient]:
+    """A client whose resource endpoints share one set of stores.
+
+    Shared across requests deliberately: a test can register over RES-001, list
+    over RES-002, and change one over RES-004, which is the sequence the
+    catalogue screen performs.
+    """
+    app = create_app()
+
+    @contextmanager
+    def provide() -> Iterator[ManageResources]:
+        yield cataloguing.cataloguer()
+
+    setattr(app.state, RESOURCES_PROVIDER, provide)
     with TestClient(app) as client:
         yield client

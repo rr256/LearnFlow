@@ -2,7 +2,7 @@
 title: LearnFlow Domain Model
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-13
+last_updated: 2026-08-16
 related:
   - ../00-project-context.md
   - entities.md
@@ -21,6 +21,7 @@ related:
   - ../adr/ADR-028-revision-workflow.md
   - ../requirements/functional.md
   - ../database/schema.md
+  - ../adr/ADR-032-learning-resource-catalogue.md
 ---
 
 # LearnFlow Domain Model
@@ -84,6 +85,8 @@ Topics are the shared anchor for planning, resources, quizzes, revision, learner
 A learner-owned or curated reference used for study. Examples include PDF notes, PYQs, short notes, formula sheets, and references to local video resources.
 
 A resource can be linked to one or more subjects, topics, or subtopics. Resource content is distinct from the curriculum structure and from learner progress.
+
+**Only topic and subtopic links are stored today** — the two are the same record — and a resource records **where the material is** rather than the material itself. Subject-level linking stays a model target with no table behind it. See [entities](entities.md#learning-resource) and [ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
 
 ### Examination Schedule
 
