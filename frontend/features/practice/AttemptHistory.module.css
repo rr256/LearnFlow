@@ -1,0 +1,43 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 1.125rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.items {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Every attempt is styled identically. Nothing marks one as better than another,
+ * because nothing here knows which was: no attempt carries a score.
+ */
+.item {
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+.title {
+  margin: 0;
+}
+
+.state {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}

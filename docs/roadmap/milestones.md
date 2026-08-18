@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-16
+last_updated: 2026-08-18
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -33,6 +33,7 @@ related:
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-033-checkpoint-practice-workflow.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -235,7 +236,7 @@ test, and mistake evidence a fuller priority focus would draw on are what remain
   them against each other. It writes nothing and counts nothing, as the rest of the screen does not.
   Contracted by [ADR-031](../adr/ADR-031-priority-focus-panel.md).
   **The item stays open** because the priority focus is drawn only from the evidence LearnFlow stores:
-  no quiz outcome, external test result, or mistake evidence exists to draw one from, and material
+  no external test result or mistake evidence exists to draw one from, and the quiz outcomes that now exist are deliberately not a signal: nothing ranks or reads them, and material
   status and study activity are still not stored either. **PRG-001 is therefore still not
   implemented**, and now waits on that quiz, test, and mistake evidence alone. **FR-011 is not met in
   full** — two of its four acceptance criteria are met and a third is partly met, and
@@ -534,16 +535,63 @@ half** of [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s sec
 
 **Outcome:** practice and learner-entered test results improve recommendations transparently.
 
+This milestone has been **opened** by checkpoint practice: a learner can write their own practice
+questions, take a quiz assembled from them, and read an honest per-question result. That is the first
+two items below, and deliberately no more of the milestone — no external test result can be entered,
+no mistake is stored, and nothing incorporates quiz evidence into a recommendation. Contracted by
+[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md), with migration `20260818_01` creating the
+whole *Assessment* schema area.
+
+**No question content ships with LearnFlow.** The learner writes every question, which is the position
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md) took for study material: no seed, no data
+file, no bundled previous-year paper, and no external fetch, so no third-party licensing question
+arises. `generated` waits on an AI provider; `verified_pyq` waits on a licensing position nobody has
+taken.
+
 ### Definition of Done
 
-- [ ] Learner can generate/select a topic checkpoint quiz.
-- [ ] Learner can submit answers and receive objective scoring where supported.
-- [ ] Quiz attempts, feedback, and mistakes are stored.
+- [x] Learner can generate/select a topic checkpoint quiz. **Done**, over QZ-001 with QZ-008 to
+  QZ-010 behind it: the learner writes questions against topics, and a quiz asks **every** ready
+  question for the topics they choose, in the order they wrote them. **Deterministic, with no AI
+  provider** — the same topics over the same bank always give the same quiz. LearnFlow selects none
+  and leaves none out, because choosing which few to ask is a ranking, so *short* is the learner's
+  own decision. A quiz naming no topic is refused, which is
+  [ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md)'s rule.
+- [x] Learner can submit answers and receive objective scoring where supported. **Done**, over
+  QZ-003, QZ-005, and QZ-007, and **with no score**: every objective answer is marked correct or not
+  correct by a pure domain rule, and the result states those outcomes per question with the expected
+  answer and the explanation. There is no total, no mark, and no percentage — the conflict between
+  [terminology](../domain/terminology.md) and [schema.md](../database/schema.md), resolved in
+  terminology's favour. **An unanswered question is not a wrong one.** QZ-004 is not implemented: a
+  learner submits the whole attempt in one form post, which works with no JavaScript.
+- [ ] Quiz attempts, feedback, and mistakes are stored. **Attempts and answers are stored.** The feedback a
+  learner reads is the explanation held on the question itself, which is why no
+  `quiz_attempt_answers.feedback` column exists: a question is never edited, so its explanation cannot
+  drift from an attempt marked against it. **The item stays open on the word
+  *mistakes***: `mistake_evidence` has four discovery-source foreign keys of which two reference
+  `external_test_results` and `study_activities`, neither of which exists, so it cannot be created
+  until they are. It arrives with FR-010, below.
 - [ ] Learner can manually enter external test result data and optional private reference attachment.
 - [ ] Subject/topic evidence is recorded only when the learner/test report provides it.
 - [ ] Progress/revision recommendations incorporate evidence without claiming permanent mastery.
-- [ ] No external test-platform scraping, login sharing, or direct integration exists.
-- [ ] Assessment flows have API/domain/persistence tests.
+  **Nothing incorporates quiz evidence yet, deliberately**: a quiz writes no learning stage, no plan,
+  no plan item, and no revision, which is FR-005's and FR-009's shared rule. PRG-001 still waits on
+  the stored mistake evidence above.
+- [x] No external test-platform scraping, login sharing, or direct integration exists. **Holds**, and
+  nothing in this milestone's first half reaches any network at all.
+- [ ] Assessment flows have API/domain/persistence tests. **Done for checkpoint practice**:
+  domain-rule tests over the pure marking module, use-case tests against fakes, API contract tests
+  over the real application factory — including that QZ-002 never sends an expected answer and that
+  no response carries a score — PostgreSQL integration tests over migration `20260818_01`, its
+  upgrade, its downgrade, every permitted value, the constraints it refuses, and the columns it
+  deliberately does not create, plus the workflow read back over HTTP against the seeded GATE CSE
+  curriculum; and frontend tests over the forms, the question bank, the quiz, the result, and the
+  history. **The item stays open** for the external-evidence half.
+
+**FR-009 is not met in full**; [endpoints.md](../api/endpoints.md#fr-009-acceptance-criteria) carries
+the count. **FR-006 is still not met in full** either: its second criterion wants practice
+suggestions on a revision, and surfacing a quiz there would mean recommending one, which nothing in
+LearnFlow does.
 
 ## Milestone 6 — Daily-Use Hardening
 
@@ -615,3 +663,4 @@ half** of [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s sec
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the first of those two counts, now met, and why the second stayed open
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the second count, now partly met, and the evidence the item still waits on
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the Milestone 4 item this opens, and the reasons the rest of that milestone stays closed
+- [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — the two Milestone 5 items this opens, and the reasons the rest of that milestone stays closed

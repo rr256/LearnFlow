@@ -2,9 +2,10 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-13
+last_updated: 2026-08-18
 related:
   - ../adr/ADR-028-revision-workflow.md
+  - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../00-project-context.md
   - ../adr/ADR-020-initial-study-plan-generation.md
   - ../adr/ADR-021-plan-item-completion.md
@@ -100,8 +101,9 @@ happened, [ADR-022](../adr/ADR-022-plan-adaptation.md). See
 
 Of the inputs above, four are read: the active study goal and its horizon, the availability slots and
 planning preferences, the curriculum structure and topic relationships, and topic progress. The other
-two are not, for different reasons. **Assessment evidence is not stored at all** — `quiz_attempts` and
-`mistake_evidence` do not exist. `revision_records` now does, per
+two are not, for different reasons. **Assessment evidence is partly stored** — `quiz_attempts` and
+`quiz_attempt_answers` arrived with migration `20260818_01`, holding per-question outcomes and no
+score, but they are deliberately **not** a planner input either; `mistake_evidence` does not exist. `revision_records` now does, per
 [ADR-028](../adr/ADR-028-revision-workflow.md), but it is deliberately **not** a planner input: a
 revision lives beside a plan rather than inside one. **Pending plan items are now read, but only by
 adaptation**: PLN-005 reads which topics the learner has completed and which items are overdue, and rebuilds the plan around both. PLN-001 still plans from the curriculum and the goal alone, so
@@ -227,6 +229,23 @@ Create/manage checkpoint quizzes, evaluate attempts, and return useful feedback.
 - Label generated questions as AI-generated.
 - Score objective questions deterministically where possible.
 - Treat subjective evaluation as guidance requiring careful presentation.
+
+### What is built today (ADR-033)
+
+Checkpoint practice ships as **no service at all**: there is no AI provider behind it and nothing
+generates a question. The learner writes every question, and a quiz asks **every** one they wrote for
+the topics they chose, in the order they wrote them — so there is no *question count* and no
+*difficulty* to ask for, because choosing which few to ask and grading how hard one is would each
+rank one question against another, which nothing in LearnFlow does. Marking is a pure rule in
+`backend/app/domain/checkpoint_marking.py`.
+
+The **scores** and **mistake evidence** named above are not produced. A result states what became of
+each question — correct, not correct, or unanswered — and no total at all, which is the rule
+[terminology](../domain/terminology.md) states against a number that rates the learner;
+`mistake_evidence` waits on the external-evidence tables. Nothing here feeds a progress or revision
+recommendation, deliberately: a checkpoint says what happened in one attempt, and moves no learning
+stage, plan, or revision. The verified-PYQ and AI-generated paths above stay unbuilt.
+See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
 
 ## External Test Analysis Service
 

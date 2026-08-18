@@ -1,0 +1,60 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 1.125rem;
+}
+
+.lead {
+  margin: 0 0 var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.items {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Every outcome is styled identically -- no green, no red, no icon, no weight.
+ * Colouring a result by whether the learner was right turns a record of work
+ * into a verdict on a person, which is what docs/domain/terminology.md refuses,
+ * and it would also carry meaning that a learner who cannot see the colour
+ * loses. The words carry it instead.
+ */
+.item {
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+.prompt {
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+}
+
+.position {
+  color: var(--colour-text-muted);
+}
+
+.outcome {
+  margin: 0 0 var(--space-2);
+}
+
+.line {
+  margin: 0 0 var(--space-1);
+  font-size: 0.9375rem;
+}
+
+.explanation {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}

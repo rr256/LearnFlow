@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-16
+last_updated: 2026-08-18
 related:
   - ../00-project-context.md
   - conventions.md
@@ -32,6 +32,7 @@ related:
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-033-checkpoint-practice-workflow.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -867,9 +868,11 @@ Each waits on something that does not exist rather than on a decision:
 - **PRG-001** reports the current plan, revisions due, and priority focus areas. All three now have
   stored facts behind them — `study_plans` and `plan_items` are read by PLN-002 and PLN-003,
   `revision_records` by REV-001, and the *priority focus area* panel is drawn from a plan item whose
-  day has passed, a review REV-001 reports as due, and PLN-006's verdict. What PRG-001 still waits on
-  is the **quiz, external-test, and mistake evidence** its purpose also implies, which FR-009 and
-  FR-010 would store and which does not exist.
+  day has passed, a review REV-001 reports as due, and PLN-006's verdict. **Quiz evidence is now
+  stored** — QZ-005 writes per-question outcomes to `quiz_attempt_answers` — but nothing draws a
+  priority from it, and no *score* exists to draw one from. What PRG-001 still waits on is the
+  **external-test and mistake evidence** its purpose also implies, which FR-010 would store and which
+  does not exist.
 
   **The progress overview screen does not use it.** `/progress` is a *reading* of eight existing
   contracts — LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, REV-001, PRG-002, and CUR-003 — and adds
@@ -892,9 +895,11 @@ Each waits on something that does not exist rather than on a decision:
   explained, and **ranking nothing**, per [ADR-031](../adr/ADR-031-priority-focus-panel.md) — the
   recorded learning stage is deliberately not a signal,
   because selecting some of the five stages would rank them against each other. It is partial because
-  no priority is drawn from quiz, test, or mistake evidence, none of which is stored. **Not met:**
-  recent quiz history and external test results, because FR-009 and FR-010 do not exist. **FR-011 is
-  not met in full.**
+  no priority is drawn from quiz, test, or mistake evidence — quiz outcomes are now stored but
+  nothing ranks or reads them, and the other two are stored nowhere. **Not met:** recent quiz history
+  and external test results on this screen; QZ-006 lists attempts on `/practice`, and `/progress`
+  deliberately gains no panel from it, because summarising attempts there is the counting
+  [terminology](../domain/terminology.md) refuses. **FR-011 is not met in full.**
 - **PRG-003** promises a progress summary, evidence, and a next action. The only evidence stored is
   the stage itself, so today it would return exactly what PRG-002 returns per item.
 - **ACT-001** and **ACT-002** need `study_activities`, which is not created.
@@ -903,8 +908,10 @@ Three of [FR-005](../requirements/functional.md#fr-005-topic-progress-and-learni
 acceptance criteria are met — marking a topic with one of the five stages, updating it at any time,
 and presenting an encouraging next action. Three are not: recording that study material has been
 completed, which needs `material_status`; storing quiz, test, mistake, and revision evidence
-separately, which needs those tables; and the rule against claiming mastery from one signal, which is
-respected but not yet exercised, because only one kind of signal exists.
+separately — **quiz and revision evidence now exist**, in `quiz_attempt_answers` and
+`revision_records`, while test and mistake evidence need tables that do not; and the rule against
+claiming mastery from one signal, which is respected and now exercised, because a quiz outcome
+deliberately moves no learning stage.
 
 Related entities: [learner topic progress](../domain/entities.md#learner-topic-progress) and
 [topic](../domain/entities.md#topic). Related tables:
@@ -915,9 +922,13 @@ Related entities: [learner topic progress](../domain/entities.md#learner-topic-p
 Supports **FR-006 — Revision Guidance**, which these four endpoints do **not** complete. They deliver
 its revision scheduling, its status updates, and its view of what is due. The **resource-and-practice
 half of FR-006's second criterion is deferred**: a revision links its topic, and linking resource or
-practice suggestions depends on FR-007's resources and FR-009's checkpoint quizzes, neither of which
-exists. FR-006's fourth criterion considers three of its four inputs — completion, learning stage, and
-prior revision history — because no quiz or test evidence is stored.
+practice suggestions depends on FR-007's resources and FR-009's checkpoint quizzes. **Both now
+exist**, and the half stays deferred for a different reason: linking material to a review is done
+(RES-002), while suggesting a *quiz* for a topic would be recommending one, and nothing in LearnFlow
+recommends. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). FR-006's fourth criterion
+considers three of its four inputs — completion, learning stage, and prior revision history. **Quiz
+evidence is now stored** but nothing reads it: no revision interval, plan, or learning stage moves on
+a quiz result.
 
 | ID | Method and path | Purpose | Primary response | State |
 | --- | --- | --- | --- | --- |
@@ -1033,7 +1044,7 @@ is stored.
 Supports **FR-007 — Learning Resource Organization**, which these four endpoints begin and do not
 complete, and supplies the **resource half** of
 [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
-[ADR-028](../adr/ADR-028-revision-workflow.md) deferred. The practice half still waits on FR-009.
+[ADR-028](../adr/ADR-028-revision-workflow.md) deferred. The practice half is **deliberately still open**: checkpoint practice exists, but surfacing a quiz beside a review would mean recommending one for a topic, and nothing in LearnFlow recommends. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
 
 | ID | Method and path | Purpose | Primary request/result | State |
 | --- | --- | --- | --- | --- |
@@ -1232,15 +1243,185 @@ The mentor endpoint must not silently modify learner progress, learning stage, p
 
 Supports **FR-009 — Topic Checkpoint Practice**.
 
+**The learner writes every question.** Nothing here is generated by a model, taken from a
+previous-year paper, or shipped with the repository: `source_type` is always `curated`, and
+`generated` and `verified_pyq` remain constrained and unwritten. See
+[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
+
+**No response under this heading carries a score.** There is no total, no mark, no count of correct
+answers, and no percentage — a result is a list of per-question outcomes. `quiz_attempts.score` and
+the marks columns are not created at all. This is [terminology](../domain/terminology.md)'s rule
+against a number that rates the learner, applied to an assessment.
+
 | ID | Method and path | Purpose | Primary request/result |
 | --- | --- | --- | --- |
-| QZ-001 | `POST /api/v1/checkpoint-quizzes/generate` | Generate/select a checkpoint quiz for one or more topics. | Quiz record with its linked topics; may return `202` if generation is asynchronous. Reject a request carrying no topic. |
+| QZ-001 | `POST /api/v1/checkpoint-quizzes/generate` | Assemble a checkpoint quiz for one or more topics. | Quiz record with its linked topics and the questions it asks. Rejects a request carrying no topic. |
 | QZ-002 | `GET /api/v1/checkpoint-quizzes/{quiz_id}` | Read quiz instructions and learner-safe questions. | Quiz content without expected answers. |
 | QZ-003 | `POST /api/v1/checkpoint-quizzes/{quiz_id}/attempts` | Start an attempt. | Attempt record. |
-| QZ-004 | `PATCH /api/v1/quiz-attempts/{attempt_id}/answers/{question_id}` | Save/update one submitted answer before final submission. | Saved answer state. |
-| QZ-005 | `POST /api/v1/quiz-attempts/{attempt_id}/submit` | Submit and evaluate an attempt. | Score, feedback, mistakes, and updated recommendations. |
+| QZ-004 | `PATCH /api/v1/quiz-attempts/{attempt_id}/answers/{question_id}` | Save/update one submitted answer before final submission. | Saved answer state. **Not implemented**; see below. |
+| QZ-005 | `POST /api/v1/quiz-attempts/{attempt_id}/submit` | Submit an attempt's answers and mark them. | Per-question outcomes. **Takes the answers in its body**; see below. |
 | QZ-006 | `GET /api/v1/quiz-attempts` | List learner quiz-attempt history. | Attempt collection. |
 | QZ-007 | `GET /api/v1/quiz-attempts/{attempt_id}` | Read a completed/in-progress attempt with permitted feedback. | Attempt details. |
+| QZ-008 | `POST /api/v1/practice-questions` | Write one practice question against the topics it covers. | Question record with its topics. |
+| QZ-009 | `GET /api/v1/practice-questions` | List the questions the learner has written. | Question collection, filterable by topic and status. |
+| QZ-010 | `PATCH /api/v1/practice-questions/{question_id}` | Set a question aside, or bring it back. | Updated question. **`status` is the only field**; see below. |
+
+QZ-008 to QZ-010 were added by [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). The
+catalogue had no endpoint for creating a question, because who writes one had never been decided.
+
+### QZ-001 — `POST /api/v1/checkpoint-quizzes/generate`
+
+Assembles a quiz from the learner's own `ready` questions for the topics named. **Deterministic,
+with no AI provider**: the same topics over the same question bank always produce the same quiz, in
+the same order — which is why the catalogued `202` for asynchronous generation is not used.
+
+**Every ready question linked to a chosen topic is asked**, in the order the questions were written.
+LearnFlow selects none and leaves none out: choosing which few to ask would be a ranking. There is no
+cap, no sampling, and no shuffling, so the length of a quiz is the learner's own decision. A question
+linked to two chosen topics is asked once; a **retired** question is left out.
+
+Request: `{"topic_ids": ["…"]}`. **At least one topic is required**, which is
+[ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md)'s rule. `422` for no topic, an
+unknown topic, a topic named twice, or topics the learner has written no ready question for — a quiz
+that asks nothing cannot be attempted, so none is stored. `409` when no learner exists.
+
+Asking again assembles a **new** quiz rather than returning the last one. Nothing is superseded and
+nothing is deleted.
+
+### QZ-002 — `GET /api/v1/checkpoint-quizzes/{quiz_id}`
+
+**The response has no field for an expected answer and none for an explanation**, so a quiz open in
+a browser cannot be read for its answers. That is enforced by the response shape rather than by
+stripping a field. `404` when no such quiz is stored or it belongs to another learner.
+
+### QZ-003 — `POST /api/v1/checkpoint-quizzes/{quiz_id}/attempts`
+
+**Safe to ask for twice.** An unfinished attempt at the same quiz is returned with `200 OK` rather
+than a second attempt being created; a newly created attempt is `201 Created`. That is the position
+REV-004 takes for a review already waiting.
+
+Takes no request body. `started_at` comes from the server's clock. `404` when no such quiz is stored
+or it belongs to another learner.
+
+### QZ-004 — not implemented
+
+Saving one answer before submission needs a client that keeps an attempt open across requests. A
+learner submits the whole attempt in one form post instead, which works with no JavaScript. The
+endpoint stays catalogued for a build that has a reason to save partial work.
+
+### QZ-005 — `POST /api/v1/quiz-attempts/{attempt_id}/submit`
+
+**Departs from the catalogue by taking a request body**, because QZ-004 does not exist to have saved
+the answers first:
+
+```json
+{ "answers": [{ "question_id": "…", "option_key": "b" }] }
+```
+
+**A question the submission omits is recorded as unanswered** — `submitted_answer` and `is_correct`
+both null — **never as wrong**. An empty `answers` list is allowed and marks every question
+unanswered.
+
+The response carries, for each question in the quiz's own order: what the learner chose, whether it
+matches the expected answer, the expected answer, and the explanation the question was written with.
+**It carries no score, no marks, and no count.**
+
+`409` when the attempt has already been marked — a record of what happened is not edited afterwards,
+which is the position PLN-004 takes for an item on a superseded plan; the learner starts a new
+attempt instead. `422` for an answer naming a question the quiz does not ask, a question answered
+twice, or an option the question does not offer. `404` when the attempt is not the learner's.
+
+Marking writes **no learning stage, no plan, no plan item, and no revision**. A checkpoint says what
+happened in one attempt; it does not claim a topic is understood.
+
+### QZ-006 — `GET /api/v1/quiz-attempts`
+
+Newest first, paginated with `limit` and `offset`. **Nothing is counted, totalled, or compared**: the
+collection is a list of what happened, and no attempt is set against another.
+
+A listed attempt carries the **same shape** as a read one, so it includes every question's outcome.
+That is deliberate — a list that emptied a field the same schema populates elsewhere would read as
+"this attempt had no questions" — and its cost is a payload that grows with the learner's own question
+bank. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
+
+### QZ-007 — `GET /api/v1/quiz-attempts/{attempt_id}`
+
+An attempt still `in_progress` reads back **without** its expected answers and explanations, so
+opening a result before submitting reveals nothing.
+
+### QZ-008 — `POST /api/v1/practice-questions`
+
+Records one multiple-choice question the learner has written:
+
+```json
+{
+  "prompt": "How many bits are needed to address 1 KiB?",
+  "options": ["8", "10", "16", "1024"],
+  "correct_option_index": 1,
+  "explanation": "1 KiB is 2^10 bytes, so ten bits address it.",
+  "topic_ids": ["…"]
+}
+```
+
+**Option keys are assigned by LearnFlow from each option's position** — the first is `a`, the second
+`b` — and are never accepted from a caller, so a stored expected answer always names an option the
+question offers. Between two and six options; two options with identical wording are refused, because
+a learner choosing the other one would be marked wrong for the same answer.
+
+**At least one topic is required**: a quiz is assembled by topic, so a question covering none could
+never be asked. A question may cover **any** stored topic, including one that only groups subtopics —
+following RES-001 rather than PRG-004.
+
+There is no `status`, no `source_type`, and no `question_type` field: a question is written `ready`,
+`curated`, and `multiple_choice`. `409` when no learner exists.
+
+### QZ-009 — `GET /api/v1/practice-questions`
+
+Filterable by `topic_id` and `status`, paginated with `limit` and `offset`. **No status is assumed**:
+a caller wanting only what a quiz may ask asks for `ready`, and one wanting what has been set aside
+asks for `retired` — how PLN-002, REV-001, and RES-002 treat their own.
+
+**This response carries the expected answers**, because it is the author reading back what they
+wrote. A quiz being taken reads QZ-002 instead.
+
+### QZ-010 — `PATCH /api/v1/practice-questions/{question_id}`
+
+**`status` is the only field.** A prompt, its options, its expected answer, its explanation, and its
+topics are all fixed once written, because `quiz_attempt_answers` references a question by identifier
+and rewriting a prompt would silently rewrite the history of every attempt already marked against it.
+A learner corrects a question by retiring it and writing another; both stay readable.
+
+`ready` and `retired` only, in either direction. **Retiring is reversible and deletes nothing**: a
+retired question is asked by no *new* quiz, and goes on being asked by every quiz already assembled
+from it. `404` when the question is not the learner's.
+
+### FR-009 acceptance criteria
+
+**Three of [FR-009](../requirements/functional.md#fr-009-topic-checkpoint-practice)'s six acceptance
+criteria are met in full, two are partly met, and one is unmet.** This section is authoritative for
+the count.
+
+- *"The learner can request a short topic-focused checkpoint quiz covering one or more topics; every
+  quiz covers at least one topic"* — **met in full.** *Short* is the learner's own decision: the quiz
+  asks every question they wrote for the topics they chose, so LearnFlow neither lengthens nor
+  shortens it.
+- *"The quiz can use relevant notes/PYQs as context when available"* — **unmet.** It needs retrieval,
+  which does not exist; nothing here reads a resource.
+- *"The learner can submit answers and receive basic feedback"* — **met in full**, over QZ-005: each
+  question reads back as correct, not correct, or unanswered, with the expected answer and the
+  explanation.
+- *"Objective answers can be scored automatically"* — **met in full.** Every answer is marked
+  deterministically by a pure domain rule. No *total* is produced, deliberately; see below.
+- *"The product stores the attempt, answers, score, and identified mistakes"* — **partly met.** The
+  attempt and its answers are stored. **No score is**, because
+  [terminology](../domain/terminology.md) forbids a number that rates the learner and
+  [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) resolves that conflict in terminology's
+  favour. **No mistake is**, because `mistake_evidence` has four discovery-source foreign keys of
+  which two reference tables that do not exist; it arrives with FR-010.
+- *"Quiz results inform learning-stage, practice, and revision recommendations but do not alone prove
+  mastery"* — **partly met**, and deliberately from the second half. Nothing here writes a learning
+  stage, reorders a plan, or schedules a revision, so no result claims mastery. Informing a
+  recommendation waits on the stored evidence above.
 
 ## External Test Result Endpoints
 
@@ -1291,7 +1472,7 @@ Implement in an order that enables one working learner flow:
 5. Revision reads/updates. **Done** — REV-001 to REV-004, per [ADR-028](../adr/ADR-028-revision-workflow.md).
 6. Resource registration and ingestion status. **Partly done** — RES-001 to RES-004 catalogue the learner's own study material and link it to topics, contracted by [ADR-032](../adr/ADR-032-learning-resource-catalogue.md), with migration `20260816_01` creating `resources` and `resource_topic_links`. RES-005 to RES-008 wait on file storage and an extractor, neither of which exists; **RES-005 also waits on a reason to delete**, since archiving through RES-004 is reversible and destroys nothing.
 7. Mentor questions and grounded retrieval.
-8. Checkpoint quizzes and attempts.
+8. Checkpoint quizzes and attempts. **Partly done** — QZ-001, QZ-002, QZ-003, QZ-005, QZ-006, and QZ-007 assemble a quiz from the learner's own questions, run an attempt at it, and read the result back, and QZ-008 to QZ-010 hold the question bank they are built from, contracted by [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md), with migration `20260818_01` creating the whole assessment area. **QZ-004 waits on a client with a reason to save partial work.** Nothing is generated by a model and no question content ships with the repository, so `generated` and `verified_pyq` stay unwritten; and **no response carries a score**, which is the conflict ADR-033 resolves in terminology's favour.
 9. External test result entry and analysis.
 
 ## Related Documents

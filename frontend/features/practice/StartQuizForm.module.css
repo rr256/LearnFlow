@@ -1,0 +1,43 @@
+.form {
+  display: grid;
+  gap: var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.form h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.topics {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  background: var(--colour-surface);
+  color: var(--colour-text);
+  font: inherit;
+}
+
+.failed {
+  margin: 0;
+  border-left: 3px solid var(--colour-notice-border);
+  padding-left: var(--space-3);
+}

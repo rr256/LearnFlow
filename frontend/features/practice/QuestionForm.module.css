@@ -1,0 +1,109 @@
+.form {
+  display: grid;
+  gap: var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.form h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.prompt,
+.field textarea,
+.field input,
+.option input[type="text"] {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  background: var(--colour-surface);
+  color: var(--colour-text);
+  font: inherit;
+}
+
+.options {
+  display: grid;
+  gap: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin: 0;
+}
+
+.options legend {
+  font-weight: 600;
+  padding: 0 var(--space-2);
+}
+
+/*
+ * Every option is styled identically. Nothing marks one as more likely than
+ * another: which is expected is the learner's own statement, carried by the
+ * radio rather than by emphasis.
+ */
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.letter {
+  min-width: 1.5rem;
+  color: var(--colour-text-muted);
+  font-weight: 600;
+}
+
+.topics {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  background: var(--colour-surface);
+  color: var(--colour-text);
+  font: inherit;
+}
+
+.saved {
+  margin: 0;
+  color: var(--colour-text-muted);
+}
+
+.failed {
+  margin: 0;
+  border-left: 3px solid var(--colour-notice-border);
+  padding-left: var(--space-3);
+}
+
+/*
+ * Available to a screen reader and not to a pointer. Every option field keeps a
+ * real `<label>`; the visible letter beside it is decorative and hidden from
+ * assistive technology, so neither is announced twice.
+ */
+.forScreenReaders {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

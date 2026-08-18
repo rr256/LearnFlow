@@ -13,7 +13,9 @@ from fastapi import FastAPI
 
 from app.composition.config import Settings, load_settings
 from app.composition.providers import (
+    build_checkpoint_quizzes_provider,
     build_learner_profile_provider,
+    build_practice_questions_provider,
     build_read_curriculum_provider,
     build_read_examination_schedules_provider,
     build_resources_provider,
@@ -24,7 +26,9 @@ from app.composition.providers import (
 )
 from app.infrastructure.persistence.engine import create_database_engine, create_session_factory
 from app.presentation.api.dependencies import (
+    CHECKPOINT_QUIZZES_PROVIDER,
     LEARNER_PROFILE_PROVIDER,
+    PRACTICE_QUESTIONS_PROVIDER,
     READ_CURRICULUM_PROVIDER,
     READ_EXAMINATION_SCHEDULES_PROVIDER,
     RESOURCES_PROVIDER,
@@ -35,12 +39,15 @@ from app.presentation.api.dependencies import (
 )
 from app.presentation.api.errors import register_error_handlers
 from app.presentation.api.routes import (
+    checkpoint_quizzes,
     curriculum,
     examination_schedules,
     health,
     learner,
     plan_items,
+    practice_questions,
     progress,
+    quiz_attempts,
     resources,
     revisions,
     study_goals,
@@ -107,6 +114,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     setattr(app.state, REVISIONS_PROVIDER, build_revisions_provider(session_factory))
     setattr(app.state, RESOURCES_PROVIDER, build_resources_provider(session_factory))
     setattr(app.state, TOPIC_PROGRESS_PROVIDER, build_topic_progress_provider(session_factory))
+    setattr(
+        app.state,
+        PRACTICE_QUESTIONS_PROVIDER,
+        build_practice_questions_provider(session_factory),
+    )
+    setattr(
+        app.state,
+        CHECKPOINT_QUIZZES_PROVIDER,
+        build_checkpoint_quizzes_provider(session_factory),
+    )
 
     # Registered before the routers so every failure -- including a 404 for a
     # path no router claims -- is reported in the documented error envelope.
@@ -123,4 +140,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(progress.router)
     app.include_router(revisions.router)
     app.include_router(resources.router)
+    app.include_router(practice_questions.router)
+    app.include_router(checkpoint_quizzes.router)
+    app.include_router(quiz_attempts.router)
     return app

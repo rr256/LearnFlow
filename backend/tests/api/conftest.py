@@ -29,6 +29,8 @@ from app.application.ports.curriculum_seed_repository import (
     TopicRecord,
     TopicRelationshipRecord,
 )
+from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
+from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
 from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_plans import ManageStudyPlans
@@ -36,6 +38,8 @@ from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.composition.app_factory import create_app
 from app.presentation.api.dependencies import (
+    CHECKPOINT_QUIZZES_PROVIDER,
+    PRACTICE_QUESTIONS_PROVIDER,
     READ_CURRICULUM_PROVIDER,
     RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
@@ -49,6 +53,7 @@ from tests.unit.fake_resource_repository import FakeResourceRepository
 from tests.unit.fake_revision_repository import FakeRevisionRepository
 from tests.unit.fake_topic_progress_repository import FakeTopicProgressRepository, topic
 from tests.unit.planning_fixtures import FixedClock, Planning
+from tests.unit.practice_fixtures import Practising
 
 PUBLISHED_AT = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
 
@@ -348,5 +353,36 @@ def resource_client(cataloguing: Cataloguing) -> Iterator[TestClient]:
         yield cataloguing.cataloguer()
 
     setattr(app.state, RESOURCES_PROVIDER, provide)
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture
+def practising() -> Practising:
+    """The learner and topics the checkpoint-practice endpoints work from."""
+    return Practising()
+
+
+@pytest.fixture
+def practice_client(practising: Practising) -> Iterator[TestClient]:
+    """A client whose practice endpoints share one set of stores.
+
+    Both use cases are installed over the same store deliberately: a test can
+    write a question over QZ-008, assemble a quiz from it over QZ-001, attempt it
+    over QZ-003, and submit it over QZ-005, which is the sequence the practice
+    screens perform.
+    """
+    app = create_app()
+
+    @contextmanager
+    def provide_questions() -> Iterator[ManagePracticeQuestions]:
+        yield practising.author()
+
+    @contextmanager
+    def provide_quizzes() -> Iterator[ManageCheckpointQuizzes]:
+        yield practising.quizzes()
+
+    setattr(app.state, PRACTICE_QUESTIONS_PROVIDER, provide_questions)
+    setattr(app.state, CHECKPOINT_QUIZZES_PROVIDER, provide_quizzes)
     with TestClient(app) as client:
         yield client

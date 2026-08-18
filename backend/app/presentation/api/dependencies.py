@@ -19,7 +19,9 @@ from collections.abc import Iterator
 
 from fastapi import Request
 
+from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
+from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
 from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
@@ -38,6 +40,8 @@ STUDY_PLANS_PROVIDER = "study_plans_provider"
 REVISIONS_PROVIDER = "revisions_provider"
 RESOURCES_PROVIDER = "resources_provider"
 TOPIC_PROGRESS_PROVIDER = "topic_progress_provider"
+PRACTICE_QUESTIONS_PROVIDER = "practice_questions_provider"
+CHECKPOINT_QUIZZES_PROVIDER = "checkpoint_quizzes_provider"
 
 
 def provide_read_curriculum(request: Request) -> Iterator[ReadCurriculum]:
@@ -96,5 +100,19 @@ def provide_resources(request: Request) -> Iterator[ManageResources]:
 def provide_topic_progress(request: Request) -> Iterator[ManageTopicProgress]:
     """Yield the topic-progress use case bound to this request's unit of work."""
     provider = getattr(request.app.state, TOPIC_PROGRESS_PROVIDER)
+    with provider() as use_case:
+        yield use_case
+
+
+def provide_practice_questions(request: Request) -> Iterator[ManagePracticeQuestions]:
+    """Yield the practice-question use case bound to this request's unit of work."""
+    provider = getattr(request.app.state, PRACTICE_QUESTIONS_PROVIDER)
+    with provider() as use_case:
+        yield use_case
+
+
+def provide_checkpoint_quizzes(request: Request) -> Iterator[ManageCheckpointQuizzes]:
+    """Yield the checkpoint-quiz use case bound to this request's unit of work."""
+    provider = getattr(request.app.state, CHECKPOINT_QUIZZES_PROVIDER)
     with provider() as use_case:
         yield use_case

@@ -1,0 +1,19 @@
+.lead {
+  max-width: var(--measure);
+  color: var(--colour-text-muted);
+}
+
+.panels {
+  display: grid;
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

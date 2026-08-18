@@ -2,7 +2,7 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-16
+last_updated: 2026-08-18
 related:
   - ../00-project-context.md
   - domain-model.md
@@ -25,6 +25,7 @@ related:
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../development/coding-standards.md
 ---
 
@@ -98,9 +99,10 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Stage source** | Whether a learning stage was set by the learner or derived from evidence. | Stored as `learner`, `derived`, or `mixed`. Everything recorded today is `learner`; nothing derives a stage yet. |
 | **Revision** | Intentional revisiting of a topic to reinforce retention and address errors. | A *revision record* tracks when it is due and what happened. Created only when the learner asks, from work they have finished — never automatically, and never as a plan item, so it survives the supersede adaptation performs on a plan. It records whether a **review happened**, never that a topic is understood: nothing here writes a learning stage. See [ADR-028](../adr/ADR-028-revision-workflow.md). |
 | **Revision due** | A topic currently recommended for revision. | A recommendation, not a failure notice. Its day has arrived or passed and nobody has answered about it — decided by a domain rule and reported by the API, so a screen never decides for itself. Unlike an *overdue* plan item, a revision dated today **is** due: the plan asks for work on a day, and a review is offered from one. Never say a learner is behind on revision, and never count a learner's revisions on a screen or across requests — the one permitted count is REV-004's report of what a single scheduling request left alone, described below. |
-| **Checkpoint quiz** | A short, topic-focused practice assessment. | Used to gather evidence after study or revision. |
-| **Question / assessment item** | One answerable prompt within a quiz or question bank. | May be AI-generated or from a verified source. |
-| **Quiz attempt** | A learner's submitted response to a checkpoint quiz. | Records answers, score, feedback, and mistakes. |
+| **Checkpoint practice** | The screen where a learner writes their own practice questions, asks for a quiz on the topics they choose, answers it, and reads what became of each question. | The canonical name for the screen at `/practice`, and for this capability in prose and UI copy. Named for what a learner does there. **Writing lives there alone**; `/practice/quizzes/{id}` is where a quiz is answered and `/practice/attempts/{id}` is a read-only result. Do not call it a *test*, a *mock*, or an *exam* — none of those is what it is, and each imports a verdict. |
+| **Checkpoint quiz** | A short, topic-focused practice assessment. | Used to gather evidence after study or revision. Assembled **deterministically from the learner's own questions**, and it asks *every* one of them for the topics chosen: LearnFlow selects none and leaves none out, because choosing which few to ask is a ranking. *Short* is therefore the learner's decision, not the product's. |
+| **Question / assessment item** | One answerable prompt within a quiz or question bank. | May be AI-generated or from a verified source; today it is **written by the learner**, and no question content ships with LearnFlow. **Never edited** — a learner corrects one by setting it aside and writing another, because attempts already marked against it reference it, and rewriting a prompt would rewrite a result the learner has already read. |
+| **Quiz attempt** | A learner's submitted response to a checkpoint quiz. | Records what became of **each question** — correct, not correct, or *unanswered* — with the expected answer and the explanation. It records **no score, no mark, and no total**; see the rule below. An unanswered question is not a wrong one, which is why the three outcomes are kept apart. |
 | **External test result** | A learner-entered result from an assessment completed outside LearnFlow. | Canonical term for the whole recorded result. May reference Testbook, Made Easy, or another provider; it is not an integration. |
 | **Topic performance evidence** | Topic-specific marks, attempts, or mistakes recorded from an external test result. | Canonical term for the topic-level detail inside an external test result; it belongs to one external test result and one topic. Checkpoint quiz outcomes are never topic performance evidence. Only create it when the external test report actually provides topic-level information. |
 | **Mistake evidence** | A recorded error or learning gap. | Initial categories: concept gap, calculation error, careless error, time-management issue. |
@@ -130,6 +132,7 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | Onboarding | Learner setup | Use **learner setup** for the capability. **Onboarding** is permitted for one narrower thing only: the first-time UI flow a learner walks through before they have a profile or a goal. It never names the capability, its endpoints, or the ongoing ability to change a goal — a learner who edits an established goal is not being onboarded. |
 | Dashboard (as a screen's name) | Progress overview; home screen | **The screen the word was reserved for now exists**, at `/progress`, and its canonical name is *progress overview* — FR-011's own title, and what a learner does there rather than what it looks like. *Dashboard* stays the reserved informal word for that content and names nothing: not the route, not the heading, not a component. It is still wrong for the landing screen, which is the **home screen** and shows the saved *learner setup*; calling that one a dashboard would make one word mean two things. **The overview does not deliver all of FR-011**: upcoming work and revisions due are shown, and so are the recorded learning stages gathered by subject; *priority focus areas* are now shown **for the evidence LearnFlow stores**, while quiz and external-test history are not, and PRG-001 is still unbuilt. See [ADR-029](../adr/ADR-029-progress-overview.md), [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md), and [ADR-031](../adr/ADR-031-priority-focus-panel.md). |
 | Weekly study hours; total available time | Weekly availability; the availability of one day | A total is planning arithmetic, and it invites a judgement about whether a week is *enough*. FR-003's planner is what should form that view, with the trade-offs visible — and since [ADR-027](../adr/ADR-027-plan-feasibility.md) it does, in the domain rule behind *plan feasibility*. **That rule is the one place a week is totalled and the one place that judgement is made.** Nowhere else adds a week up: not a goal response, not a plan, and not a screen of its own accord. The feasibility panel shows the durations that rule returned; it computes none of them. |
+| Quiz score; marks; "you got 3 of 5"; accuracy | What became of each question — *correct*, *not the expected answer*, *unanswered* | A quiz result states per-question outcomes and no total. `quiz_attempts.score` and the marks columns are not created, so there is nothing to add up. See the rule below and [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). |
 | Plan priority (as a rank); most important topic | Plan item order; where an item falls in the plan | `plan_items.priority` is a position counted from 1, not a score. A topic later in a plan is later, not weaker — the same distinction the learning stages draw. Nothing in LearnFlow ranks two topics against each other. |
 | Study pace; intensity; study style | Planning preference; session length; topic order | *Pace* and *intensity* sound like settings but define nothing a planner can act on, and they invite a judgement about how hard a learner is working. Name the specific choice being made. |
 | Default session length; recommended topic order | An unset planning preference | A preference the learner has not set has no value, and presenting one as a default would report a decision they did not make. Say it is unset, and let the planner choose visibly — which it does, naming the choice as its own. |
@@ -192,6 +195,18 @@ name is one word from the count. Nor is the panel ever ordered, grouped, or colo
 learner may move to any of the five from any of them, so a scale would rank two topics against each
 other, which nothing in LearnFlow does. See
 [ADR-030](../adr/ADR-030-learning-stages-by-subject-panel.md).
+
+The rule met its hardest case in **checkpoint practice**, where a score is what everyone expects. A
+quiz result states what became of each question and **no total at all**: no mark, no percentage, and
+no "3 of 5", which is the shape forbidden by name above. The three tests decide it — the subject of
+"you got 3 of 5" is the learner rather than the work, the figure is meaningless for an attempt nobody
+has made, and it invites a comparison with last week's attempt. So `quiz_attempts.score`,
+`quiz_attempts.max_score`, `quiz_questions.max_marks`, and `quiz_attempt_answers.awarded_marks` are
+**not created at all**, rather than created and left unread: a column that exists is a column
+something will eventually total. This is the one place where this document and
+[schema.md](../database/schema.md) disagreed, and
+[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) resolves it here. **Nothing counts a
+learner's quizzes**, no quiz count appears in the interface, and no attempt is set against another.
 
 The rule is tested again by the overview's **priority focus area** panel, whose whole subject is
 what needs attention. It states **no figure at all**: no tally of what is outstanding, no
@@ -262,6 +277,7 @@ ratio has a denominator and a denominator invites the comparison the third test 
 - [ADR-025: Let a learner postpone a plan item, settling it while the work waits for the next adaptation](../adr/ADR-025-learner-postponement.md) — *postponed* above, its two writers, and why it settles an item without moving it
 - [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the *monthly study view* above, and why a month mostly without dates says so rather than being filled in
 - [ADR-027: Report whether the saved week reaches the horizon, as a read-only planning rule](../adr/ADR-027-plan-feasibility.md) — *plan feasibility* above, the one place a week is totalled, and why the answer is counts rather than a ratio
+- [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — the quiz vocabulary above, and why a result states outcomes rather than a score
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — *progress overview* above, the screen the word *dashboard* was reserved for, and why it lists what a learner marked rather than counting it
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the stages panel the overview gained, and why a subject may not carry a count or an order over the five stages
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — *priority focus area* above, the three stored facts it is gathered from, and why the recorded stage is not one of them
