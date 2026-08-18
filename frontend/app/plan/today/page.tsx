@@ -6,13 +6,16 @@ import { Notice } from "@/components/Notice";
 import { DailyStudyView } from "@/features/planner/DailyStudyView";
 import { planOfType } from "@/features/planner/plan";
 import { learnerToday } from "@/features/planner/today";
+import { resourcesByTopicId } from "@/features/resources/by-topic";
 import {
   ApiError,
+  listResources,
   listStudyGoals,
   listStudyPlans,
   readLearnerProfile,
   readStudyPlan,
 } from "@/lib/api-client";
+import type { LearningResource } from "@/types/resource";
 import type { StudyGoal } from "@/types/study-goal";
 import type { StudyPlan } from "@/types/study-plan";
 
@@ -30,15 +33,42 @@ interface DailyPlanData {
   week: StudyPlan | null;
   /** The learner's own calendar date, resolved from their stored timezone. */
   today: string;
+  /**
+   * The learner's catalogued material, keyed by the topics it covers, or null
+   * when it could not be read.
+   */
+  resources: Map<string, LearningResource[]> | null;
+}
+
+/**
+ * RES-002 — the study material this learner has catalogued, by topic.
+ *
+ * A failure here is deliberately **not fatal**: today's work is what this screen
+ * is for, and unreadable material should cost the reader that list rather than
+ * the day. Returning null renders the work without it, which is the call the
+ * curriculum view and the revision screen already make about the same read.
+ *
+ * The whole catalogue is read once and joined here rather than asked for a topic
+ * at a time, which is what those two screens do with the same call.
+ */
+async function catalogued(): Promise<Map<string, LearningResource[]> | null> {
+  try {
+    return resourcesByTopicId(await listResources());
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    return null;
+  }
 }
 
 /**
  * Today's work, in as few round trips as the contract allows.
  *
- * The profile and the goals are independent, so they run together; the plans
- * cannot, because which goal's plans to read depends on the goal. Only the
- * `weekly` plan is opened — the roadmap dates nothing, so it holds no work that
- * could belong to a day.
+ * The profile, the goals, and the catalogue are independent, so they run
+ * together; the plans cannot, because which goal's plans to read depends on the
+ * goal. Only the `weekly` plan is opened — the roadmap dates nothing, so it holds
+ * no work that could belong to a day.
  *
  * **The date comes from the learner's stored timezone, not this server's.** A
  * container running in UTC must not show a learner in `Asia/Kolkata` tomorrow's
@@ -46,7 +76,11 @@ interface DailyPlanData {
  * and why the backend resolves its own dates the same way.
  */
 async function readDailyPlanData(): Promise<DailyPlanData> {
-  const [profile, goals] = await Promise.all([readLearnerProfile(), listStudyGoals()]);
+  const [profile, goals, resources] = await Promise.all([
+    readLearnerProfile(),
+    listStudyGoals(),
+    catalogued(),
+  ]);
 
   // Only reachable before setup has created a learner, in which case there is no
   // goal and no plan either. UTC is the same fallback the backend applies to a
@@ -58,14 +92,14 @@ async function readDailyPlanData(): Promise<DailyPlanData> {
   // all the learner has.
   const goal = goals.find((candidate) => candidate.status === "active") ?? goals[0] ?? null;
   if (!goal) {
-    return { goal: null, week: null, today };
+    return { goal: null, week: null, today, resources };
   }
 
   const active = await listStudyPlans({ studyGoalId: goal.id, status: "active" });
   const summary = planOfType(active, "weekly");
   const week = summary ? await readStudyPlan(summary.id) : null;
 
-  return { goal, week, today };
+  return { goal, week, today, resources };
 }
 
 /**
@@ -130,7 +164,12 @@ async function DailyStudySection() {
     );
   }
 
-  return <DailyStudyView plan={data.week} today={data.today} />;
+  /*
+    The learner's own material sits beside the work that names its topic,
+    read-only. Registering it, correcting it, and putting it aside all stay on
+    the catalogue screen, exactly as generating and adapting stay on `/plan`.
+  */
+  return <DailyStudyView plan={data.week} resources={data.resources} today={data.today} />;
 }
 
 /**
@@ -151,9 +190,10 @@ export default function DailyPlanPage() {
     <>
       <h1>What to study today</h1>
       <p className={styles.lead}>
-        Today&apos;s work from your study plan, with the reason the plan gives for each item. Mark
-        each one completed as you go, and change your mind whenever you like. Nothing here rebuilds
-        your plan — that stays on your study plan, where you ask for it.
+        Today&apos;s work from your study plan, with the reason the plan gives for each item and
+        the study material you have catalogued for its topic. Mark each one completed as you go,
+        and change your mind whenever you like. Nothing here rebuilds your plan — that stays on
+        your study plan, where you ask for it.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading today&apos;s work…</p>}>
@@ -176,6 +216,9 @@ export default function DailyPlanPage() {
           </li>
           <li>
             <Link href="/">Your study setup</Link>
+          </li>
+          <li>
+            <Link href="/resources">Your study material</Link>
           </li>
           <li>
             <Link href="/curriculum">Browse the curriculum</Link>

@@ -116,7 +116,11 @@ checkpoint-practice history by
 which is **accepted** and changes no contract, adds no endpoint, and needs no migration, and
 practice-question correction by
 [`docs/adr/ADR-035-practice-question-correction.md`](docs/adr/ADR-035-practice-question-correction.md),
-which is **accepted**, amends ADR-033 on one point, and needs no migration either.
+which is **accepted**, amends ADR-033 on one point, and needs no migration either, and a topic's
+material on the plan screens by
+[`docs/adr/ADR-036-topic-material-on-the-plan-screens.md`](docs/adr/ADR-036-topic-material-on-the-plan-screens.md),
+which is **accepted**, amends ADR-032 on one point of substance, changes no contract, adds no
+endpoint, and needs no migration or backend change at all.
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -331,12 +335,14 @@ that FR-007 is complete. **Nothing curated ships** — no seed, no data file, no
 repository — and `owner_learner_id` stays nullable for curated content nothing writes yet. **Nothing
 is deleted**: RES-005 is unimplemented, and a learner puts material aside with `status: archived`,
 reversibly. **Nothing is recommended, ranked, or counted**: a topic's material is what the learner
-linked to it, in the API's order, and no figure appears beside a subject, a topic, or a review. Only
+linked to it, in the API's order, and no figure appears beside a subject, a topic, a review, a plan item, or a day. Only
 `primary` of the four link roles is written, though the `CHECK` carries all four; `resource_type`
 permits five of seven and `status` two of five, because the missing values need storage that does not
 exist. **A resource may cover any stored topic, including a grouping heading** — deliberately unlike
-PRG-004, which refuses a stage on one. **Writing lives on `/resources` alone** — add, edit, and archive — while the curriculum view
-and `/revisions` show a topic's material **read-only** and link there. This supplies the **resource
+PRG-004, which refuses a stage on one. **Writing lives on `/resources` alone** — add, edit, and archive — while the curriculum view,
+`/revisions`, `/plan`, and `/plan/today` show a topic's material **read-only** and link there.
+`/plan/month` deliberately does not, because the month's value is its shape; see
+[`docs/adr/ADR-036-topic-material-on-the-plan-screens.md`](docs/adr/ADR-036-topic-material-on-the-plan-screens.md). This supplies the **resource
 half** of FR-006's second criterion, which ADR-028 deferred — the **practice half still waits on
 FR-009**, so **FR-006 is still not met in full**. Contracted by
 [`docs/adr/ADR-032-learning-resource-catalogue.md`](docs/adr/ADR-032-learning-resource-catalogue.md).
@@ -427,8 +433,9 @@ server action, so the browser never reaches the backend, no CORS configuration e
 also reads the learner's recorded stages over PRG-002 and writes one over PRG-004, a `/setup` screen
 over EXM-001, LRN-001, LRN-002, and GOAL-001 to GOAL-005, a home screen at `/` that reads the
 saved setup back over LRN-001, GOAL-002, and EXM-001, a `/plan` screen that reads the current plan
-over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed, skipped, or postponed over PLN-004, adapts the plan over PLN-005, and reads whether the saved week reaches the horizon over PLN-006, a `/plan/today` daily study view that reads the same weekly plan over
-PLN-002 and PLN-003, takes the learner's date from LRN-001, and moves items over PLN-004 —
+over PLN-002 and PLN-003, generates one over PLN-001, marks an item completed, skipped, or postponed over PLN-004, adapts the plan over PLN-005, reads whether the saved week reaches the horizon over PLN-006, and shows a topic's catalogued material beside each item over RES-002, **read-only**, a `/plan/today` daily study view that reads the same weekly plan over
+PLN-002 and PLN-003, takes the learner's date from LRN-001, moves items over PLN-004, and shows the
+same material over RES-002 —
 generating and adapting stay on `/plan`, where the learner asks for them — and a `/plan/month` monthly
 study view that reads both active plans over PLN-002 and PLN-003, takes the learner's month from
 LRN-001, and **writes nothing at all**, and a `/revisions` screen that reads the learner's reviews
@@ -446,8 +453,9 @@ learning-resource catalogue that lists the learner's own study material over RES
 over RES-001, and **corrects** it or puts it aside and back over RES-004 — reading GOAL-002 and
 CUR-003 to offer the topics it may be linked to. It supports **add, edit, and archive**; material
 put aside is read-only, so a learner puts it back before correcting it, and the edit form never
-sends `status` while the archive control sends nothing else. The curriculum view and `/revisions` also read RES-002 and show a
-topic's material **read-only**, linking to `/resources` for every change. A goal response carries the saved study week
+sends `status` while the archive control sends nothing else. The curriculum view, `/revisions`, `/plan`, and `/plan/today` also read RES-002 and show a
+topic's material **read-only**, linking to `/resources` for every change; `/plan/month` deliberately
+does not. A goal response carries the saved study week
 and the saved planning preferences, so neither setup nor home calls anything extra to show them.
 
 The frontend serves its own static `/health` for the container health check, distinct from the

@@ -1,11 +1,20 @@
 import styles from "@/features/planner/StudyRoadmap.module.css";
 import { PlanItemStatusControl } from "@/features/planner/PlanItemStatusControl";
 import { describeEstimate, describeSettledStatus, itemClassName } from "@/features/planner/plan";
+import { TopicResources } from "@/features/resources/TopicResources";
+import { resourcesFor } from "@/features/resources/by-topic";
+import type { LearningResource } from "@/types/resource";
 import type { StudyPlan } from "@/types/study-plan";
 
 interface StudyRoadmapProps {
   /** The roadmap, or null when no plan has been generated yet. */
   plan: StudyPlan | null;
+  /**
+   * The learner's catalogued material, keyed by the topics it covers, or null
+   * when it could not be read. Null renders the roadmap without it, which costs
+   * the reader the material rather than the plan they came for.
+   */
+  resources?: Map<string, LearningResource[]> | null;
 }
 
 /**
@@ -28,8 +37,14 @@ interface StudyRoadmapProps {
  * setting a topic aside before it reaches one — should not have to wait for it to
  * appear there. Moving one moves that item alone: the same topic on the week's
  * plan is a separate item and stays as it was.
+ *
+ * **The material beside an item is the learner's own, and nothing suggests any.**
+ * It is what they linked to that topic in their catalogue, listed read-only in the
+ * API's order; material they have put aside is left out. A topic appearing on both
+ * this panel and the week shows the same material twice because it is the same
+ * topic read twice, not because anything is emphasised.
  */
-export function StudyRoadmap({ plan }: StudyRoadmapProps) {
+export function StudyRoadmap({ plan, resources = null }: StudyRoadmapProps) {
   if (!plan) {
     return null;
   }
@@ -68,6 +83,18 @@ export function StudyRoadmap({ plan }: StudyRoadmapProps) {
               ) : null}
               {item.recommendation_reason ? (
                 <p className={styles.why}>{item.recommendation_reason}</p>
+              ) : null}
+              {/*
+                The learner's own material for this item's topic, read-only:
+                adding it and putting it aside live on the catalogue screen.
+                Nothing is suggested -- this is what they linked, and a topic
+                with nothing linked renders nothing at all.
+              */}
+              {resources && item.topic ? (
+                <TopicResources
+                  resources={resourcesFor(resources, item.topic.id)}
+                  topicName={item.topic.name}
+                />
               ) : null}
               <PlanItemStatusControl
                 planItemId={item.id}

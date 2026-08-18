@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -33,6 +33,8 @@ related:
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-034-checkpoint-practice-history.md
   - ../adr/ADR-035-practice-question-correction.md
+  - ../adr/ADR-036-topic-material-on-the-plan-screens.md
+  - ../adr/ADR-036-topic-material-on-the-plan-screens.md
   - ../domain/terminology.md
 ---
 
@@ -264,14 +266,17 @@ app/
 │       └── page.module.css
 ├── plan/
 │   ├── page.tsx                            # PLN-002 and PLN-003 over the learner's
-│   │                                       # active goal; writes PLN-001, PLN-004,
-│   │                                       # and PLN-005 via server actions
+│   │                                       # active goal, and RES-002 for the
+│   │                                       # material each topic has; writes
+│   │                                       # PLN-001, PLN-004, and PLN-005 via
+│   │                                       # server actions, and no resource control
 │   ├── page.module.css
 │   ├── today/
 │   │   ├── page.tsx                        # The daily study view: LRN-001 for the
 │   │   │                                   # learner's timezone, GOAL-002, PLN-002,
 │   │   │                                   # and PLN-003 for the active goal's weekly
-│   │   │                                   # plan; writes PLN-004 only
+│   │   │                                   # plan, and RES-002 for the material each
+│   │   │                                   # topic has; writes PLN-004 only
 │   │   └── page.module.css
 │   └── month/
 │       ├── page.tsx                        # The monthly study view: LRN-001 for the
@@ -397,11 +402,14 @@ and `pagination.total` is never read. See
 `ResourceCatalogue.tsx` for the screen and `ResourceForm.tsx` for both the add and the edit form —
 one component, since both ask for the same six fields and differ only in whether they start filled
 and which endpoint they reach — `ResourceStatusControl.tsx` for putting material aside and back,
-`TopicResources.tsx` for the read-only list the curriculum view and the revision screen show
-beside a topic, `by-topic.ts` and `topic-options.ts` for the joins and the topic picker,
-`actions.ts` for the three writes, and `submission.ts` for the form state — which lives apart from
-the actions because a `"use server"` module may export only async functions. See
-[ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
+`TopicResources.tsx` for the read-only list shown beside a topic by the curriculum view, the
+revision screen, `/plan`, and `/plan/today` — called from five components across four screens, so
+the rules about ordering, archived material, and recommending nothing are enforced once rather than
+restated in each — `by-topic.ts` and `topic-options.ts` for the joins and the topic picker, `actions.ts` for the
+three writes, and `submission.ts` for the form state, which lives apart from the actions because a
+`"use server"` module may export only async functions. See
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md) and
+[ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md).
 
 `onboarding/` holds the **learner setup** capability's screen. The module keeps the narrower name
 because a module directory names a UI flow, which is the one use
@@ -428,13 +436,13 @@ onboarded — and it writes nothing.
 | `onboarding/availability.ts` | Reads the availability form into the request it makes, owns that form's state shape, and writes a saved week the way a learner reads it. Plain functions, for the same reason. |
 | `onboarding/preferences.ts` | Writes a saved planning preference the way a learner reads it. Presentation only — the reading half lives in `submission.ts`, because preferences ride on the goal write that form already makes. Plain functions, for the same reason, and used by the home panel as well as the setup screen. |
 | `onboarding/actions.ts` | The `"use server"` module holding both write paths. |
-| `planner/StudyRoadmap.tsx` | The order the plan works through the curriculum, with its CSS Module. Every item shows the reason it is where it is, which is what FR-003 asks a recommendation to carry, and carries the control that says what became of it — completed, skipped, or back to planned. It reorders nothing: ordering is a planning rule, and a settled item keeps its place. |
-| `planner/PlanWeek.tsx` | The work the plan places on each of the coming days, with its CSS Module, each item carrying the control that says what became of it. A day with no work is absent rather than shown empty; no day or week is totalled, and nothing counts how much of one is done. |
+| `planner/StudyRoadmap.tsx` | The order the plan works through the curriculum, with its CSS Module. Every item shows the reason it is where it is, which is what FR-003 asks a recommendation to carry, and carries the control that says what became of it — completed, skipped, or back to planned. It reorders nothing: ordering is a planning rule, and a settled item keeps its place. It also shows the learner's own material for each item's topic, **read-only**, through `resources/TopicResources.tsx`; nothing is recommended and a topic with nothing linked renders nothing. Contracted by [ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md). |
+| `planner/PlanWeek.tsx` | The work the plan places on each of the coming days, with its CSS Module, each item carrying the control that says what became of it and the learner's own material for its topic, **read-only**, through `resources/TopicResources.tsx`. A day with no work is absent rather than shown empty; no day or week is totalled, and nothing counts how much of one is done — including its material. Contracted by [ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md). |
 | `planner/GeneratePlanForm.tsx` | The button that asks for a plan, with its CSS Module. A client component only so it can report the last submission's result; it calls no API itself. It says plainly that rebuilding keeps the previous plan. |
 | `planner/PlanItemStatusControl.tsx` | The control beside one plan item that records what became of its work, with its CSS Module. It offers the **three statuses the item is not already in** — `completed`, `skipped`, `postponed`, and `planned` in any direction — as one form each, so the status travels in a hidden field and a scriptless submission carries it exactly as a hydrated one does. A client component only so it can report the last submission's result; it calls no API itself. An item in a status PLN-004 does not accept as a target is shown with no control rather than as something a learner can move; every stored status is now offered, so that branch is reached only by a value a later backend adds. Contracted by [ADR-024](../adr/ADR-024-plan-item-skipping.md) and [ADR-025](../adr/ADR-025-learner-postponement.md). |
-| `planner/DailyStudyView.tsx` | The daily study view's two panels — the work the weekly plan placed on the learner's own date, and work whose day has passed — with its CSS Module. Each item shows its reason and carries the same status control the other panels carry. It writes no plan and asks for none: rebuilding stays on `/plan`, where the learner asks for it. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md). |
+| `planner/DailyStudyView.tsx` | The daily study view's two panels — the work the weekly plan placed on the learner's own date, and work whose day has passed — with its CSS Module. Each item shows its reason, the learner's own material for its topic **read-only**, and the same status control the other panels carry; one `PlanItemLine` serves both panels, so an item reads the same in each. It writes no plan and asks for none: rebuilding stays on `/plan`, and registering material stays on `/resources`. Contracted by [ADR-023](../adr/ADR-023-daily-study-view.md) and [ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md). |
 | `planner/PlanFeasibility.tsx` | Whether the learner's saved study week covers the work left before their horizon, with its CSS Module. It renders the sentence and the figures PLN-006 returned rather than computing any — totalling a week is planning arithmetic the backend owns — and carries **no control of any kind**. Counts and durations only: no percentage, no fraction, and no progress bar, which would be a percentage drawn. Contracted by [ADR-027](../adr/ADR-027-plan-feasibility.md). |
-| `planner/MonthlyPlanView.tsx` | The monthly study view's two panels — the days this month the plan has already dated, and the roadmap topics the week has not reached — with its CSS Module. Each item shows its reason, and a settled item keeps its place marked in words. It deliberately carries **no status control and no plan control**: it writes nothing at all, so marking work stays on `plan/today` and rebuilding stays on `plan`. Contracted by [ADR-026](../adr/ADR-026-monthly-study-view.md). |
+| `planner/MonthlyPlanView.tsx` | The monthly study view's two panels — the days this month the plan has already dated, and the roadmap topics the week has not reached — with its CSS Module. Each item shows its reason, and a settled item keeps its place marked in words. It deliberately carries **no status control and no plan control**: it writes nothing at all, so marking work stays on `plan/today` and rebuilding stays on `plan`. It is also the one plan panel that deliberately shows **no material**, because the month's value is its shape. Contracted by [ADR-026](../adr/ADR-026-monthly-study-view.md) and [ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md). |
 | `revision/RevisionList.tsx` | The revision screen's two panels — reviews ready now, and those still to come or already answered — with its CSS Module. Each shows the reason the schedule gave and carries the control that records what became of it. Contracted by [ADR-028](../adr/ADR-028-revision-workflow.md). |
 | `revision/RevisionStatusControl.tsx` | The control beside one review that records what became of it, with its CSS Module. It offers the three statuses the review is not already in — reviewed, skipped, postponed, or back to due — deliberately mirroring `PlanItemStatusControl`, so a learner meets one vocabulary rather than two. |
 | `revision/ScheduleRevisionsForm.tsx` | The button that asks for reviews to be scheduled from finished work, with its CSS Module. A client component only so it can report what the last run did; nothing schedules on its own, and asking twice adds nothing. |
@@ -633,6 +641,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — `checkpoint_marking.py`, the `practice/` feature module, and the three practice routes
 - [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — the fourth practice route, and the `history.ts` module behind it
 - [ADR-035: Let a practice question be corrected until a quiz has asked it](../adr/ADR-035-practice-question-correction.md) — why `QuestionForm.tsx` serves two jobs, and where the correction form sits
+- [ADR-036: Show a topic's material beside the plan items that name it, read-only](../adr/ADR-036-topic-material-on-the-plan-screens.md) — the fourth and fifth surfaces `TopicResources.tsx` serves, and the plan panel deliberately left without it
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

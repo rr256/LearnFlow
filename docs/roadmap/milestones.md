@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -36,6 +36,7 @@ related:
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-034-checkpoint-practice-history.md
   - ../adr/ADR-035-practice-question-correction.md
+  - ../adr/ADR-036-topic-material-on-the-plan-screens.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -488,21 +489,24 @@ which keeps the plan-views item below open even though all four levels are now v
 **Outcome:** learner-owned GATE CSE notes become usable, grounded mentor context.
 
 This milestone has been **opened** by the learning-resource catalogue: a learner can record where
-their own study material is and which topics it covers, and find it again from the curriculum and
-from a review. That is the first item below, and deliberately no more of the milestone — nothing is
+their own study material is and which topics it covers, and find it again from the curriculum, from
+a review, and from the plan items that name its topic. That is the first item below, and deliberately no more of the milestone — nothing is
 uploaded, extracted, indexed, or retrieved, and no mentor exists. It also supplies the **resource
 half** of [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
 [ADR-028](../adr/ADR-028-revision-workflow.md) deferred; the practice half still waits on FR-009, so
 **FR-006 is still not met in full**. Contracted by
 [ADR-032](../adr/ADR-032-learning-resource-catalogue.md), with migration `20260816_01` creating
-`resources` and `resource_topic_links`.
+`resources` and `resource_topic_links`, and extended to `/plan` and `/plan/today` by
+[ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md), which amends ADR-032's
+plan-screens-untouched sentence and needs no migration, endpoint, or backend change at all.
 
 ### Definition of Done
 
 - [ ] Learner can register/link supported local resources to topics. **Registering and linking are
   done**: RES-001 to RES-004 record a title, a kind, where the material is, and the topics it covers,
-  and `/resources` supports **add, edit, and archive** while the curriculum view and `/revisions`
-  show a topic's material read-only. Material put aside is read-only until it is put back. A resource may cover **any** topic, including a heading that groups subtopics, which is
+  and `/resources` supports **add, edit, and archive** while the curriculum view, `/revisions`,
+  `/plan`, and `/plan/today` show a topic's material read-only and link there for every change.
+  `/plan/month` deliberately does not, because the month's value is its shape. Material put aside is read-only until it is put back. A resource may cover **any** topic, including a heading that groups subtopics, which is
   where this differs from the learning-stage control. **Nothing is recommended, ranked, or counted**,
   and **nothing is deleted** — material is put aside reversibly, so RES-005 stays unimplemented.
   **The item stays open on the word *local***: `external_reference` accepts an `http` or `https`
@@ -681,6 +685,7 @@ LearnFlow does.
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the first of those two counts, now met, and why the second stayed open
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the second count, now partly met, and the evidence the item still waits on
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the Milestone 4 item this opens, and the reasons the rest of that milestone stays closed
+- [ADR-036: Show a topic's material beside the plan items that name it, read-only](../adr/ADR-036-topic-material-on-the-plan-screens.md) — the two plan screens that now show catalogued material, and the one deliberately left without it
 - [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — the two Milestone 5 items this opens, and the reasons the rest of that milestone stays closed
 - [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — the history screen over those two items, which checks no further box here
 - [ADR-035: Let a practice question be corrected until a quiz has asked it](../adr/ADR-035-practice-question-correction.md) — the correction rule over the same two items, which checks no further box either

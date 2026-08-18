@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
@@ -1466,8 +1466,10 @@ Covered by this review:
   casually, and nothing deletes a resource at all, so a cascade would describe a deletion path that
   does not exist.
 - Both required indexes were created with their tables. `resources(owner_learner_id, status)` serves
-  the catalogue's own reads, and `resource_topic_links(topic_id, resource_id)` serves the topic
-  filter the curriculum and revision screens depend on.
+  the catalogue's own reads, and `resource_topic_links(topic_id, resource_id)` serves RES-002's
+  `topic_id` filter. The screens that show a topic's material do not use it: the curriculum,
+  revision, and plan views read the catalogue once and join it by topic in the client, so the index
+  serves the filter itself rather than any one caller.
 - The identifier-length precedent was checked: the longest name here,
   `ix_resource_topic_links_topic_id_resource_id`, is 44 characters, comfortably inside PostgreSQL's
   63-character limit. The unit test guarding that limit covers both tables.

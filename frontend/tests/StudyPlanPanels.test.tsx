@@ -9,6 +9,9 @@ vi.mock("@/features/planner/actions", () => ({ savePlanItemStatus: vi.fn() }));
 const { PlanWeek } = await import("@/features/planner/PlanWeek");
 const { StudyRoadmap } = await import("@/features/planner/StudyRoadmap");
 
+import { resourcesByTopicId } from "@/features/resources/by-topic";
+
+import type { LearningResource } from "@/types/resource";
 import type { PlanItem, StudyPlan } from "@/types/study-plan";
 
 afterEach(cleanup);
@@ -365,4 +368,108 @@ describe("every panel that shows an item lets the learner say what became of it"
     expect(screen.queryByText(/1 of 2 completed/i)).toBeNull();
     expect(screen.queryByText(/\d+%/)).toBeNull();
   });
+});
+
+describe("a plan panel showing the learner's own material", () => {
+  const panels: [string, typeof StudyRoadmap][] = [
+    ["StudyRoadmap", StudyRoadmap],
+    ["PlanWeek", PlanWeek],
+  ];
+
+  function resource(overrides: Partial<LearningResource> = {}): LearningResource {
+    return {
+      id: `resource-${Math.random()}`,
+      owner_learner_id: "learner-1",
+      resource_type: "pyq",
+      title: "Scheduling PYQs 2015-2025",
+      source_label: null,
+      external_reference: "https://example.test/pyq.pdf",
+      status: "registered",
+      topics: [],
+      ...overrides,
+    };
+  }
+
+  /** The index the pages build with `resourcesByTopicId`, for one topic. */
+  function catalogue(resources: LearningResource[]): Map<string, LearningResource[]> {
+    return new Map([["topic-1", resources]]);
+  }
+
+  function dated(overrides: Partial<PlanItem> = {}) {
+    return plan({ item_count: 1, items: [item({ scheduled_for: "2026-08-10", ...overrides })] });
+  }
+
+  it.each(panels)("%s lists the material linked to the item's topic", (_name, Panel) => {
+    render(<Panel plan={dated()} resources={catalogue([resource()])} />);
+
+    expect(screen.getByRole("link", { name: "Scheduling PYQs 2015-2025" })).toBeDefined();
+  });
+
+  it.each(panels)("%s labels the material with the topic it covers", (_name, Panel) => {
+    render(<Panel plan={dated()} resources={catalogue([resource()])} />);
+
+    expect(screen.getByRole("list", { name: "Your material for CPU scheduling" })).toBeDefined();
+  });
+
+  it.each(panels)("%s shows nothing for a topic with nothing linked", (_name, Panel) => {
+    /* ADR-032: LearnFlow holds no material and recommends none, so a topic with
+     * nothing linked renders nothing rather than an invented suggestion. */
+    render(<Panel plan={dated()} resources={new Map()} />);
+
+    expect(screen.queryByText("Your material")).toBeNull();
+  });
+
+  it.each(panels)("%s renders the plan when the catalogue could not be read", (_name, Panel) => {
+    /* Unreadable material costs the reader that list rather than the plan they
+     * came for, which is the call the curriculum and revision screens make. */
+    render(<Panel plan={dated()} resources={null} />);
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.queryByText("Your material")).toBeNull();
+  });
+
+  it.each(panels)("%s adds no control for material", (_name, Panel) => {
+    /* Registering, correcting, and putting material aside live on the catalogue
+     * screen alone. The status control is the only button a panel offers. */
+    render(<Panel plan={dated()} resources={catalogue([resource()])} />);
+
+    for (const button of screen.queryAllByRole("button")) {
+      expect(button.textContent).not.toMatch(/material|resource|archive/i);
+    }
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it.each(panels)("%s counts nothing about the material", (_name, Panel) => {
+    /* Terminology forbids a figure beside a topic: a count of a learner's
+     * material measures the learner. */
+    render(<Panel plan={dated()} resources={catalogue([resource(), resource()])} />);
+
+    expect(screen.queryByText(/2 resources/i)).toBeNull();
+    expect(screen.queryByText(/\d+ items? of material/i)).toBeNull();
+  });
+
+  it.each(panels)("%s leaves out material the learner put aside", (_name, Panel) => {
+    /* The index the pages pass is built by `resourcesByTopicId`, which drops
+     * archived material; nothing here re-decides that. */
+    const index = resourcesByTopicId([
+      resource({ title: "Put aside notes", status: "archived", topics: [topicLink()] }),
+      resource({ title: "Current notes", topics: [topicLink()] }),
+    ]);
+
+    render(<Panel plan={dated()} resources={index} />);
+
+    expect(screen.getByRole("link", { name: "Current notes" })).toBeDefined();
+    expect(screen.queryByRole("link", { name: "Put aside notes" })).toBeNull();
+  });
+
+  /** The topic link RES-002 returns on a resource, matching the plan item's topic. */
+  function topicLink() {
+    return {
+      id: "topic-1",
+      code: null,
+      name: "CPU scheduling",
+      subject_id: "subject-1",
+      subject_name: "Operating Systems",
+    };
+  }
 });

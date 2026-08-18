@@ -7,11 +7,20 @@ import {
   groupByDay,
   itemClassName,
 } from "@/features/planner/plan";
+import { TopicResources } from "@/features/resources/TopicResources";
+import { resourcesFor } from "@/features/resources/by-topic";
+import type { LearningResource } from "@/types/resource";
 import type { StudyPlan } from "@/types/study-plan";
 
 interface PlanWeekProps {
   /** The dated plan for the coming week, or null when none was generated. */
   plan: StudyPlan | null;
+  /**
+   * The learner's catalogued material, keyed by the topics it covers, or null
+   * when it could not be read. Null renders the week without it, which costs the
+   * reader the material rather than the plan they came for.
+   */
+  resources?: Map<string, LearningResource[]> | null;
 }
 
 /**
@@ -37,8 +46,15 @@ interface PlanWeekProps {
  * stays where it is rather than moving or disappearing: the plan says what the day
  * held, and hiding what was finished would leave the day looking undone, while
  * hiding what was skipped would hide a decision the learner may want to take back.
+ *
+ * **The material beside an item is the learner's own, and nothing suggests any.**
+ * It is what they linked to that topic in their catalogue, listed read-only in the
+ * API's order; material they have put aside is left out. Registering, correcting,
+ * and putting material aside stay on the catalogue screen, which the list names —
+ * the shape ADR-032 fixed for the curriculum view and the revision screen, applied
+ * here to the panel a learner acts on daily.
  */
-export function PlanWeek({ plan }: PlanWeekProps) {
+export function PlanWeek({ plan, resources = null }: PlanWeekProps) {
   const days = groupByDay(plan);
 
   if (!plan || days.length === 0) {
@@ -76,6 +92,18 @@ export function PlanWeek({ plan }: PlanWeekProps) {
                   ) : null}
                   {item.recommendation_reason ? (
                     <p className={styles.why}>{item.recommendation_reason}</p>
+                  ) : null}
+                  {/*
+                    The learner's own material for this item's topic, read-only:
+                    adding it and putting it aside live on the catalogue screen.
+                    Nothing is suggested -- this is what they linked, and a topic
+                    with nothing linked renders nothing at all.
+                  */}
+                  {resources && item.topic ? (
+                    <TopicResources
+                      resources={resourcesFor(resources, item.topic.id)}
+                      topicName={item.topic.name}
+                    />
                   ) : null}
                   <PlanItemStatusControl
                     planItemId={item.id}

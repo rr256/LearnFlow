@@ -2,7 +2,7 @@
 title: "ADR-032: Catalogue Learner-Owned Study Material as Metadata, Linked to Topics"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-16
+last_updated: 2026-08-19
 related:
   - ../00-project-context.md
   - ADR-008-assessment-and-mistake-evidence-model.md
@@ -73,6 +73,23 @@ half still waits on FR-009**, which does not exist. **FR-006 is still not met in
 
 It needs **one migration**: `20260816_01`, two `CREATE TABLE`s and two indexes. Nothing existing is
 altered.
+
+## Implementation status
+
+**2026-08-19 — a topic's material is now also shown on `/plan` and `/plan/today`.**
+
+Active topic-linked resources are shown **read-only** beside the plan items that name their topic, on
+the plan screen and the daily study view, alongside the curriculum view and `/revisions` this
+record already named. **Archived material remains excluded** from all of them, exactly as decided
+below; `/resources` remains the only place material is registered, corrected, or put aside; and
+nothing is recommended, ranked, or counted on the added surfaces.
+
+[ADR-036](ADR-036-topic-material-on-the-plan-screens.md) records the added surface, its reasoning,
+and the sentences of this record it leaves short — including *"The plan screens are untouched"* under
+[Where material appears, and where it can be changed](#where-material-appears-and-where-it-can-be-changed).
+`/plan/month` is unchanged.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
 
 ## Context
 
