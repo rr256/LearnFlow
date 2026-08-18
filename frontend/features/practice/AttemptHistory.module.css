@@ -41,3 +41,16 @@
   color: var(--colour-text-muted);
   font-size: 0.875rem;
 }
+
+.topics {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.more {
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--colour-border);
+  font-size: 0.9375rem;
+}

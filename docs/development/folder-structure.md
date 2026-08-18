@@ -31,6 +31,7 @@ related:
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
+  - ../adr/ADR-034-checkpoint-practice-history.md
   - ../domain/terminology.md
 ---
 
@@ -305,6 +306,11 @@ app/
 │   │                                       # topics; writes over QZ-008, QZ-010, and
 │   │                                       # QZ-001, via server actions
 │   ├── page.module.css
+│   ├── history/
+│   │   ├── page.tsx                        # QZ-006 — the checkpoint practice
+│   │   │                                   # history, a page at a time. Read-only,
+│   │   │                                   # carries no score, and counts nothing
+│   │   └── page.module.css
 │   ├── quizzes/[quizId]/
 │   │   ├── page.tsx                        # QZ-002 — the quiz, with no expected
 │   │   │                                   # answers; one form post starts the attempt
@@ -322,7 +328,8 @@ app/
 ```
 
 Every home, curriculum, setup, plan, progress, revision, resource, and practice route sets
-`dynamic = "force-dynamic"`. The curriculum lives in the
+`dynamic = "force-dynamic"`, `practice/history` among them, because a learner's attempts are learner
+data and the container build has no API to reach. The curriculum lives in the
 database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
 goal are learner data that changes on submission — and the container build has no API to reach.
 `plan/today` needs it most strongly of all: it is a screen *about* the current date, so a cached copy
@@ -371,13 +378,19 @@ Each feature owns its screens, view models, feature-specific components, and API
 `practice/` holds **checkpoint practice**: `QuestionForm.tsx` for writing a question,
 `QuestionBank.tsx` and `QuestionStatusControl.tsx` for reading them back and setting one aside,
 `StartQuizForm.tsx` for choosing topics, `QuizForm.tsx` for answering a quiz in one form post,
-`AttemptResult.tsx` for what became of each question, `AttemptHistory.tsx` for past attempts, and
+`AttemptResult.tsx` for what became of each question, `AttemptHistory.tsx` for the most recent
+attempts on `/practice`, `PracticeHistory.tsx` for the whole history at `/practice/history`,
+`history.ts` for the paging and entry-presentation rules both of those share, and
 `submission.ts` and `actions.ts` for the form parsing and the writes. It reuses
 `resources/topic-options.ts` for both topic pickers rather than copying it: flattening the CUR-003
 tree into one level of `<optgroup>` is the same presentation problem, and a second copy would be a
 second thing to keep in step with the curriculum contract. **No component here counts, totals, or
-ranks anything**, and none renders a score. See
-[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
+ranks anything**, and none renders a score. `history.ts` is plain functions, for the reason
+`resources/by-topic.ts` is: they are testable without a running server. Its `HistoryPage` carries
+exactly three fields — the attempts and the two offsets — so there is nowhere for a count to appear,
+and `pagination.total` is never read. See
+[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) and
+[ADR-034](../adr/ADR-034-checkpoint-practice-history.md).
 
 `resources/` holds the **learning-resource catalogue**, which supports **add, edit, and archive**:
 `ResourceCatalogue.tsx` for the screen and `ResourceForm.tsx` for both the add and the edit form —
@@ -617,6 +630,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the two further modules that route gained, and the two reads they consume unchanged
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the two modules that route gained again, why the panel renders no control, and why it adds no read at all
 - [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — `checkpoint_marking.py`, the `practice/` feature module, and the three practice routes
+- [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — the fourth practice route, and the `history.ts` module behind it
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

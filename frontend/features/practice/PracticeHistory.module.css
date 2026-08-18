@@ -1,0 +1,119 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 1.125rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.items {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Every attempt is styled identically. Nothing marks one as better, more recent
+ * than it already reads, or more worth opening than another, because nothing
+ * here knows which was: no attempt carries a score, and no attempt is set
+ * against another (docs/domain/terminology.md).
+ */
+.item {
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+.title {
+  margin: 0;
+}
+
+.state {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.topics {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.unsubmitted {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.outcomes {
+  margin-top: var(--space-2);
+  font-size: 0.9375rem;
+}
+
+.outcomes summary {
+  cursor: pointer;
+}
+
+.outcomeItems {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+}
+
+/*
+ * Nothing is coloured by outcome here either -- no green, no red, no icon. The
+ * words carry the meaning, so a learner who cannot see the styling loses none of
+ * it, and a page of attempts cannot be read as a pattern of wins and losses.
+ */
+.outcomeItem {
+  margin: 0;
+}
+
+.outcomePrompt {
+  margin: 0;
+}
+
+.outcomeState {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+}
+
+.outcomeFooter {
+  margin: var(--space-3) 0 0;
+}
+
+.pages {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--colour-border);
+}
+
+.pages ul {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Keeps the walk backward on the right when it is the only link on the row, so
+ * the two directions stay in the same places whichever of them is offered.
+ */
+.older {
+  margin-left: auto;
+}
