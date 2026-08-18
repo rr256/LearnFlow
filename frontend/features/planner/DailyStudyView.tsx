@@ -9,6 +9,9 @@ import {
   itemClassName,
 } from "@/features/planner/plan";
 import { selectDailyWork, weekHasPassed } from "@/features/planner/today";
+import { TopicResources } from "@/features/resources/TopicResources";
+import { resourcesFor } from "@/features/resources/by-topic";
+import type { LearningResource } from "@/types/resource";
 import type { PlanItem, StudyPlan } from "@/types/study-plan";
 
 interface DailyStudyViewProps {
@@ -16,6 +19,12 @@ interface DailyStudyViewProps {
   plan: StudyPlan | null;
   /** The learner's own calendar date, from `learnerToday`. */
   today: string;
+  /**
+   * The learner's catalogued material, keyed by the topics it covers, or null
+   * when it could not be read. Null renders the day without it, which costs the
+   * reader the material rather than the work they came for.
+   */
+  resources?: Map<string, LearningResource[]> | null;
 }
 
 /**
@@ -47,8 +56,16 @@ interface DailyStudyViewProps {
  * The wording describes **items**, never the learner: an item is overdue, and a
  * day that passed is a fact about a date rather than a verdict on a person
  * (docs/domain/terminology.md). Nothing is counted, totalled, or scored.
+ *
+ * **The material beside an item is the learner's own, and nothing suggests any.**
+ * It is what they linked to that topic in their catalogue, listed read-only in the
+ * API's order; material they have put aside is left out, and a topic with nothing
+ * linked shows nothing rather than an invented suggestion. It is here because this
+ * is the screen a learner reads before they sit down to study — registering,
+ * correcting, and putting material aside stay on the catalogue screen, exactly as
+ * generating and adapting stay on the plan screen.
  */
-export function DailyStudyView({ plan, today }: DailyStudyViewProps) {
+export function DailyStudyView({ plan, today, resources = null }: DailyStudyViewProps) {
   const work = selectDailyWork(plan, today);
 
   return (
@@ -67,7 +84,7 @@ export function DailyStudyView({ plan, today }: DailyStudyViewProps) {
         ) : (
           <ul className={styles.items}>
             {work.today.map((item) => (
-              <PlanItemLine item={item} key={item.id} />
+              <PlanItemLine item={item} key={item.id} resources={resources} />
             ))}
           </ul>
         )}
@@ -88,7 +105,7 @@ export function DailyStudyView({ plan, today }: DailyStudyViewProps) {
                 <h3 className={styles.date}>{day.on}</h3>
                 <ul className={styles.items}>
                   {day.items.map((item) => (
-                    <PlanItemLine item={item} key={item.id} />
+                    <PlanItemLine item={item} key={item.id} resources={resources} />
                   ))}
                 </ul>
               </li>
@@ -104,9 +121,17 @@ export function DailyStudyView({ plan, today }: DailyStudyViewProps) {
  * One item of the plan, as both lists on this screen show it.
  *
  * The same fields the week's panel shows, in the same order, so an item reads
- * the same wherever a learner meets it.
+ * the same wherever a learner meets it — the learner's own material for its topic
+ * included, which is why the panel on the plan screen renders it in the same
+ * place.
  */
-function PlanItemLine({ item }: { item: PlanItem }) {
+function PlanItemLine({
+  item,
+  resources,
+}: {
+  item: PlanItem;
+  resources: Map<string, LearningResource[]> | null;
+}) {
   return (
     <li className={itemClassName(item, styles)}>
       <p className={styles.topic}>
@@ -121,6 +146,17 @@ function PlanItemLine({ item }: { item: PlanItem }) {
         <p className={styles.settledLabel}>{describeSettledStatus(item.status)}</p>
       ) : null}
       {item.recommendation_reason ? <p className={styles.why}>{item.recommendation_reason}</p> : null}
+      {/*
+        The learner's own material for this item's topic, read-only: adding it
+        and putting it aside live on the catalogue screen. Nothing is suggested --
+        this is what they linked, and a topic with nothing linked renders nothing.
+      */}
+      {resources && item.topic ? (
+        <TopicResources
+          resources={resourcesFor(resources, item.topic.id)}
+          topicName={item.topic.name}
+        />
+      ) : null}
       <PlanItemStatusControl
         planItemId={item.id}
         status={item.status}

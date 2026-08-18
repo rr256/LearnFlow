@@ -35,6 +35,7 @@ related:
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-034-checkpoint-practice-history.md
   - ../adr/ADR-035-practice-question-correction.md
+  - ../adr/ADR-036-topic-material-on-the-plan-screens.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -1232,7 +1233,10 @@ the count.
 - *"LearnFlow records basic resource metadata, including title, type, source location, and linked
   curriculum areas"* — **met in full.**
 - *"The learner can find resources associated with a topic"* — **met in full**, by RES-002's
-  `topic_id` filter, and on the `/resources`, curriculum, and `/revisions` screens.
+  `topic_id` filter, and on the `/resources`, curriculum, `/revisions`, `/plan`, and `/plan/today`
+  screens. The last two were added by
+  [ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md), which changes no contract here and
+  leaves this verdict and the count above unchanged: it adds surfaces rather than capability.
 
 ## Mentor Endpoints
 

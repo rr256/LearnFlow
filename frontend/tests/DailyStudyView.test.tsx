@@ -8,6 +8,9 @@ vi.mock("@/features/planner/actions", () => ({ savePlanItemStatus: vi.fn() }));
 
 const { DailyStudyView } = await import("@/features/planner/DailyStudyView");
 
+import { resourcesByTopicId } from "@/features/resources/by-topic";
+
+import type { LearningResource } from "@/types/resource";
 import type { PlanItem, StudyPlan } from "@/types/study-plan";
 
 afterEach(cleanup);
@@ -286,5 +289,119 @@ describe("DailyStudyView on a day with no work", () => {
 
     expect(screen.getByText(/Nothing is planned for today/)).toBeDefined();
     expect(screen.getByRole("heading", { name: "From earlier days" })).toBeDefined();
+  });
+});
+
+describe("the daily study view showing the learner's own material", () => {
+  const TOPIC = {
+    id: "topic-1",
+    code: null,
+    name: "CPU scheduling",
+    subject_id: "subject-1",
+    subject_name: "Operating Systems",
+  };
+
+  function resource(overrides: Partial<LearningResource> = {}): LearningResource {
+    return {
+      id: `resource-${Math.random()}`,
+      owner_learner_id: "learner-1",
+      resource_type: "note",
+      title: "Kanodia OS notes",
+      source_label: "Blue binder, chapter 3",
+      external_reference: null,
+      status: "registered",
+      topics: [TOPIC],
+      ...overrides,
+    };
+  }
+
+  it("lists the material for today's work", () => {
+    render(
+      <DailyStudyView
+        plan={week()}
+        resources={resourcesByTopicId([resource()])}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByRole("list", { name: "Your material for CPU scheduling" })).toBeDefined();
+    expect(screen.getByText(/Blue binder, chapter 3/)).toBeDefined();
+  });
+
+  it("lists it beside work whose day has passed too", () => {
+    /* The same item reads the same wherever a learner meets it, which is why
+     * both panels render through one component. */
+    render(
+      <DailyStudyView
+        plan={week({ items: [item({ scheduled_for: "2026-08-07" })] })}
+        resources={resourcesByTopicId([resource()])}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "From earlier days" })).toBeDefined();
+    expect(screen.getByRole("list", { name: "Your material for CPU scheduling" })).toBeDefined();
+  });
+
+  it("shows nothing for a topic with nothing linked", () => {
+    /* ADR-032: LearnFlow holds no material and recommends none, so a topic with
+     * nothing linked renders nothing rather than an invented suggestion. */
+    render(<DailyStudyView plan={week()} resources={new Map()} today={TODAY} />);
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.queryByText("Your material")).toBeNull();
+  });
+
+  it("shows the day's work when the catalogue could not be read", () => {
+    render(<DailyStudyView plan={week()} resources={null} today={TODAY} />);
+
+    expect(screen.getByText("CPU scheduling")).toBeDefined();
+    expect(screen.queryByText("Your material")).toBeNull();
+  });
+
+  it("leaves out material the learner put aside", () => {
+    render(
+      <DailyStudyView
+        plan={week()}
+        resources={resourcesByTopicId([
+          resource({ title: "Put aside notes", status: "archived" }),
+          resource({ title: "Current notes" }),
+        ])}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByText("Current notes")).toBeDefined();
+    expect(screen.queryByText("Put aside notes")).toBeNull();
+  });
+
+  it("adds no control for material", () => {
+    /* Registering, correcting, and putting material aside live on the catalogue
+     * screen alone; the status control stays the only button on an item. */
+    render(
+      <DailyStudyView
+        plan={week()}
+        resources={resourcesByTopicId([resource()])}
+        today={TODAY}
+      />,
+    );
+
+    for (const button of screen.queryAllByRole("button")) {
+      expect(button.textContent).not.toMatch(/material|resource|archive/i);
+    }
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("counts nothing about the material", () => {
+    render(
+      <DailyStudyView
+        plan={week()}
+        resources={resourcesByTopicId([resource(), resource({ title: "Second note" })])}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.queryByText(/2 resources/i)).toBeNull();
+    expect(screen.queryByText(/\d+%/)).toBeNull();
   });
 });

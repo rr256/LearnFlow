@@ -9,13 +9,16 @@ import { PlanFeasibility } from "@/features/planner/PlanFeasibility";
 import { PlanWeek } from "@/features/planner/PlanWeek";
 import { StudyRoadmap } from "@/features/planner/StudyRoadmap";
 import { planOfType } from "@/features/planner/plan";
+import { resourcesByTopicId } from "@/features/resources/by-topic";
 import {
   ApiError,
+  listResources,
   listStudyGoals,
   listStudyPlans,
   readPlanFeasibility,
   readStudyPlan,
 } from "@/lib/api-client";
+import type { LearningResource } from "@/types/resource";
 import type { StudyGoal } from "@/types/study-goal";
 import type { PlanFeasibility as PlanFeasibilityReading, StudyPlan } from "@/types/study-plan";
 
@@ -33,6 +36,35 @@ interface PlanData {
   week: StudyPlan | null;
   /** Whether the saved week reaches the horizon, or null when unavailable. */
   feasibility: PlanFeasibilityReading | null;
+  /**
+   * The learner's catalogued material, keyed by the topics it covers, or null
+   * when it could not be read.
+   */
+  resources: Map<string, LearningResource[]> | null;
+}
+
+/**
+ * RES-002 — the study material this learner has catalogued, by topic.
+ *
+ * A failure here is deliberately **not fatal**: the plan is what this screen is
+ * for, and unreadable material should cost the reader that list rather than the
+ * plan. Returning null renders the panels without it, which is the call the
+ * curriculum view and the revision screen already make about the same read.
+ *
+ * The whole catalogue is read once and joined here rather than asked for a topic
+ * at a time: a roadmap of sixty topics would otherwise make sixty requests. That
+ * is the join those two screens perform, and the reason RES-002 returns each
+ * resource with its topics.
+ */
+async function catalogued(): Promise<Map<string, LearningResource[]> | null> {
+  try {
+    return resourcesByTopicId(await listResources());
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    return null;
+  }
 }
 
 /**
@@ -42,7 +74,9 @@ interface PlanData {
  * carrying every item would be an unbounded payload — so the two that exist are
  * read individually with PLN-003. They are independent, so they run together,
  * and PLN-006 joins them: it reads records rather than writing any, so it costs
- * a round trip and changes nothing.
+ * a round trip and changes nothing. RES-002 joins them for the same reason, and
+ * runs alongside rather than after: the material a learner catalogued does not
+ * depend on which plans they have.
  */
 async function readPlanData(): Promise<PlanData> {
   const goals = await listStudyGoals();
@@ -51,18 +85,19 @@ async function readPlanData(): Promise<PlanData> {
   // all the learner has.
   const goal = goals.find((candidate) => candidate.status === "active") ?? goals[0] ?? null;
   if (!goal) {
-    return { goal: null, roadmap: null, week: null, feasibility: null };
+    return { goal: null, roadmap: null, week: null, feasibility: null, resources: null };
   }
 
   const active = await listStudyPlans({ studyGoalId: goal.id, status: "active" });
   const summaries = { roadmap: planOfType(active, "roadmap"), week: planOfType(active, "weekly") };
-  const [roadmap, week, feasibility] = await Promise.all([
+  const [roadmap, week, feasibility, resources] = await Promise.all([
     summaries.roadmap ? readStudyPlan(summaries.roadmap.id) : Promise.resolve(null),
     summaries.week ? readStudyPlan(summaries.week.id) : Promise.resolve(null),
     readPlanFeasibility(goal.id),
+    catalogued(),
   ]);
 
-  return { goal, roadmap, week, feasibility };
+  return { goal, roadmap, week, feasibility, resources };
 }
 
 /**
@@ -140,8 +175,14 @@ async function StudyPlanSection() {
             owed it before they read the days. It writes nothing.
           */}
           <PlanFeasibility reading={data.feasibility} />
-          <PlanWeek plan={data.week} />
-          <StudyRoadmap plan={data.roadmap} />
+          {/*
+            Each panel shows the learner's own material for a topic it names,
+            read-only. Registering it, correcting it, and putting it aside all
+            stay on the catalogue screen — the shape ADR-032 fixed for the
+            curriculum view and the revision screen.
+          */}
+          <PlanWeek plan={data.week} resources={data.resources} />
+          <StudyRoadmap plan={data.roadmap} resources={data.resources} />
         </>
       )}
     </>
@@ -167,7 +208,8 @@ export default function PlanPage() {
         how you said you want to study. Mark each item completed as you go, and change your mind
         whenever you like. When you are ready, update the plan to rebuild it around where you have
         got to — nothing moves until you ask. It also says whether the study time you saved covers
-        what is left before the date you are working toward.
+        what is left before the date you are working toward, and shows the study material you have
+        catalogued for each topic it names.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading your study plan…</p>}>
@@ -193,6 +235,9 @@ export default function PlanPage() {
           </li>
           <li>
             <Link href="/setup">Edit your setup</Link>
+          </li>
+          <li>
+            <Link href="/resources">Your study material</Link>
           </li>
           <li>
             <Link href="/curriculum">Browse the curriculum</Link>
