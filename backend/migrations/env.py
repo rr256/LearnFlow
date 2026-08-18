@@ -15,6 +15,7 @@ from alembic import context
 
 from app.composition.config import load_settings
 from app.infrastructure.persistence import (  # noqa: F401  -- registers models
+    assessment,
     curriculum,
     examination_schedule,
     learner_planning,

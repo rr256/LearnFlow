@@ -2,10 +2,11 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-16
+last_updated: 2026-08-18
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../00-project-context.md
   - overview.md
   - schema.md
@@ -143,6 +144,7 @@ The applied revisions are:
 | `20260806_03` | `create_study_plan_tables` — the last two learner-planning tables, `study_plans` and `plan_items`, completing that schema area. Creates two empty tables and both indexes [schema.md](schema.md#required-indexes) lists for them; adds nothing to an existing one. `plan_type`, `status`, and `action_type` are `varchar(32)` guarded by a `CHECK` rather than the `text` [schema.md](schema.md#study_plans) first documented, for the reason `day_of_week` and `topic_sequencing` already changed. |
 | `20260813_01` | `create_revision_records_table` — the second table of the progress area, holding one recommended or completed review per learner and topic. Creates one empty table and the index [schema.md](schema.md#required-indexes) lists for it; adds nothing to an existing one. `status` and `trigger_type` are `varchar(32)` guarded by a `CHECK` rather than the bare `text` [schema.md](schema.md#revision_records) first documented, and the table carries a `recommendation_reason` that document's row does not list, so a revision's stored date and its explanation cannot drift apart. See [ADR-028](../adr/ADR-028-revision-workflow.md). |
 | `20260816_01` | `create_learning_resource_tables` — the first two tables of the *Resources and RAG metadata* area, `resources` and `resource_topic_links`, holding where a learner's study material is and which topics it covers. Creates two empty tables and both indexes [schema.md](schema.md#required-indexes) lists for them; adds nothing to an existing one. `storage_key`, `metadata`, and `resource_ingestions` are deliberately **not** created, because nothing uploads or indexes a file; the approved *at least one of `storage_key` or `external_reference`* constraint is expressed over `source_label` or `external_reference` instead; and the controlled columns are `varchar(32)` guarded by a `CHECK`, each permitting only the values something writes. See [ADR-032](../adr/ADR-032-learning-resource-catalogue.md). |
+| `20260818_01` | `create_assessment_tables` — the whole *Assessment* area in one revision: `checkpoint_quizzes`, `checkpoint_quiz_topics`, `questions`, `question_topic_links`, `quiz_questions`, `quiz_attempts`, and `quiz_attempt_answers`, holding the practice questions a learner writes, the quizzes assembled from them, and what became of each attempt. The area arrives whole because a quiz that cannot be attempted and an attempt that cannot be marked are not a smaller feature but a broken one. Creates seven empty tables and four indexes — both [schema.md](schema.md#required-indexes) lists for the area, plus two this build's own access patterns need; **alters nothing**. `questions.difficulty`, `quiz_questions.max_marks`, `quiz_attempt_answers.awarded_marks`, `quiz_attempt_answers.feedback`, `quiz_attempts.score`, `quiz_attempts.max_score`, and `quiz_attempts.duration_seconds` are deliberately **not** created, because nothing maintains any of them and the result carries no total — which is also why the numeric precision of score and marks columns **stays undecided**. `questions.author_learner_id` is **added** beyond schema.md, nullable, mirroring `resources.owner_learner_id`. Controlled columns are `varchar(32)` guarded by a `CHECK`, each carrying every documented value although the application writes a subset. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). |
 
 ## What Requires a Migration
 
@@ -489,3 +491,4 @@ An AI assistant may propose or generate a migration, but it must not:
 - [Architecture Decision Register](../architecture/decisions.md)
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — the decision behind `20260813_01`, its two departures from the approved table, and the values it leaves unwritten
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the decision behind `20260816_01`, the columns it leaves uncreated, and why no seed accompanies it
+- [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — the decision behind `20260818_01`, the seven columns it leaves uncreated, the one it adds, and why no question content ships with it

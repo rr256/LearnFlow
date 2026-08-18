@@ -1,0 +1,84 @@
+.panel {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 1.125rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.items {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Every question is styled identically. Nothing is emphasised over anything
+ * else: the bank holds what the learner wrote, and highlighting one would be a
+ * recommendation this product does not make.
+ */
+.item {
+  border-left: 3px solid var(--colour-border);
+  padding-left: var(--space-3);
+}
+
+.prompt {
+  margin: 0;
+  font-weight: 600;
+}
+
+.state {
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.options {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.option,
+.expected {
+  font-size: 0.9375rem;
+}
+
+/*
+ * The expected answer is named in words as well as weighted, so which one it is
+ * does not depend on the styling being seen.
+ */
+.expected {
+  font-weight: 600;
+}
+
+.key {
+  display: inline-block;
+  min-width: 1.25rem;
+  color: var(--colour-text-muted);
+}
+
+.note {
+  font-weight: 400;
+  color: var(--colour-text-muted);
+}
+
+.explanation,
+.topics {
+  margin: 0 0 var(--space-2);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}

@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-16
+last_updated: 2026-08-18
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -30,6 +30,7 @@ related:
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../domain/terminology.md
 ---
 
@@ -143,6 +144,7 @@ records onto these values rather than the other way round.
 
 | Path | Responsibility |
 | --- | --- |
+| `checkpoint_marking.py` | The deterministic rules a checkpoint quiz is made of: how a question's options are keyed, which order a quiz asks its questions in, and whether one submitted answer matches the expected one. Pure functions over plain values — no clock, no session, no configuration, and **no AI provider**, which is what lets a learner who disagrees with a mark be shown why. It **counts, totals, ranks, and scores nothing**: a marked attempt is a sequence of per-question outcomes, and an unanswered question is `None` rather than wrong. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). |
 | `revision_scheduling.py` | The deterministic rules a revision is made of: how long after finished work a topic comes back, and which revisions are due on a day. Pure functions over plain values — no clock, no session, no configuration. The intervals are LearnFlow's own and are named as such wherever a revision explains itself; a longer wait is not a better mark. See [ADR-028](../adr/ADR-028-revision-workflow.md). |
 | `study_planning.py` | The deterministic rules a study plan is made of: what order the topics are worked through, which day each session lands on, what makes an item overdue (ADR-022), and — since ADR-027 — whether a saved week holds enough time to reach the goal's horizon. Pure functions over plain values — no clock, no session, no configuration — which is what makes a plan replayable and exhaustively testable rather than merely observable. It knows nothing of day *names*, learning stages, or storage; a capacity arrives as a date and a number of minutes. See [ADR-020](../adr/ADR-020-initial-study-plan-generation.md), [ADR-022](../adr/ADR-022-plan-adaptation.md), and [ADR-027](../adr/ADR-027-plan-feasibility.md). |
 
@@ -296,6 +298,22 @@ app/
 │   │                                       # adds over RES-001, and edits or archives
 │   │                                       # over RES-004, via server actions
 │   └── page.module.css
+├── practice/
+│   ├── page.tsx                            # Checkpoint practice: QZ-009 for the
+│   │                                       # learner's questions, QZ-006 for their
+│   │                                       # attempts, GOAL-002 and CUR-003 for the
+│   │                                       # topics; writes over QZ-008, QZ-010, and
+│   │                                       # QZ-001, via server actions
+│   ├── page.module.css
+│   ├── quizzes/[quizId]/
+│   │   ├── page.tsx                        # QZ-002 — the quiz, with no expected
+│   │   │                                   # answers; one form post starts the attempt
+│   │   │                                   # over QZ-003 and submits it over QZ-005
+│   │   └── page.module.css
+│   └── attempts/[attemptId]/
+│       ├── page.tsx                        # QZ-007 — what became of each question.
+│       │                                   # Read-only, and carries no score
+│       └── page.module.css
 └── setup/
     └── page.tsx                            # Reads LRN-001, CUR-001, GOAL-002, EXM-001;
                                             # writes LRN-002, GOAL-001/GOAL-004 — which
@@ -303,7 +321,7 @@ app/
                                             # GOAL-005, via server actions
 ```
 
-Every home, curriculum, setup, plan, progress, revision, and resource route sets
+Every home, curriculum, setup, plan, progress, revision, resource, and practice route sets
 `dynamic = "force-dynamic"`. The curriculum lives in the
 database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
 goal are learner data that changes on submission — and the container build has no API to reach.
@@ -348,7 +366,18 @@ quizzes/
 external-tests/
 ```
 
-Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, and `resources/` exist today.
+Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, `resources/`, and `practice/` exist today.
+
+`practice/` holds **checkpoint practice**: `QuestionForm.tsx` for writing a question,
+`QuestionBank.tsx` and `QuestionStatusControl.tsx` for reading them back and setting one aside,
+`StartQuizForm.tsx` for choosing topics, `QuizForm.tsx` for answering a quiz in one form post,
+`AttemptResult.tsx` for what became of each question, `AttemptHistory.tsx` for past attempts, and
+`submission.ts` and `actions.ts` for the form parsing and the writes. It reuses
+`resources/topic-options.ts` for both topic pickers rather than copying it: flattening the CUR-003
+tree into one level of `<optgroup>` is the same presentation problem, and a second copy would be a
+second thing to keep in step with the curriculum contract. **No component here counts, totals, or
+ranks anything**, and none renders a score. See
+[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
 
 `resources/` holds the **learning-resource catalogue**, which supports **add, edit, and archive**:
 `ResourceCatalogue.tsx` for the screen and `ResourceForm.tsx` for both the add and the edit form —
@@ -413,6 +442,15 @@ onboarded — and it writes nothing.
 | `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
 | `progress/submission.ts` | Reads the stage form into the request it makes, and owns the control's state shape. |
 | `progress/actions.ts` | The `"use server"` module holding the write path. |
+| `practice/QuestionForm.tsx` | Where a learner writes one practice question of their own, with its CSS Module. A client component only so it can report the last submission; it offers no way to generate a question, because LearnFlow writes none. |
+| `practice/QuestionBank.tsx` | The questions the learner has written, newest first, with the expected answer named in words. A question set aside is still listed, so it can be brought back. Nothing is counted or ranked. |
+| `practice/QuestionStatusControl.tsx` | The control beside one question that sets it aside or brings it back, with its CSS Module. Nothing here deletes, and nothing here edits. |
+| `practice/StartQuizForm.tsx` | Where a learner chooses the topics to practise, with its CSS Module. The quiz asks every question written for them, so nothing here picks a count or a difficulty. |
+| `practice/QuizForm.tsx` | The quiz being answered, with its CSS Module. Pre-selects nothing, submits the whole attempt in one form post, and shows no expected answer — QZ-002 sends none. |
+| `practice/AttemptResult.tsx` | What became of each question, with its CSS Module. **Renders no score and derives nothing**, and colours no outcome: the words carry the meaning. |
+| `practice/AttemptHistory.tsx` | The quizzes the learner has taken, linking to each result. No attempt is set against another. |
+| `practice/submission.ts` | Reads the four practice forms into the requests they make, and owns their state shapes. It re-indexes the expected answer when a blank option is dropped, and leaves an unanswered question out of a submission rather than sending a blank. |
+| `practice/actions.ts` | The `"use server"` module holding the write, retire, assemble, and submit paths. The last two redirect, so the flow works with no JavaScript. |
 
 A goal response carries the examination **window** but not the dated periods, per
 [endpoints](../api/endpoints.md#learner-setup-and-goal-endpoints), so a screen wanting the
@@ -578,6 +616,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the `progress` route, the two modules behind it, and why it adds no endpoint
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the two further modules that route gained, and the two reads they consume unchanged
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the two modules that route gained again, why the panel renders no control, and why it adds no read at all
+- [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — `checkpoint_marking.py`, the `practice/` feature module, and the three practice routes
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

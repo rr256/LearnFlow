@@ -2,10 +2,11 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-16
+last_updated: 2026-08-18
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../00-project-context.md
   - overview.md
   - ../domain/domain-model.md
@@ -49,12 +50,15 @@ tables arrive in more than one migration.
 | Learner planning | Implemented — `learners` and `study_goals` arrive in migration `20260801_01`, `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots), `study_goals`' planning preferences in `20260806_02`, as two typed columns rather than the `planning_preferences jsonb` documented [below](#study_goals), and `study_plans` and `plan_items` in `20260806_03`, whose controlled columns are `varchar(32)` guarded by a `CHECK` rather than the `text` documented [below](#study_plans). |
 | Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `revision_records` arrives in `20260813_01` with the revision code that reads it, per [ADR-028](../adr/ADR-028-revision-workflow.md). `study_activities` still arrives with the code that records study work. |
 | Resources and RAG metadata | Partly implemented — `resources` and `resource_topic_links` arrive in migration `20260816_01` with the catalogue code that reads them (RES-001 to RES-004), per [ADR-032](../adr/ADR-032-learning-resource-catalogue.md); two columns of `resources` are deliberately not created, and `resource_ingestions` arrives with the extractor and vector index it tracks. See [below](#resources). |
-| Assessment | Not implemented — arrives with Milestone 5. |
-| External evidence | Not implemented — arrives with Milestone 5. |
+| Assessment | Implemented — all seven tables arrive in migration `20260818_01` with the checkpoint-practice code that reads them (QZ-001 to QZ-010), per [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). Seven columns are deliberately not created and one is added beyond this document; see [the area review](#assessment-area-review-2026-08-18). |
+| External evidence | Not implemented — arrives with FR-010, in the second half of Milestone 5. `mistake_evidence` waits with it: two of its four discovery sources reference tables in this area. |
 
 A pending area's columns are an approved target, not a committed shape. One of the three details this
-document recorded as undecided remains so — numeric precision for score and marks columns — and is
-decided in the change that creates its table, not before. The other two are settled:
+document recorded as undecided **remains so** — numeric precision for score and marks columns. It was
+*not* settled by the assessment migration, because that change creates none of those columns:
+[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) reports per-question outcomes and no total,
+so nothing would have read the answer. It is decided by the change that first stores a mark. The other
+two are settled:
 
 - The **default learner timezone** was decided when `learners` was created: it comes from
   `APP_DEFAULT_TIMEZONE`, which defaults to `Asia/Kolkata`. See
@@ -707,6 +711,14 @@ Tracks extraction and indexing of eligible resources.
 
 ### `checkpoint_quizzes`
 
+**Migration `20260818_01` creates every table in this area, and every documented column except**
+`questions.difficulty`, `quiz_questions.max_marks`, `quiz_attempt_answers.awarded_marks`,
+`quiz_attempt_answers.feedback`, `quiz_attempts.score`, `quiz_attempts.max_score`, and
+`quiz_attempts.duration_seconds` — seven columns nothing maintains. It **adds**
+`questions.author_learner_id`, which this document does not list. The tables below are the approved
+target; [the area review](#assessment-area-review-2026-08-18) records what was built and why it
+differs, per [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
+
 Stores a topic-focused practice set.
 
 | Column | Type | Notes |
@@ -887,7 +899,7 @@ Use named nullable foreign keys rather than a generic polymorphic `source_type`/
 ## Required Indexes
 
 Create indexes in addition to primary/unique keys for likely MVP access patterns. Each is created by
-the migration that creates its table; the three marked below are implemented today.
+the migration that creates its table; the entries marked below are implemented today.
 
 - `topics(subject_id, parent_topic_id, position)` — implemented
 - `examination_periods(examination_schedule_id, starts_on)` — implemented
@@ -899,8 +911,10 @@ the migration that creates its table; the three marked below are implemented tod
 - `resource_topic_links(topic_id, resource_id)` — implemented
 - `resources(owner_learner_id, status)` — implemented
 - `resource_ingestions(resource_id, status)`
-- `checkpoint_quiz_topics(topic_id, checkpoint_quiz_id)`
-- `quiz_attempts(learner_id, checkpoint_quiz_id, created_at desc)`
+- `checkpoint_quiz_topics(topic_id, checkpoint_quiz_id)` — implemented
+- `quiz_attempts(learner_id, checkpoint_quiz_id, created_at desc)` — implemented
+- `questions(author_learner_id, status)` — implemented; not listed when this document was written, and added by [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) for the access pattern that assembles a quiz
+- `question_topic_links(topic_id, question_id)` — implemented; added for the same reason, and how a quiz finds the questions covering a topic
 - `external_test_results(learner_id, taken_on desc)`
 - `external_test_topic_performance(topic_id, external_test_result_id)`
 - `mistake_evidence(learner_id, topic_id, resolved_at)`
@@ -1469,6 +1483,97 @@ Covered by this review:
 
 One table of this area does not exist yet, so it stays **partly reviewed** for the two created and
 unreviewed for `resource_ingestions`.
+
+### Assessment area — review 2026-08-18
+
+This is a review of the assessment tables as created by migration
+`20260818_01_create_assessment_tables`, which creates the area **whole** — all seven tables — with
+the checkpoint-practice code that reads them (QZ-001 to QZ-010), per
+[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md) and
+[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). The area arrives whole rather than
+partially because a quiz that cannot be attempted and an attempt that cannot be marked are not a
+smaller feature but a broken one.
+
+Reviewed against the inputs that exist: the final GATE CSE curriculum seed structure, the SQLAlchemy
+mapping strategy, the first API contracts (QZ-001 to QZ-010), and the constraint support of
+PostgreSQL 18 with Alembic. **One input stays pending**: the actual mistake-evidence rules, which
+belong to `mistake_evidence` in the *External evidence* area and cannot be reviewed until the tables
+its discovery sources reference exist.
+
+[ADR-008](../adr/ADR-008-assessment-and-mistake-evidence-model.md) is implemented unchanged:
+`checkpoint_quiz_topics` is the only quiz-to-topic link, `checkpoint_quizzes` has no `topic_id`, the
+"at least one topic" rule is enforced in the use case because no simple constraint can express it,
+and no quiz outcome is written to `external_test_topic_performance`.
+
+#### Columns deliberately not created
+
+Each is absent because nothing maintains it, which is the rule ADR-011 states and the reason
+`learner_topic_progress` and `resources` each arrived short of their documented shape.
+
+- **`questions.difficulty`.** An "optional controlled value" with no controlled vocabulary decided
+  anywhere in this repository, and a difficulty would rank one question above another, which nothing
+  in LearnFlow does.
+- **`quiz_questions.max_marks`**, **`quiz_attempt_answers.awarded_marks`**, **`quiz_attempts.score`**,
+  and **`quiz_attempts.max_score`.** These are a mark scheme, and this build has none: a result
+  states per-question outcomes and no total at all. See ADR-033, which resolves the conflict between
+  this document and [terminology](../domain/terminology.md) in terminology's favour. Their absence is
+  also why the numeric-precision question above **stays open**.
+- **`quiz_attempts.duration_seconds`.** Nothing times an attempt, and `started_at` and `submitted_at`
+  already bound one, so storing the span between them would be a second source of truth.
+- **`quiz_attempt_answers.feedback`.** It would freeze the explanation an answer was marked with. It
+  is unnecessary because **a question is never edited** — only retired and rewritten — so the
+  explanation on the question cannot drift away from an attempt marked against it. This is where the
+  assessment area differs from `revision_records`, which needed `recommendation_reason` precisely
+  because its inputs can move.
+
+#### One column created beyond this document
+
+- **`questions.author_learner_id`**, `uuid` FK to `learners.id`, **nullable**, indexed with `status`.
+  Every question is written by the learner, and this document's own *Conventions* require a learner
+  identifier on learner-owned records. It mirrors `resources.owner_learner_id` exactly, including its
+  nullability, so the shared or curated bank this table was originally designed for still has
+  somewhere to live. **Nothing writes an ownerless question today**: the use case requires an author
+  on every write.
+
+#### Controlled values
+
+Every controlled column is `varchar(32)` guarded by a `CHECK` rather than the bare `text` above,
+following this document's *Conventions* and ADR-011's validated-text rule, as every migration since
+`20260806_01` has done.
+
+Each `CHECK` carries **all** of its documented values, although the application writes a subset —
+`multiple_choice` of the four question types, `curated` of the three source types, `ready` and
+`retired` of the three question statuses, `ready` of the three quiz statuses, and `in_progress` and
+`evaluated` of the four attempt statuses. None of the unwritten values needs storage that is missing,
+so offering one later is a use-case change rather than a migration, which is the argument ADR-020
+made for `plan_items.status` and ADR-032 for `relationship_type`.
+
+#### `jsonb` payloads
+
+`questions.options`, `questions.expected_answer`, and `quiz_attempt_answers.submitted_answer` are
+`jsonb`, exactly as approved above. Their shape is fixed by the application and read and written in
+one module: `options` holds `[{"key": "a", "text": "…"}, …]`, and both answer columns hold
+`{"option_key": "a"}`. Keys are assigned by position by the domain rule and never accepted from a
+caller, so a stored `expected_answer` always names an option the question offers.
+
+`quiz_attempt_answers.is_correct` is nullable and stays so **deliberately**: null is a question the
+learner left alone. An unanswered question is not a wrong one, and writing `false` there would state
+something about the learner that they did not.
+
+#### Constraints and indexes
+
+`quiz_questions` keeps the approved unique `(checkpoint_quiz_id, position)`. The approved
+`max_marks > 0` guards a column this migration does not create; what survives of it is
+`position >= 1`, on the column that carries its role. `quiz_attempt_answers` keeps the approved
+unique `(quiz_attempt_id, question_id)`.
+
+Both indexes this document lists for the area are created. Two more are created that it does not
+list, for access patterns the checkpoint-practice code has: `questions(author_learner_id, status)`
+and `question_topic_links(topic_id, question_id)`. Both are recorded under *Required Indexes* above.
+
+Curriculum foreign keys are **not** cascades, as elsewhere: curriculum rows are reference data that
+learner records reference, and this document forbids deleting one casually.
+
 
 ## Related Documents
 

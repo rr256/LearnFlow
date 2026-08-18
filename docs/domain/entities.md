@@ -2,7 +2,7 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-16
+last_updated: 2026-08-18
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../00-project-context.md
@@ -19,6 +19,7 @@ related:
   - ../adr/ADR-025-learner-postponement.md
   - ../database/schema.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-033-checkpoint-practice-workflow.md
 ---
 
 # LearnFlow Domain Entities
@@ -235,6 +236,8 @@ Represents one answerable item in a checkpoint quiz or a verified practice sourc
 
 **Responsible for:** storing the prompt, answer format, possible options where applicable, expected answer, explanation, source type, difficulty, and topic links.
 
+As built, it is **written by the learner** and stores no difficulty: no controlled vocabulary decides one, and a difficulty would rank one question above another. It is **never edited** — a learner corrects one by setting it aside and writing another. Option keys are assigned by position rather than accepted from a caller. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
+
 **Key relationships:** belongs to a checkpoint quiz or reusable question bank; may link to multiple topics; receives learner answers through quiz attempts.
 
 ### Quiz Attempt
@@ -242,6 +245,8 @@ Represents one answerable item in a checkpoint quiz or a verified practice sourc
 Represents one learner's attempt at a checkpoint quiz.
 
 **Responsible for:** recording submitted answers, scoring, feedback, timing, and mistakes discovered during the attempt.
+
+As built it records answers and per-question feedback and **no score, no duration, and no mistakes**. A result states what became of each question and no total at all, because a figure like "3 of 5" measures the learner rather than the work; an **unanswered question is recorded as unanswered**, never as wrong. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
 
 **Key relationships:** belongs to a learner and checkpoint quiz; contains answer-level results; informs topic progress and revision recommendations.
 

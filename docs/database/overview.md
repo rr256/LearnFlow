@@ -2,8 +2,9 @@
 title: LearnFlow Database Overview
 status: approved
 owner: architecture-and-data
-last_updated: 2026-07-31
+last_updated: 2026-08-18
 related:
+  - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../00-project-context.md
   - schema.md
   - migrations.md
@@ -34,7 +35,7 @@ PostgreSQL
 ├── Study goals, availability, plans, and plan items
 ├── Learner topic progress and learning evidence
 ├── Revision records
-├── Quiz definitions, attempts, answers, scores, and mistakes
+├── Quiz definitions, attempts, answers, and mistakes
 ├── Manually entered external test results and topic evidence
 ├── Resource metadata and curriculum links
 └── References to stored files and retrieval/indexing status
@@ -89,11 +90,11 @@ Although the MVP has one local learner, learner-owned records must be associated
 
 Stores study goals, study plans, plan items, topic progress, learning-stage evidence, and revision records.
 
-Progress remains evidence-based. Do not collapse manual completion, learning stage, quiz score, external test results, and revision history into one irreversible database field.
+Progress remains evidence-based. Do not collapse manual completion, learning stage, quiz outcomes, external test results, and revision history into one irreversible database field.
 
 ### Assessment Data
 
-Stores checkpoint quizzes, questions, learner attempts, answer-level results, scores, timing, and mistake evidence.
+Stores checkpoint quizzes, questions, learner attempts, answer-level results, and mistake evidence. **As built there is no score and no timing**: a result states per-question outcomes and no total, so `score`, `max_score`, the marks columns, and `duration_seconds` are not created. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
 
 Stores manually entered external test results separately from internal quizzes, while allowing both to contribute evidence to the same topic progress.
 

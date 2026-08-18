@@ -22,7 +22,9 @@ from contextlib import AbstractContextManager, contextmanager
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ports.clock import Clock
+from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
+from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
 from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
@@ -31,6 +33,9 @@ from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.application.use_cases.read_examination_schedules import ReadExaminationSchedules
 from app.infrastructure.clock import SystemClock
+from app.infrastructure.persistence.checkpoint_practice_repository import (
+    SqlAlchemyCheckpointPracticeRepository,
+)
 from app.infrastructure.persistence.curriculum_repository import SqlAlchemyCurriculumRepository
 from app.infrastructure.persistence.examination_schedule_repository import (
     SqlAlchemyExaminationScheduleRepository,
@@ -54,6 +59,8 @@ StudyPlansProvider = Callable[[], AbstractContextManager[ManageStudyPlans]]
 RevisionsProvider = Callable[[], AbstractContextManager[ManageRevisions]]
 ResourcesProvider = Callable[[], AbstractContextManager[ManageResources]]
 TopicProgressProvider = Callable[[], AbstractContextManager[ManageTopicProgress]]
+PracticeQuestionsProvider = Callable[[], AbstractContextManager[ManagePracticeQuestions]]
+CheckpointQuizzesProvider = Callable[[], AbstractContextManager[ManageCheckpointQuizzes]]
 
 
 def build_read_curriculum_provider(
@@ -257,6 +264,81 @@ def build_topic_progress_provider(
                 yield ManageTopicProgress(
                     learners=SqlAlchemyLearnerRepository(session),
                     progress=SqlAlchemyTopicProgressRepository(session),
+                )
+            except BaseException:
+                session.rollback()
+                raise
+            session.commit()
+
+    return provide
+
+
+def build_practice_questions_provider(
+    session_factory: sessionmaker[Session], *, clock: Clock | None = None
+) -> PracticeQuestionsProvider:
+    """Build the provider that hands the practice-question use case to one request.
+
+    It writes, so it owns the transaction like the other learner-owned providers:
+    a question and the topics it covers are one unit of work, so a learner cannot
+    end up with a question no quiz could ever ask.
+
+    It reads the clock because a question's `written_at` is what a quiz is ordered
+    by, and a caller able to supply that instant could reorder a quiz.
+
+    Args:
+        session_factory: The application's shared session factory.
+        clock: Where "now" comes from. Defaults to the system clock; a caller
+            supplies one to fix the instant, which is what makes a quiz's order
+            assertable.
+    """
+    reads_the_clock = clock or SystemClock()
+
+    @contextmanager
+    def provide() -> Iterator[ManagePracticeQuestions]:
+        with session_factory() as session:
+            try:
+                yield ManagePracticeQuestions(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    practice=SqlAlchemyCheckpointPracticeRepository(session),
+                    clock=reads_the_clock,
+                )
+            except BaseException:
+                session.rollback()
+                raise
+            session.commit()
+
+    return provide
+
+
+def build_checkpoint_quizzes_provider(
+    session_factory: sessionmaker[Session], *, clock: Clock | None = None
+) -> CheckpointQuizzesProvider:
+    """Build the provider that hands the checkpoint-quiz use case to one request.
+
+    It writes, so it owns the transaction. Assembling a quiz writes the quiz, the
+    topics it covers, and the questions it asks, and marking an attempt writes the
+    attempt and every answer: each is one unit of work, so a learner cannot end up
+    with a quiz that asks nothing or a result that marked half its questions.
+
+    It reads the clock because an attempt's `started_at`, `submitted_at`, and
+    `evaluated_at` all come from the server rather than from a caller — the rule
+    ADR-021 fixed for `plan_items.completed_at`.
+
+    Args:
+        session_factory: The application's shared session factory.
+        clock: Where "now" comes from. Defaults to the system clock; a caller
+            supplies one to fix the instant an attempt was marked.
+    """
+    reads_the_clock = clock or SystemClock()
+
+    @contextmanager
+    def provide() -> Iterator[ManageCheckpointQuizzes]:
+        with session_factory() as session:
+            try:
+                yield ManageCheckpointQuizzes(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    practice=SqlAlchemyCheckpointPracticeRepository(session),
+                    clock=reads_the_clock,
                 )
             except BaseException:
                 session.rollback()

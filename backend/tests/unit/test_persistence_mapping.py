@@ -88,12 +88,23 @@ PROGRESS_TABLES = ("learner_topic_progress", "revision_records")
 
 RESOURCE_TABLES = ("resources", "resource_topic_links")
 
+ASSESSMENT_TABLES = (
+    "checkpoint_quizzes",
+    "checkpoint_quiz_topics",
+    "questions",
+    "question_topic_links",
+    "quiz_questions",
+    "quiz_attempts",
+    "quiz_attempt_answers",
+)
+
 MAPPED_TABLES = (
     CURRICULUM_TABLES
     + EXAMINATION_TABLES
     + LEARNER_PLANNING_TABLES
     + PROGRESS_TABLES
     + RESOURCE_TABLES
+    + ASSESSMENT_TABLES
 )
 
 
@@ -108,7 +119,11 @@ def constraint_names(table_name: str) -> set[str]:
 
 
 def test_only_the_migrated_tables_are_mapped():
-    """Assessment, study activities, and resource ingestion arrive with their milestones."""
+    """Study activities and resource ingestion arrive with their own code.
+
+    The assessment area arrived whole with the checkpoint-practice code that
+    reads it (ADR-033), which is why its seven tables are mapped here.
+    """
     assert set(Base.metadata.tables) == set(MAPPED_TABLES)
 
 
@@ -242,18 +257,29 @@ def test_topic_ordering_and_trackability_use_the_documented_types():
 
 
 def test_the_remaining_schema_areas_are_absent():
-    """Guards the agreed scope. `study_plans` and `plan_items` arrived with the
-    planning code that reads them, completing the learner-planning area,
-    `revision_records` arrived with the revision code, and `resources` and
-    `resource_topic_links` have since arrived with the catalogue code that reads
-    them. `study_activities` is what the progress area still lacks,
-    `resource_ingestions` what the resource area lacks, and the assessment area
-    follows with its own milestone. Each waits for the code that reads it, so no
-    column fixes a shape before a requirement constrains it."""
+    """Guards the agreed scope.
+
+    `study_plans` and `plan_items` arrived with the planning code that reads
+    them, completing the learner-planning area; `revision_records` arrived with
+    the revision code; `resources` and `resource_topic_links` with the catalogue
+    code; and the seven assessment tables with the checkpoint-practice code
+    (ADR-033). What is left is `study_activities`, which the progress area still
+    lacks, `resource_ingestions`, which the resource area lacks, and the whole
+    external-evidence area, which follows with FR-010. Each waits for the code
+    that reads it, so no column fixes a shape before a requirement constrains
+    it.
+
+    `mistake_evidence` is named explicitly: it is the one table ADR-033 wanted
+    and could not create, because two of its four discovery sources reference
+    tables that do not exist.
+    """
     for table_name in (
         "study_activities",
         "resource_ingestions",
-        "checkpoint_quizzes",
+        "external_test_results",
+        "external_test_subject_performance",
+        "external_test_topic_performance",
+        "mistake_evidence",
     ):
         assert table_name not in Base.metadata.tables
 

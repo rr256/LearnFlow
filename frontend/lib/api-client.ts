@@ -13,6 +13,19 @@
 
 import { resolveApiBaseUrl } from "@/lib/config";
 import type {
+  CheckpointQuiz,
+  CheckpointQuizResponse,
+  NewPracticeQuestion,
+  PracticeQuestion,
+  PracticeQuestionCollectionResponse,
+  PracticeQuestionResponse,
+  QuestionStatus,
+  QuizAttempt,
+  QuizAttemptCollectionResponse,
+  QuizAttemptResponse,
+  SubmittedAnswer,
+} from "@/types/practice";
+import type {
   LearningResource,
   LearningResourceCollectionResponse,
   LearningResourceResponse,
@@ -821,4 +834,214 @@ export async function scheduleRevisions(): Promise<ScheduledRevisions> {
     already_scheduled_topic_count: payload.already_scheduled_topic_count,
     reason: payload.reason,
   };
+}
+
+/**
+ * QZ-009 -- list the practice questions the learner has written.
+ *
+ * No status is assumed: a caller wanting only what a quiz may ask passes
+ * `ready`, and one wanting what has been set aside passes `retired`. The
+ * response carries the expected answers, because it is the author reading back
+ * what they wrote — a quiz being taken reads `readCheckpointQuiz` instead.
+ *
+ * @throws ApiError with `isConflict` when more than one learner is stored.
+ */
+export async function listPracticeQuestions({
+  topicId,
+  status,
+  limit = MAX_PAGE_SIZE,
+  offset = 0,
+}: {
+  topicId?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<PracticeQuestion[]> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (topicId) {
+    query.set("topic_id", topicId);
+  }
+  if (status) {
+    query.set("status", status);
+  }
+  const body = await requestJson(`/api/v1/practice-questions?${query.toString()}`);
+  unwrapCollection(body, "a practice question collection");
+
+  return (body as PracticeQuestionCollectionResponse).data;
+}
+
+/**
+ * QZ-008 -- write one practice question against the topics it covers.
+ *
+ * Option keys are assigned by the backend from each option's position, so
+ * nothing here invents one. At least one topic is required: a quiz is assembled
+ * by topic, and a question covering none could never be asked.
+ *
+ * @throws ApiError with `isConflict` when no learner exists yet.
+ */
+export async function writePracticeQuestion(
+  question: NewPracticeQuestion,
+): Promise<PracticeQuestion> {
+  const body = await requestJson("/api/v1/practice-questions", {
+    method: "POST",
+    body: question,
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed question.", null);
+  }
+  return (body as PracticeQuestionResponse).data;
+}
+
+/**
+ * QZ-010 -- set a practice question aside, or bring it back.
+ *
+ * Status is the only thing that may change. A question is never edited: a
+ * learner corrects one by setting it aside and writing another, because attempts
+ * already marked against it reference it by identifier.
+ *
+ * @throws ApiError with `isNotFound` when no such question is stored or another
+ *   learner wrote it.
+ */
+export async function updatePracticeQuestionStatus(
+  questionId: string,
+  status: QuestionStatus,
+): Promise<PracticeQuestion> {
+  const body = await requestJson(`/api/v1/practice-questions/${encodeURIComponent(questionId)}`, {
+    method: "PATCH",
+    body: { status },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed question.", null);
+  }
+  return (body as PracticeQuestionResponse).data;
+}
+
+/**
+ * QZ-001 -- assemble a checkpoint quiz from the learner's questions.
+ *
+ * Deterministic and with no AI provider: the quiz asks every ready question the
+ * learner wrote for the chosen topics, in the order they wrote them. Nothing is
+ * generated, sampled, or selected in preference to anything else.
+ *
+ * @throws ApiError with `isConflict` when no learner exists yet.
+ */
+export async function assembleCheckpointQuiz(topicIds: string[]): Promise<CheckpointQuiz> {
+  const body = await requestJson("/api/v1/checkpoint-quizzes/generate", {
+    method: "POST",
+    body: { topic_ids: topicIds },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed quiz.", null);
+  }
+  return (body as CheckpointQuizResponse).data;
+}
+
+/**
+ * QZ-002 -- read a quiz's questions, without their answers.
+ *
+ * The response carries no expected answer and no explanation, so nothing here
+ * has to strip one before rendering.
+ *
+ * @throws ApiError with `isNotFound` when no such quiz is stored or it is not
+ *   the local learner's.
+ */
+export async function readCheckpointQuiz(quizId: string): Promise<CheckpointQuiz> {
+  const body = await requestJson(`/api/v1/checkpoint-quizzes/${encodeURIComponent(quizId)}`);
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed quiz.", null);
+  }
+  return (body as CheckpointQuizResponse).data;
+}
+
+/**
+ * QZ-003 -- begin an attempt at a checkpoint quiz.
+ *
+ * Asking twice starts nothing the second time: an unfinished attempt at the same
+ * quiz is returned instead, so a reloaded page cannot litter the learner's
+ * history.
+ *
+ * @throws ApiError with `isNotFound` when no such quiz is stored.
+ */
+export async function startQuizAttempt(quizId: string): Promise<QuizAttempt> {
+  const body = await requestJson(
+    `/api/v1/checkpoint-quizzes/${encodeURIComponent(quizId)}/attempts`,
+    { method: "POST", body: {} },
+  );
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed attempt.", null);
+  }
+  return (body as QuizAttemptResponse).data;
+}
+
+/**
+ * QZ-005 -- submit every answer at once, and read the marked result back.
+ *
+ * A question the learner left alone is omitted from `answers` rather than sent
+ * with a null, and reads back as unanswered rather than as wrong. Submitting
+ * twice is refused: a record of what happened is not edited afterwards.
+ *
+ * @throws ApiError with `isConflict` when the attempt has already been marked.
+ */
+export async function submitQuizAttempt(
+  attemptId: string,
+  answers: SubmittedAnswer[],
+): Promise<QuizAttempt> {
+  const body = await requestJson(`/api/v1/quiz-attempts/${encodeURIComponent(attemptId)}/submit`, {
+    method: "POST",
+    body: { answers },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed attempt.", null);
+  }
+  return (body as QuizAttemptResponse).data;
+}
+
+/**
+ * QZ-006 -- list the learner's quiz attempts, newest first.
+ *
+ * Nothing is counted, totalled, or compared: the collection is a list of what
+ * happened, and no attempt is scored against another.
+ *
+ * @throws ApiError with `isConflict` when more than one learner is stored.
+ */
+export async function listQuizAttempts({
+  limit = MAX_PAGE_SIZE,
+  offset = 0,
+}: { limit?: number; offset?: number } = {}): Promise<QuizAttempt[]> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  const body = await requestJson(`/api/v1/quiz-attempts?${query.toString()}`);
+  unwrapCollection(body, "a quiz attempt collection");
+
+  return (body as QuizAttemptCollectionResponse).data;
+}
+
+/**
+ * QZ-007 -- read one attempt and what became of each question.
+ *
+ * An attempt still in progress reads back without its expected answers and
+ * explanations, so opening a result before submitting reveals nothing.
+ *
+ * @throws ApiError with `isNotFound` when no such attempt is stored or it is not
+ *   the local learner's.
+ */
+export async function readQuizAttempt(attemptId: string): Promise<QuizAttempt> {
+  const body = await requestJson(`/api/v1/quiz-attempts/${encodeURIComponent(attemptId)}`);
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed attempt.", null);
+  }
+  return (body as QuizAttemptResponse).data;
 }

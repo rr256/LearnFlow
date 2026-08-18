@@ -2,7 +2,7 @@
 title: LearnFlow Functional Requirements
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-05
+last_updated: 2026-08-18
 related:
   - ../00-project-context.md
   - mvp.md
@@ -202,6 +202,7 @@ Each implementation task, API contract, data-model change, and test should link 
 - [Product vision](../vision/vision.md)
 - [MVP scope](mvp.md)
 - [ADR-013: Model an examination period as a published window of reference data](../adr/ADR-013-examination-schedule-and-study-goal.md) — what a target examination schedule is, and why FR-002 does not ask for a single date
+- [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — how FR-009 is being met, and why its stored-score criterion is deliberately not; [endpoints](../api/endpoints.md#fr-009-acceptance-criteria) carries the per-criterion count
 - [Domain model](../domain/domain-model.md)
 - [API endpoints](../api/endpoints.md)
 - [Roadmap](../roadmap/roadmap.md)
