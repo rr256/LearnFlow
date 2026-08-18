@@ -34,6 +34,7 @@ related:
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
+  - ../adr/ADR-034-checkpoint-practice-history.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -542,6 +543,13 @@ no mistake is stored, and nothing incorporates quiz evidence into a recommendati
 [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md), with migration `20260818_01` creating the
 whole *Assessment* schema area.
 
+The **checkpoint practice history** since joined it: `/practice/history` shows every quiz a learner
+has taken, a page at a time, with what became of each question, and opens each attempt's existing
+result. It is a **reading** of QZ-006, opening the QZ-007 result view ADR-033 already built — no
+endpoint, no column, no migration, and no backend change — and it **checks no further box here**: nothing is stored, marked, or incorporated by
+it. **Nothing is counted, scored, or compared** on it, and the pages are not numbered. Contracted by
+[ADR-034](../adr/ADR-034-checkpoint-practice-history.md).
+
 **No question content ships with LearnFlow.** The learner writes every question, which is the position
 [ADR-032](../adr/ADR-032-learning-resource-catalogue.md) took for study material: no seed, no data
 file, no bundled previous-year paper, and no external fetch, so no third-party licensing question
@@ -585,8 +593,10 @@ taken.
   no response carries a score — PostgreSQL integration tests over migration `20260818_01`, its
   upgrade, its downgrade, every permitted value, the constraints it refuses, and the columns it
   deliberately does not create, plus the workflow read back over HTTP against the seeded GATE CSE
-  curriculum; and frontend tests over the forms, the question bank, the quiz, the result, and the
-  history. **The item stays open** for the external-evidence half.
+  curriculum; and frontend tests over the forms, the question bank, the quiz, the result, the
+  practice screen's own attempt panel, and the **checkpoint practice history** — its paging rules as
+  pure functions, and the screen's refusal of a score, a count, a page number, and a control.
+  **The item stays open** for the external-evidence half.
 
 **FR-009 is not met in full**; [endpoints.md](../api/endpoints.md#fr-009-acceptance-criteria) carries
 the count. **FR-006 is still not met in full** either: its second criterion wants practice
@@ -664,3 +674,4 @@ LearnFlow does.
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the second count, now partly met, and the evidence the item still waits on
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the Milestone 4 item this opens, and the reasons the rest of that milestone stays closed
 - [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — the two Milestone 5 items this opens, and the reasons the rest of that milestone stays closed
+- [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — the history screen over those two items, which checks no further box here

@@ -7,6 +7,7 @@ import { AttemptHistory } from "@/features/practice/AttemptHistory";
 import { QuestionBank } from "@/features/practice/QuestionBank";
 import { QuestionForm } from "@/features/practice/QuestionForm";
 import { StartQuizForm } from "@/features/practice/StartQuizForm";
+import { HISTORY_PAGE_SIZE, HISTORY_REQUEST_LIMIT } from "@/features/practice/history";
 import { topicOptions, type SubjectTopicOptions } from "@/features/resources/topic-options";
 import {
   ApiError,
@@ -27,7 +28,16 @@ export const dynamic = "force-dynamic";
 
 interface PracticeData {
   questions: PracticeQuestion[];
+  /** The most recent attempts. The whole history is at `/practice/history`. */
   attempts: QuizAttempt[];
+  /**
+   * Whether the learner has taken quizzes older than those.
+   *
+   * Read from whether QZ-006 returned the one extra record asked for, never from
+   * `pagination.total`: a figure for how many quizzes a learner has taken is
+   * forbidden by name in docs/domain/terminology.md, so none is held.
+   */
+  hasMoreAttempts: boolean;
   /** The curriculum's topics for the pickers, empty when it could not be read. */
   topicGroups: SubjectTopicOptions[];
 }
@@ -69,14 +79,22 @@ async function pickableTopics(): Promise<SubjectTopicOptions[]> {
  *
  * The three run together: none addresses another's result, so the page waits
  * once instead of three times.
+ *
+ * One attempt more than the panel shows is asked for, so the panel can say that
+ * there are earlier ones without being told — or telling anyone — how many.
  */
 async function readPractice(): Promise<PracticeData> {
   const [questions, attempts, topicGroups] = await Promise.all([
     listPracticeQuestions(),
-    listQuizAttempts(),
+    listQuizAttempts({ limit: HISTORY_REQUEST_LIMIT }),
     pickableTopics(),
   ]);
-  return { questions, attempts, topicGroups };
+  return {
+    questions,
+    attempts: attempts.slice(0, HISTORY_PAGE_SIZE),
+    hasMoreAttempts: attempts.length > HISTORY_PAGE_SIZE,
+    topicGroups,
+  };
 }
 
 /**
@@ -122,7 +140,7 @@ async function PracticeSection() {
       <StartQuizForm topicGroups={data.topicGroups} />
       <QuestionForm topicGroups={data.topicGroups} />
       <QuestionBank questions={data.questions} />
-      <AttemptHistory attempts={data.attempts} />
+      <AttemptHistory attempts={data.attempts} hasMore={data.hasMoreAttempts} />
     </>
   );
 }
@@ -147,6 +165,11 @@ async function PracticeSection() {
  *
  * **Nothing here claims a topic is understood.** Recording a learning stage stays
  * on the curriculum screen, which is where this links.
+ *
+ * The history panel shows the **most recent** quizzes the learner has taken; the
+ * whole history, a page at a time and with what became of each question, is
+ * `/practice/history`, which that panel links to. Nothing is out of reach from
+ * here, and nothing says how many there are.
  *
  * The navigation sits outside the boundary below, so an unreachable backend
  * still leaves a learner a way forward rather than a dead screen.

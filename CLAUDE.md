@@ -110,7 +110,10 @@ which changes no contract, and its priority-focus panel by
 which is **accepted** and adds RES-001 to RES-004 with migration `20260816_01`, and checkpoint
 practice by
 [`docs/adr/ADR-033-checkpoint-practice-workflow.md`](docs/adr/ADR-033-checkpoint-practice-workflow.md),
-which is **accepted** and adds QZ-001 to QZ-010 with migration `20260818_01`.
+which is **accepted** and adds QZ-001 to QZ-010 with migration `20260818_01`, and the
+checkpoint-practice history by
+[`docs/adr/ADR-034-checkpoint-practice-history.md`](docs/adr/ADR-034-checkpoint-practice-history.md),
+which is **accepted** and changes no contract, adds no endpoint, and needs no migration.
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -374,6 +377,28 @@ open, because surfacing a quiz on `/revisions` would mean recommending one. Do n
 is complete. Contracted by
 [`docs/adr/ADR-033-checkpoint-practice-workflow.md`](docs/adr/ADR-033-checkpoint-practice-workflow.md).
 
+**The checkpoint-practice history makes every attempt reachable** — `/practice/history`, which adds
+**no endpoint, no changed shape, no column, no migration, and no backend change at all**. It reads
+QZ-006 a page at a time and opens each attempt's existing QZ-007 result; `/practice` keeps the **most
+recent** attempts and links there. It **uses the payload ADR-033 recorded as a cost** — QZ-006 has
+always returned every question of every listed attempt — so the *separate summary shape* named there
+is deliberately not taken. **Nothing is counted, scored, or compared**: no score, mark, percentage,
+count of quizzes taken or questions answered, streak, average, or comparison between two attempts,
+and **no page is numbered**, because a page count is a count of the learner's quizzes with an extra
+step. **`pagination.total` is never read**, not merely never rendered — on QZ-006 it *is* that count —
+so whether an older page exists is decided by asking for **one record more than a page holds**.
+**A page is not a cap**: the order is QZ-006's own, newest first, and every attempt stays reachable,
+where capping would mean choosing which few to show. An entry names the topics covered, when it
+happened, and its state, and a closed `<details>` disclosure lists each question's prompt with its
+outcome in words — **an unanswered question is still not a wrong one** — while the **expected answer
+and the explanation stay on the result view**. An attempt that was **never submitted renders no
+outcome list**. Nothing is coloured by outcome. It is **read-only**: no `<button>`, `<form>`,
+`<input>`, or `<select>`, and no learning stage, plan, plan item, or revision moves. An `offset` that
+makes no sense reads as the newest page, not a `404`. **`/progress` gains nothing**, so FR-011's
+recent-quiz-history criterion stays **not met**, and **FR-009 is unchanged** and still not met in
+full. Contracted by
+[`docs/adr/ADR-034-checkpoint-practice-history.md`](docs/adr/ADR-034-checkpoint-practice-history.md).
+
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
 keeps that name. See [`docs/domain/terminology.md`](docs/domain/terminology.md).
@@ -405,7 +430,8 @@ drawn from those same reads, and **writes nothing at all** either, and a `/pract
 lists them over QZ-009, sets one aside or brings it back over QZ-010, assembles a quiz over QZ-001,
 and lists past attempts over QZ-006 — with `/practice/quizzes/[quizId]` reading the quiz over QZ-002
 and submitting the whole attempt over QZ-003 and QZ-005 in one form post, and
-`/practice/attempts/[attemptId]` reading the result over QZ-007, **read-only and carrying no score**.
+`/practice/attempts/[attemptId]` reading the result over QZ-007, **read-only and carrying no score**,
+and `/practice/history` reading every attempt over QZ-006 a page at a time, also **read-only**.
 It reuses `features/resources/topic-options.ts` for both topic pickers rather than copying it. And a `/resources`
 learning-resource catalogue that lists the learner's own study material over RES-002, registers it
 over RES-001, and **corrects** it or puts it aside and back over RES-004 — reading GOAL-002 and

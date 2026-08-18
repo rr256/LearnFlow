@@ -26,6 +26,7 @@ related:
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
+  - ../adr/ADR-034-checkpoint-practice-history.md
   - ../development/coding-standards.md
 ---
 
@@ -99,10 +100,11 @@ Define the canonical vocabulary for LearnFlow. Product documentation, UI copy, b
 | **Stage source** | Whether a learning stage was set by the learner or derived from evidence. | Stored as `learner`, `derived`, or `mixed`. Everything recorded today is `learner`; nothing derives a stage yet. |
 | **Revision** | Intentional revisiting of a topic to reinforce retention and address errors. | A *revision record* tracks when it is due and what happened. Created only when the learner asks, from work they have finished — never automatically, and never as a plan item, so it survives the supersede adaptation performs on a plan. It records whether a **review happened**, never that a topic is understood: nothing here writes a learning stage. See [ADR-028](../adr/ADR-028-revision-workflow.md). |
 | **Revision due** | A topic currently recommended for revision. | A recommendation, not a failure notice. Its day has arrived or passed and nobody has answered about it — decided by a domain rule and reported by the API, so a screen never decides for itself. Unlike an *overdue* plan item, a revision dated today **is** due: the plan asks for work on a day, and a review is offered from one. Never say a learner is behind on revision, and never count a learner's revisions on a screen or across requests — the one permitted count is REV-004's report of what a single scheduling request left alone, described below. |
-| **Checkpoint practice** | The screen where a learner writes their own practice questions, asks for a quiz on the topics they choose, answers it, and reads what became of each question. | The canonical name for the screen at `/practice`, and for this capability in prose and UI copy. Named for what a learner does there. **Writing lives there alone**; `/practice/quizzes/{id}` is where a quiz is answered and `/practice/attempts/{id}` is a read-only result. Do not call it a *test*, a *mock*, or an *exam* — none of those is what it is, and each imports a verdict. |
+| **Checkpoint practice** | The screen where a learner writes their own practice questions, asks for a quiz on the topics they choose, answers it, and reads what became of each question. | The canonical name for the screen at `/practice`, and for this capability in prose and UI copy. Named for what a learner does there. **Writing lives there alone**; `/practice/quizzes/{id}` is where a quiz is answered, `/practice/attempts/{id}` is a read-only result, and `/practice/history` is the *checkpoint practice history* defined below. Do not call it a *test*, a *mock*, or an *exam* — none of those is what it is, and each imports a verdict. |
 | **Checkpoint quiz** | A short, topic-focused practice assessment. | Used to gather evidence after study or revision. Assembled **deterministically from the learner's own questions**, and it asks *every* one of them for the topics chosen: LearnFlow selects none and leaves none out, because choosing which few to ask is a ranking. *Short* is therefore the learner's decision, not the product's. |
 | **Question / assessment item** | One answerable prompt within a quiz or question bank. | May be AI-generated or from a verified source; today it is **written by the learner**, and no question content ships with LearnFlow. **Never edited** — a learner corrects one by setting it aside and writing another, because attempts already marked against it reference it, and rewriting a prompt would rewrite a result the learner has already read. |
 | **Quiz attempt** | A learner's submitted response to a checkpoint quiz. | Records what became of **each question** — correct, not correct, or *unanswered* — with the expected answer and the explanation. It records **no score, no mark, and no total**; see the rule below. An unanswered question is not a wrong one, which is why the three outcomes are kept apart. |
+| **Checkpoint practice history** | The record of the checkpoint quizzes a learner has taken, newest first, with what became of each question. | The canonical name for the screen at `/practice/history` and for this reading in prose and UI copy. **A list, never a summary**: it states no score, no mark, no percentage, no count of quizzes taken or questions answered, no streak, and no average, and it sets **no attempt against another** — the rule below forbids each by name, and a history is where they are most tempting. Read live over QZ-006 and stored nowhere. Shown **a page at a time**, which is not a *cap*: the order is the API's own, newest first, and every attempt stays reachable, where capping would mean choosing which few to show. Do not number the pages — a page count is a count of the learner's quizzes with an extra step. Two words as a noun — *the checkpoint practice history* — and hyphenated only as a compound modifier, as in *the checkpoint-practice history screen*, which is why ADR-034's title carries the hyphen. See [ADR-034](../adr/ADR-034-checkpoint-practice-history.md). |
 | **External test result** | A learner-entered result from an assessment completed outside LearnFlow. | Canonical term for the whole recorded result. May reference Testbook, Made Easy, or another provider; it is not an integration. |
 | **Topic performance evidence** | Topic-specific marks, attempts, or mistakes recorded from an external test result. | Canonical term for the topic-level detail inside an external test result; it belongs to one external test result and one topic. Checkpoint quiz outcomes are never topic performance evidence. Only create it when the external test report actually provides topic-level information. |
 | **Mistake evidence** | A recorded error or learning gap. | Initial categories: concept gap, calculation error, careless error, time-management issue. |
@@ -208,6 +210,18 @@ something will eventually total. This is the one place where this document and
 [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) resolves it here. **Nothing counts a
 learner's quizzes**, no quiz count appears in the interface, and no attempt is set against another.
 
+That last clause is tested hardest by the **checkpoint practice history**, where several attempts
+sit on one screen and every obvious addition to it is forbidden above: how many quizzes have been
+taken, how many questions went as expected in each, a run of good ones, a comparison with last
+week. The history states **none of them**. It says what each attempt covered, when it happened,
+and what became of each question in words — a list, which is what replaced a number on the
+progress overview for the same reason. Paging it is not capping it: the order is the API's own and
+every attempt stays reachable, where choosing which few to show would be the ranking
+[ADR-031](../adr/ADR-031-priority-focus-panel.md) refuses. The pages are **not numbered**, because
+a page count is a count of the learner's quizzes with an extra step, and `pagination.total` — which
+*is* that count — is never read rather than merely never rendered. See
+[ADR-034](../adr/ADR-034-checkpoint-practice-history.md).
+
 The rule is tested again by the overview's **priority focus area** panel, whose whole subject is
 what needs attention. It states **no figure at all**: no tally of what is outstanding, no
 count of reviews owed — forbidden by name above — and no percentage, fraction, streak, or bar. It
@@ -278,6 +292,7 @@ ratio has a denominator and a denominator invites the comparison the third test 
 - [ADR-026: Show the month as a reading of the roadmap and the week, not a monthly plan](../adr/ADR-026-monthly-study-view.md) — the *monthly study view* above, and why a month mostly without dates says so rather than being filled in
 - [ADR-027: Report whether the saved week reaches the horizon, as a read-only planning rule](../adr/ADR-027-plan-feasibility.md) — *plan feasibility* above, the one place a week is totalled, and why the answer is counts rather than a ratio
 - [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — the quiz vocabulary above, and why a result states outcomes rather than a score
+- [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — the history vocabulary above, why paging is not capping, and why the pages are not numbered
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — *progress overview* above, the screen the word *dashboard* was reserved for, and why it lists what a learner marked rather than counting it
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the stages panel the overview gained, and why a subject may not carry a count or an order over the five stages
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — *priority focus area* above, the three stored facts it is gathered from, and why the recorded stage is not one of them

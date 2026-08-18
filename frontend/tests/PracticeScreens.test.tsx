@@ -19,7 +19,9 @@ const { StartQuizForm } = await import("@/features/practice/StartQuizForm");
 const { QuizForm } = await import("@/features/practice/QuizForm");
 const { AttemptResult } = await import("@/features/practice/AttemptResult");
 const { AttemptHistory } = await import("@/features/practice/AttemptHistory");
+const { PracticeHistory } = await import("@/features/practice/PracticeHistory");
 
+import type { HistoryPage } from "@/features/practice/history";
 import type { SubjectTopicOptions } from "@/features/resources/topic-options";
 import type {
   AttemptOutcome,
@@ -127,6 +129,10 @@ function attempt(overrides: Partial<QuizAttempt> = {}): QuizAttempt {
     outcomes: [outcome()],
     ...overrides,
   };
+}
+
+function historyPage(overrides: Partial<HistoryPage> = {}): HistoryPage {
+  return { attempts: [attempt()], olderOffset: null, newerOffset: null, ...overrides };
 }
 
 /** Every number rendered anywhere in the container, as strings. */
@@ -330,7 +336,7 @@ describe("AttemptResult", () => {
 
 describe("AttemptHistory", () => {
   it("lists what the learner has taken, linking to each result", () => {
-    render(<AttemptHistory attempts={[attempt()]} />);
+    render(<AttemptHistory attempts={[attempt()]} hasMore={false} />);
 
     const link = screen.getByRole("link", { name: "Practice: CPU scheduling" });
     expect(link.getAttribute("href")).toBe("/practice/attempts/attempt-1");
@@ -338,24 +344,214 @@ describe("AttemptHistory", () => {
 
   it("marks an attempt that was never submitted, without calling it a failure", () => {
     const { container } = render(
-      <AttemptHistory attempts={[attempt({ status: "in_progress", submitted_at: null })]} />,
+      <AttemptHistory
+        attempts={[attempt({ status: "in_progress", submitted_at: null })]}
+        hasMore={false}
+      />,
     );
 
-    expect(screen.getByText("Not submitted")).toBeTruthy();
-    expect(container.textContent).not.toMatch(/abandoned|gave up|incomplete/i);
+    expect(screen.getByText(/Not submitted/)).toBeTruthy();
+    expect(container.textContent).not.toMatch(/abandoned|gave up|incomplete|failure/i);
   });
 
-  it("says so plainly when nothing has been taken", () => {
-    render(<AttemptHistory attempts={[]} />);
+  it("names the topics an attempt covered, so it can be told from another", () => {
+    render(
+      <AttemptHistory
+        attempts={[
+          attempt({
+            topics: [
+              {
+                id: "topic-1",
+                code: null,
+                name: "CPU scheduling",
+                subject_id: "subject-1",
+                subject_name: "Operating Systems",
+              },
+            ],
+          }),
+        ]}
+        hasMore={false}
+      />,
+    );
+
+    expect(screen.getByText(/Operating Systems — CPU scheduling/)).toBeTruthy();
+  });
+
+  it("leads to the whole history, so nothing is out of reach from here", () => {
+    render(<AttemptHistory attempts={[attempt()]} hasMore />);
+
+    const link = screen.getByRole("link", { name: /See every quiz you have taken/i });
+    expect(link.getAttribute("href")).toBe("/practice/history");
+  });
+
+  it("says there are earlier ones without saying how many", () => {
+    const { container } = render(<AttemptHistory attempts={[attempt()]} hasMore />);
+
+    expect(screen.getByText(/These are your most recent/i)).toBeTruthy();
+    expect(container.textContent).not.toMatch(/\b\d+\s*(more|others|earlier|quizzes)\b/i);
+  });
+
+  it("says so plainly when nothing has been taken, and offers no history to open", () => {
+    render(<AttemptHistory attempts={[]} hasMore={false} />);
 
     expect(screen.getByText(/None yet/i)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /See every quiz/i })).toBeNull();
   });
 
   it("sets no attempt against another", () => {
     const { container } = render(
-      <AttemptHistory attempts={[attempt(), attempt({ id: "attempt-2" })]} />,
+      <AttemptHistory attempts={[attempt(), attempt({ id: "attempt-2" })]} hasMore={false} />,
     );
 
     expect(container.textContent).not.toMatch(/%|better|worse|improved|best/i);
+  });
+});
+
+describe("PracticeHistory", () => {
+  it("lists every attempt on the page, linking each to its result", () => {
+    render(
+      <PracticeHistory
+        page={historyPage({
+          attempts: [attempt(), attempt({ id: "attempt-2", quiz_title: "Practice: Deadlock" })],
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Practice: CPU scheduling" }).getAttribute("href"),
+    ).toBe("/practice/attempts/attempt-1");
+    expect(screen.getByRole("link", { name: "Practice: Deadlock" }).getAttribute("href")).toBe(
+      "/practice/attempts/attempt-2",
+    );
+  });
+
+  it("says in words what became of each question", () => {
+    render(
+      <PracticeHistory
+        page={historyPage({
+          attempts: [
+            attempt({
+              outcomes: [
+                outcome(),
+                outcome({ position: 2, question_id: "question-2", is_correct: false }),
+                outcome({ position: 3, question_id: "question-3", is_correct: null }),
+              ],
+            }),
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("You chose the expected answer")).toBeTruthy();
+    expect(screen.getByText("Not the expected answer")).toBeTruthy();
+    expect(screen.getByText("You did not answer this one")).toBeTruthy();
+  });
+
+  it("leaves the expected answer and the explanation to the result view", () => {
+    const { container } = render(<PracticeHistory page={historyPage()} />);
+
+    expect(container.textContent).not.toMatch(/1 KiB is 2\^10 bytes/);
+    expect(container.textContent).not.toMatch(/Expected:/);
+    expect(
+      screen.getByRole("link", { name: /Open the full result/i }).getAttribute("href"),
+    ).toBe("/practice/attempts/attempt-1");
+  });
+
+  it("opens the outcomes with no JavaScript, and keeps them closed to begin with", () => {
+    const { container } = render(<PracticeHistory page={historyPage()} />);
+
+    const details = container.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details?.hasAttribute("open")).toBe(false);
+    expect(container.querySelector("summary")?.textContent).toMatch(/each question/i);
+  });
+
+  it("reads back nothing for an attempt that was never submitted", () => {
+    const { container } = render(
+      <PracticeHistory
+        page={historyPage({
+          attempts: [attempt({ status: "in_progress", submitted_at: null, evaluated_at: null })],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/never submitted/i)).toBeTruthy();
+    expect(container.querySelector("details")).toBeNull();
+    expect(container.textContent).not.toMatch(/You did not answer this one/);
+  });
+
+  it("offers a walk back to earlier quizzes and forward to more recent ones", () => {
+    render(<PracticeHistory page={historyPage({ olderOffset: 20, newerOffset: 0 })} />);
+
+    expect(screen.getByRole("link", { name: /Earlier quizzes/i }).getAttribute("href")).toBe(
+      "/practice/history?offset=20",
+    );
+    expect(screen.getByRole("link", { name: /More recent quizzes/i }).getAttribute("href")).toBe(
+      "/practice/history",
+    );
+  });
+
+  it("offers no walk in a direction there is nothing in", () => {
+    render(<PracticeHistory page={historyPage()} />);
+
+    expect(screen.queryByRole("link", { name: /Earlier quizzes/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /More recent quizzes/i })).toBeNull();
+  });
+
+  it("distinguishes an empty first page from the end of the walk back", () => {
+    const { rerender } = render(<PracticeHistory page={historyPage({ attempts: [] })} />);
+    expect(screen.getByText(/None yet/i)).toBeTruthy();
+
+    rerender(<PracticeHistory page={historyPage({ attempts: [], newerOffset: 0 })} />);
+    expect(screen.getByText(/nothing further back/i)).toBeTruthy();
+  });
+
+  it("states no score, total, percentage, or count anywhere", () => {
+    // The rule ADR-033 fixes, held for a page of attempts rather than one:
+    // a history is a list of what happened, and nothing is added up.
+    const { container } = render(
+      <PracticeHistory
+        page={historyPage({
+          attempts: [
+            attempt({
+              outcomes: [
+                outcome(),
+                outcome({ position: 2, question_id: "question-2", is_correct: false }),
+              ],
+            }),
+            attempt({ id: "attempt-2" }),
+          ],
+          olderOffset: 20,
+          newerOffset: 0,
+        })}
+      />,
+    );
+
+    expect(container.textContent).not.toMatch(/%/);
+    expect(container.textContent).not.toMatch(/\b\d+\s*(of|\/)\s*\d+\b/);
+    expect(container.textContent).not.toMatch(
+      /score|marks|out of|correct answers|streak|average|total/i,
+    );
+    // No page numbering either: numbering the pages counts them.
+    expect(container.textContent).not.toMatch(/page \d+/i);
+  });
+
+  it("sets no attempt against another and ranks nothing", () => {
+    const { container } = render(
+      <PracticeHistory
+        page={historyPage({ attempts: [attempt(), attempt({ id: "attempt-2" })] })}
+      />,
+    );
+
+    expect(container.textContent).not.toMatch(/better|worse|improved|best|worst|progress|rank/i);
+  });
+
+  it("offers no control at all, because a record of what happened is not edited", () => {
+    const { container } = render(<PracticeHistory page={historyPage()} />);
+
+    expect(container.querySelector("button")).toBeNull();
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("input")).toBeNull();
+    expect(container.querySelector("select")).toBeNull();
   });
 });

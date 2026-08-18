@@ -33,6 +33,7 @@ related:
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
+  - ../adr/ADR-034-checkpoint-practice-history.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -897,9 +898,13 @@ Each waits on something that does not exist rather than on a decision:
   because selecting some of the five stages would rank them against each other. It is partial because
   no priority is drawn from quiz, test, or mistake evidence — quiz outcomes are now stored but
   nothing ranks or reads them, and the other two are stored nowhere. **Not met:** recent quiz history
-  and external test results on this screen; QZ-006 lists attempts on `/practice`, and `/progress`
-  deliberately gains no panel from it, because summarising attempts there is the counting
-  [terminology](../domain/terminology.md) refuses. **FR-011 is not met in full.**
+  and external test results on this screen; QZ-006 lists attempts on `/practice` and, in full and a
+  page at a time, on `/practice/history`, while `/progress` deliberately gains no panel from either,
+  because summarising attempts there is the counting
+  [terminology](../domain/terminology.md) refuses. This criterion asks for that history **on the
+  overview**, so [ADR-034](../adr/ADR-034-checkpoint-practice-history.md) leaves it unmet rather than
+  claiming it: a history a learner opens deliberately on the practice screen is not a panel that
+  follows them onto an overview. **FR-011 is not met in full.**
 - **PRG-003** promises a progress summary, evidence, and a next action. The only evidence stored is
   the stage itself, so today it would return exactly what PRG-002 returns per item.
 - **ACT-001** and **ACT-002** need `study_activities`, which is not created.
@@ -1344,6 +1349,16 @@ That is deliberate — a list that emptied a field the same schema populates els
 "this attempt had no questions" — and its cost is a payload that grows with the learner's own question
 bank. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
 
+**The checkpoint practice history reads it, outcomes and all.** `/practice/history` shows every
+attempt a page at a time, with what became of each question, and `/practice` shows the most recent —
+so the payload above is now what the screens are built from, and the *separate summary shape* ADR-033
+named as its eventual fix is deliberately not taken. Paging uses the `limit` and `offset` this
+endpoint has always accepted; **no query parameter is added**, and nothing about this contract
+changes. `pagination.total` is **never read** by either screen: on this endpoint it is the count of
+the learner's quizzes, which [terminology](../domain/terminology.md) forbids showing by name, so
+whether an older page exists is decided by asking for one record more than a page holds. See
+[ADR-034](../adr/ADR-034-checkpoint-practice-history.md).
+
 ### QZ-007 — `GET /api/v1/quiz-attempts/{attempt_id}`
 
 An attempt still `in_progress` reads back **without** its expected answers and explanations, so
@@ -1506,3 +1521,4 @@ Implement in an order that enables one working learner flow:
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the seventh and eighth contracts that screen reads, PRG-002 and CUR-003, and why neither gains a filter or a field
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the panel that added no read and no contract, and what PRG-001 waits on now
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the four resource contracts above, why the other four stay unimplemented, and what a resource may point at
+- [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — why the history reads QZ-006 unchanged, and why `pagination.total` is never read
