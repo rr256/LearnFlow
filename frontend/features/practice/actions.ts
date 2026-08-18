@@ -28,6 +28,7 @@ import { redirect } from "next/navigation";
 
 import {
   readAttemptSubmission,
+  readQuestionCorrection,
   readQuestionStatusSubmission,
   readQuestionSubmission,
   readQuizTopics,
@@ -39,6 +40,7 @@ import {
 import {
   ApiError,
   assembleCheckpointQuiz,
+  correctPracticeQuestion,
   startQuizAttempt,
   submitQuizAttempt,
   updatePracticeQuestionStatus,
@@ -70,6 +72,43 @@ export async function writeQuestionAction(
     return {
       status: "saved",
       message: `Added “${question.prompt}” to your practice questions.`,
+    };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+    throw error;
+  }
+}
+
+/**
+ * QZ-010 -- correct one practice question the learner has written.
+ *
+ * **Only a question no quiz has asked may be corrected**, and only while it is in
+ * use. Whether that holds is the backend's to decide — it is the one place that
+ * can see whether a quiz asks the question — so this sends the correction and
+ * shows the refusal when one comes back, rather than guessing here.
+ *
+ * The content is sent as a whole, so an explanation the learner cleared is
+ * cleared. Only the named question moves: no quiz, no attempt, no learning
+ * stage, no plan, no plan item, and no revision, and **no past result changes**.
+ */
+export async function correctQuestionAction(
+  _previous: QuestionFormState,
+  form: FormData,
+): Promise<QuestionFormState> {
+  const submission = readQuestionCorrection(form);
+  if (!submission) {
+    return { status: "error", message: UNUSABLE_QUESTION_FORM };
+  }
+
+  const { questionId, ...content } = submission;
+  try {
+    const question = await correctPracticeQuestion(questionId, content);
+    revalidatePath("/practice");
+    return {
+      status: "saved",
+      message: `Corrected. It now reads “${question.prompt}”.`,
     };
   } catch (error) {
     if (error instanceof ApiError) {

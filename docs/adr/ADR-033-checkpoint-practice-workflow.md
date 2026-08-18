@@ -17,6 +17,7 @@ related:
   - ADR-029-progress-overview.md
   - ADR-031-priority-focus-panel.md
   - ADR-032-learning-resource-catalogue.md
+  - ADR-035-practice-question-correction.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../api/versioning.md
@@ -46,6 +47,11 @@ milestone's **first two items only**, exactly as
 It is constrained throughout by [ADR-008](ADR-008-assessment-and-mistake-evidence-model.md), which is
 **accepted** and already fixes how a quiz links to topics and where quiz evidence may and may not be
 written. Nothing here reopens any of that.
+
+**Amended on one point by [ADR-035](ADR-035-practice-question-correction.md):** the rule *"a question
+is never edited"* below now reads *"never edited **once a quiz has asked it**"*. The reasoning stated
+here is unchanged and is what ADR-035 applies — a question no quiz has asked has no attempt
+referencing it, so correcting one rewrites no history. Everything else in this decision stands.
 
 ## Context
 

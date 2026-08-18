@@ -32,6 +32,7 @@ related:
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-034-checkpoint-practice-history.md
+  - ../adr/ADR-035-practice-question-correction.md
   - ../domain/terminology.md
 ---
 
@@ -375,8 +376,7 @@ external-tests/
 
 Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, `resources/`, and `practice/` exist today.
 
-`practice/` holds **checkpoint practice**: `QuestionForm.tsx` for writing a question,
-`QuestionBank.tsx` and `QuestionStatusControl.tsx` for reading them back and setting one aside,
+`practice/` holds **checkpoint practice**: `QuestionForm.tsx` serving both writing and **correcting** — one component, as `ResourceForm` is for a resource, since both ask for the same five fields and differ only in whether they start filled and which endpoint they reach — `QuestionBank.tsx` and `QuestionStatusControl.tsx` for reading them back, correcting one behind a `<details>` disclosure, and setting one aside,
 `StartQuizForm.tsx` for choosing topics, `QuizForm.tsx` for answering a quiz in one form post,
 `AttemptResult.tsx` for what became of each question, `AttemptHistory.tsx` for the most recent
 attempts on `/practice`, `PracticeHistory.tsx` for the whole history at `/practice/history`,
@@ -389,8 +389,9 @@ ranks anything**, and none renders a score. `history.ts` is plain functions, for
 `resources/by-topic.ts` is: they are testable without a running server. Its `HistoryPage` carries
 exactly three fields — the attempts and the two offsets — so there is nowhere for a count to appear,
 and `pagination.total` is never read. See
-[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) and
-[ADR-034](../adr/ADR-034-checkpoint-practice-history.md).
+[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md),
+[ADR-034](../adr/ADR-034-checkpoint-practice-history.md), and
+[ADR-035](../adr/ADR-035-practice-question-correction.md).
 
 `resources/` holds the **learning-resource catalogue**, which supports **add, edit, and archive**:
 `ResourceCatalogue.tsx` for the screen and `ResourceForm.tsx` for both the add and the edit form —
@@ -455,15 +456,15 @@ onboarded — and it writes nothing.
 | `progress/stages.ts` | Joins PRG-002's records onto the topics CUR-003 returns, and reports the stage for one topic. Plain functions, so they are testable without a running server. A stage this build does not recognise is skipped rather than shown raw. |
 | `progress/submission.ts` | Reads the stage form into the request it makes, and owns the control's state shape. |
 | `progress/actions.ts` | The `"use server"` module holding the write path. |
-| `practice/QuestionForm.tsx` | Where a learner writes one practice question of their own, with its CSS Module. A client component only so it can report the last submission; it offers no way to generate a question, because LearnFlow writes none. |
+| `practice/QuestionForm.tsx` | Where a learner writes one practice question of their own **and where they correct one**, with its CSS Module — one component for both, as `ResourceForm` is for a resource, since they ask for the same five fields and differ only in whether they start filled and which action they reach. A client component only so it can report the last submission; it offers no way to generate a question, because LearnFlow writes none. |
 | `practice/QuestionBank.tsx` | The questions the learner has written, newest first, with the expected answer named in words. A question set aside is still listed, so it can be brought back. Nothing is counted or ranked. |
 | `practice/QuestionStatusControl.tsx` | The control beside one question that sets it aside or brings it back, with its CSS Module. Nothing here deletes, and nothing here edits. |
 | `practice/StartQuizForm.tsx` | Where a learner chooses the topics to practise, with its CSS Module. The quiz asks every question written for them, so nothing here picks a count or a difficulty. |
 | `practice/QuizForm.tsx` | The quiz being answered, with its CSS Module. Pre-selects nothing, submits the whole attempt in one form post, and shows no expected answer — QZ-002 sends none. |
 | `practice/AttemptResult.tsx` | What became of each question, with its CSS Module. **Renders no score and derives nothing**, and colours no outcome: the words carry the meaning. |
 | `practice/AttemptHistory.tsx` | The quizzes the learner has taken, linking to each result. No attempt is set against another. |
-| `practice/submission.ts` | Reads the four practice forms into the requests they make, and owns their state shapes. It re-indexes the expected answer when a blank option is dropped, and leaves an unanswered question out of a submission rather than sending a blank. |
-| `practice/actions.ts` | The `"use server"` module holding the write, retire, assemble, and submit paths. The last two redirect, so the flow works with no JavaScript. |
+| `practice/submission.ts` | Reads the five practice forms into the requests they make, and owns their state shapes. A correction is the same reading as a written question plus the question it corrects, so `readQuestionCorrection` reuses `readQuestionSubmission` rather than repeating it. It re-indexes the expected answer when a blank option is dropped, and leaves an unanswered question out of a submission rather than sending a blank. |
+| `practice/actions.ts` | The `"use server"` module holding the write, **correct**, retire, assemble, and submit paths. The last two redirect, so the flow works with no JavaScript. |
 
 A goal response carries the examination **window** but not the dated periods, per
 [endpoints](../api/endpoints.md#learner-setup-and-goal-endpoints), so a screen wanting the
@@ -631,6 +632,7 @@ Local data locations are configured through environment variables and Docker vol
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the two modules that route gained again, why the panel renders no control, and why it adds no read at all
 - [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — `checkpoint_marking.py`, the `practice/` feature module, and the three practice routes
 - [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — the fourth practice route, and the `history.ts` module behind it
+- [ADR-035: Let a practice question be corrected until a quiz has asked it](../adr/ADR-035-practice-question-correction.md) — why `QuestionForm.tsx` serves two jobs, and where the correction form sits
 - [Terminology](../domain/terminology.md) — why that module keeps the narrower name
 - [API conventions](../api/conventions.md) — the contract `frontend/types/` is derived from
 - [API endpoint catalog](../api/endpoints.md) — the endpoints each screen above reads, and the response fields they carry

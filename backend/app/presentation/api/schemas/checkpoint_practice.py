@@ -27,7 +27,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.application.dto.checkpoint_practice import (
     MARKABLE_QUESTION_TYPES,
@@ -41,6 +41,7 @@ from app.application.dto.checkpoint_practice import (
     NewQuiz,
     PracticeTopic,
     QuestionChanges,
+    QuestionContent,
     QuestionDetail,
     QuestionPage,
     QuizDetail,
@@ -213,24 +214,107 @@ class WriteQuestionRequest(BaseModel):
 class UpdateQuestionRequest(BaseModel):
     """A change to a practice question (QZ-010).
 
-    **`status` is the only field.** A prompt, its options, its expected answer,
-    its explanation, and its topics are fixed once written, because
-    `quiz_attempt_answers` references the question by identifier and rewriting a
-    prompt would silently rewrite the history of every attempt already marked
-    against it. Correct a question by retiring it and writing another.
+    Either or both of a `status` and the question's content. An empty body is
+    refused: a request naming nothing to change has misread the contract.
+
+    **The content fields travel as one group** — `prompt`, `options`,
+    `correct_option_index`, and `topic_ids` are supplied together or not at all,
+    because option keys are assigned by position and the expected answer is an
+    index into the options, so one without the others could not be interpreted.
+    An `explanation` left out of a supplied group is **cleared**, which is the
+    group-replacement rule ADR-019 fixed for planning preferences.
+
+    **Content may be rewritten only while no quiz has asked the question**, and
+    only while it is `ready`. Once a quiz has asked it, `quiz_attempt_answers`
+    references it by identifier and a stored `is_correct` was decided against the
+    wording as it then stood, so rewriting it would change what a past result
+    says; the learner sets it aside and writes another instead. See ADR-033,
+    narrowed by ADR-035.
     """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    status: str = Field(
+    status: str | None = Field(
+        default=None,
         description=(
             f"One of: {', '.join(QUESTION_STATUSES)}. Retiring is reversible and destroys nothing."
-        )
+        ),
     )
+    prompt: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_PROMPT_LENGTH,
+        description="The corrected question, in your own words.",
+    )
+    options: list[str] | None = Field(
+        default=None,
+        min_length=MIN_OPTIONS,
+        max_length=MAX_OPTIONS,
+        description=(
+            f"The options now offered, {MIN_OPTIONS} to {MAX_OPTIONS} of them, in order. Keys are "
+            "reassigned by position: the first is `a`, the second `b`."
+        ),
+    )
+    correct_option_index: int | None = Field(
+        default=None,
+        ge=0,
+        lt=MAX_OPTIONS,
+        description="Which option is now the expected answer, counted from zero.",
+    )
+    explanation: str | None = Field(
+        default=None,
+        max_length=MAX_EXPLANATION_LENGTH,
+        description=(
+            "Why that answer is the expected one. Left out of a supplied content group, it is "
+            "cleared."
+        ),
+    )
+    topic_ids: list[uuid.UUID] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_TOPIC_LINKS,
+        description="The topics this question now covers, replacing the ones it named.",
+    )
+
+    @model_validator(mode="after")
+    def _content_travels_together(self) -> UpdateQuestionRequest:
+        """Refuse a content group that is only partly supplied.
+
+        Rejected rather than filled in from what is stored: an expected answer is
+        an index into the options of *this* request, so pairing it with options
+        the caller did not send would mark a different answer as expected.
+        """
+        supplied = {
+            "prompt": self.prompt is not None,
+            "options": self.options is not None,
+            "correct_option_index": self.correct_option_index is not None,
+            "topic_ids": self.topic_ids is not None,
+        }
+        if any(supplied.values()) and not all(supplied.values()):
+            missing = ", ".join(name for name, given in supplied.items() if not given)
+            raise ValueError(
+                "A question's content is corrected as a whole, so prompt, options, "
+                f"correct_option_index, and topic_ids travel together. Missing: {missing}."
+            )
+        if self.explanation is not None and not any(supplied.values()):
+            raise ValueError(
+                "An explanation is part of the question's content, so it is sent with the "
+                "prompt, options, correct_option_index, and topic_ids."
+            )
+        return self
 
     def to_changes(self) -> QuestionChanges:
         """Map the request onto the application's partial-update structure."""
-        return QuestionChanges(status=self.status)
+        content = None
+        if self.prompt is not None:
+            content = QuestionContent(
+                prompt=self.prompt,
+                option_texts=tuple(self.options or ()),
+                correct_option_index=self.correct_option_index or 0,
+                explanation=self.explanation,
+                topic_ids=tuple(self.topic_ids or ()),
+            )
+        return QuestionChanges(status=self.status, content=content)
 
 
 class QuizQuestionSchema(BaseModel):

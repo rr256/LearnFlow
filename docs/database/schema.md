@@ -7,6 +7,7 @@ related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
+  - ../adr/ADR-035-practice-question-correction.md
   - ../00-project-context.md
   - overview.md
   - ../domain/domain-model.md
@@ -1521,8 +1522,10 @@ Each is absent because nothing maintains it, which is the rule ADR-011 states an
 - **`quiz_attempts.duration_seconds`.** Nothing times an attempt, and `started_at` and `submitted_at`
   already bound one, so storing the span between them would be a second source of truth.
 - **`quiz_attempt_answers.feedback`.** It would freeze the explanation an answer was marked with. It
-  is unnecessary because **a question is never edited** — only retired and rewritten — so the
-  explanation on the question cannot drift away from an attempt marked against it. This is where the
+  is unnecessary because **a question a quiz has asked is never edited** — from then on it is only
+  retired and rewritten — so the explanation on the question cannot drift away from an attempt
+  marked against it. A question no quiz has asked may be corrected, and has no attempt to drift
+  from ([ADR-035](../adr/ADR-035-practice-question-correction.md)). This is where the
   assessment area differs from `revision_records`, which needed `recommendation_reason` precisely
   because its inputs can move.
 

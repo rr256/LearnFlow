@@ -6,15 +6,21 @@ tests/integration/test_checkpoint_practice_api.py.
 
 Three product rules are asserted repeatedly because the feature rests on them:
 every question is the **learner's own** and nothing is generated or shipped, a
-question is **never edited** — only retired and rewritten — and writing one
-**moves nothing else**.
+question is corrected **only while no quiz has asked it** — once one has, it is
+retired and rewritten — and writing one **moves nothing else**.
 """
 
 import uuid
 
 import pytest
 
-from app.application.dto.checkpoint_practice import CURATED, QuestionChanges, QuestionFilters
+from app.application.dto.checkpoint_practice import (
+    CURATED,
+    NewQuiz,
+    QuestionChanges,
+    QuestionContent,
+    QuestionFilters,
+)
 from app.application.use_cases.local_learner import AmbiguousLocalLearnerError
 from app.application.use_cases.manage_practice_questions import (
     DuplicateOptionError,
@@ -23,7 +29,9 @@ from app.application.use_cases.manage_practice_questions import (
     LearnerNotSetUpError,
     MissingPromptError,
     MissingTopicLinkError,
+    QuestionAlreadyAskedError,
     QuestionNotFoundError,
+    RetiredQuestionEditError,
     TooManyTopicLinksError,
     UnknownExpectedAnswerError,
     UnknownQuestionStatusError,
@@ -241,7 +249,7 @@ def test_retiring_is_reversible(practising):
 
 
 def test_retiring_keeps_everything_the_question_said(practising):
-    """A question is never edited, so nothing but its status may move."""
+    """A status-only update moves the status and nothing else."""
     author = practising.author()
     written = author.write(a_question(topic_ids=(practising.topic.id,)))
 
@@ -283,3 +291,248 @@ def test_another_learners_question_is_reported_as_missing(practising):
 
     with pytest.raises(QuestionNotFoundError):
         practising.author().update(written.id, QuestionChanges(status="retired"))
+
+
+# -- correcting ---------------------------------------------------------------
+
+
+def a_correction(**fields: object) -> QuestionContent:
+    """A whole replacement content group, overridable field by field."""
+    defaults: dict[str, object] = {
+        "prompt": "How many bits address 1 MiB?",
+        "option_texts": ("10", "20", "16"),
+        "correct_option_index": 1,
+        "explanation": "1 MiB is 2^20 bytes, so twenty bits address it.",
+        "topic_ids": (),
+    }
+    defaults.update(fields)
+    return QuestionContent(**defaults)  # type: ignore[arg-type]
+
+
+def test_a_question_no_quiz_has_asked_can_be_corrected(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    corrected = author.update(
+        written.id, QuestionChanges(content=a_correction(topic_ids=(practising.topic.id,)))
+    )
+
+    assert corrected.prompt == "How many bits address 1 MiB?"
+    assert [option.text for option in corrected.options] == ["10", "20", "16"]
+    assert corrected.explanation == "1 MiB is 2^20 bytes, so twenty bits address it."
+
+
+def test_correcting_keeps_the_question_and_its_identity(practising):
+    """A correction is the same question said better, not a second one."""
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    corrected = author.update(
+        written.id, QuestionChanges(content=a_correction(topic_ids=(practising.topic.id,)))
+    )
+
+    assert corrected.id == written.id
+    assert len(practising.practice.questions) == 1
+
+
+def test_correcting_leaves_written_at_alone(practising):
+    """`written_at` orders a quiz, so moving it would reorder one."""
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    corrected = author.update(
+        written.id, QuestionChanges(content=a_correction(topic_ids=(practising.topic.id,)))
+    )
+
+    assert corrected.written_at == written.written_at
+
+
+def test_option_keys_are_reassigned_by_position_on_a_correction(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    corrected = author.update(
+        written.id, QuestionChanges(content=a_correction(topic_ids=(practising.topic.id,)))
+    )
+
+    assert [option.key for option in corrected.options] == ["a", "b", "c"]
+    assert corrected.expected_option_key == "b"
+
+
+def test_a_correction_replaces_the_topics_it_covers(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    corrected = author.update(
+        written.id, QuestionChanges(content=a_correction(topic_ids=(practising.other_topic.id,)))
+    )
+
+    assert [topic.id for topic in corrected.topics] == [practising.other_topic.id]
+
+
+def test_a_correction_leaving_out_an_explanation_clears_it(practising):
+    """The content is one group, so a member left out is unset (ADR-019's rule)."""
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    corrected = author.update(
+        written.id,
+        QuestionChanges(content=a_correction(explanation=None, topic_ids=(practising.topic.id,))),
+    )
+
+    assert corrected.explanation is None
+
+
+def test_a_correction_can_travel_with_a_status(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    corrected = author.update(
+        written.id,
+        QuestionChanges(status="retired", content=a_correction(topic_ids=(practising.topic.id,))),
+    )
+
+    assert corrected.status == "retired"
+    assert corrected.prompt == "How many bits address 1 MiB?"
+
+
+def test_a_question_a_quiz_has_asked_cannot_be_corrected(practising):
+    """The rule ADR-033 gave and ADR-035 narrowed: history must not be rewritten."""
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+    practising.quizzes().assemble(NewQuiz(topic_ids=(practising.topic.id,)))
+
+    with pytest.raises(QuestionAlreadyAskedError):
+        author.update(
+            written.id, QuestionChanges(content=a_correction(topic_ids=(practising.topic.id,)))
+        )
+
+
+def test_a_question_a_quiz_has_asked_can_still_be_retired(practising):
+    """Setting aside stays available: it is what a learner does instead of correcting."""
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+    practising.quizzes().assemble(NewQuiz(topic_ids=(practising.topic.id,)))
+
+    retired = author.update(written.id, QuestionChanges(status="retired"))
+
+    assert retired.status == "retired"
+
+
+def test_a_refused_correction_changes_nothing(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+    practising.quizzes().assemble(NewQuiz(topic_ids=(practising.topic.id,)))
+
+    with pytest.raises(QuestionAlreadyAskedError):
+        author.update(
+            written.id, QuestionChanges(content=a_correction(topic_ids=(practising.topic.id,)))
+        )
+
+    assert practising.practice.questions[0].prompt == written.prompt
+    assert practising.practice.questions[0].expected_option_key == written.expected_option_key
+
+
+def test_a_question_set_aside_cannot_be_corrected_as_it_stands(practising):
+    """ADR-032's two-step: bring it back, then correct it."""
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+    author.update(written.id, QuestionChanges(status="retired"))
+
+    with pytest.raises(RetiredQuestionEditError):
+        author.update(
+            written.id, QuestionChanges(content=a_correction(topic_ids=(practising.topic.id,)))
+        )
+
+
+def test_bringing_a_question_back_lets_it_be_corrected_again(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+    author.update(written.id, QuestionChanges(status="retired"))
+    author.update(written.id, QuestionChanges(status="ready"))
+
+    corrected = author.update(
+        written.id, QuestionChanges(content=a_correction(topic_ids=(practising.topic.id,)))
+    )
+
+    assert corrected.prompt == "How many bits address 1 MiB?"
+
+
+def test_a_correction_asking_to_be_brought_back_at_once_is_still_refused(practising):
+    """Eligibility is read from what is stored, never from the request."""
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+    author.update(written.id, QuestionChanges(status="retired"))
+
+    with pytest.raises(RetiredQuestionEditError):
+        author.update(
+            written.id,
+            QuestionChanges(status="ready", content=a_correction(topic_ids=(practising.topic.id,))),
+        )
+
+
+def test_a_correction_with_no_prompt_is_refused(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    with pytest.raises(MissingPromptError):
+        author.update(
+            written.id,
+            QuestionChanges(content=a_correction(prompt="  ", topic_ids=(practising.topic.id,))),
+        )
+
+
+def test_a_correction_repeating_an_option_is_refused(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    with pytest.raises(DuplicateOptionError):
+        author.update(
+            written.id,
+            QuestionChanges(
+                content=a_correction(option_texts=("10", "10"), topic_ids=(practising.topic.id,))
+            ),
+        )
+
+
+def test_a_correction_whose_expected_answer_names_no_option_is_refused(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    with pytest.raises(UnknownExpectedAnswerError):
+        author.update(
+            written.id,
+            QuestionChanges(
+                content=a_correction(correct_option_index=9, topic_ids=(practising.topic.id,))
+            ),
+        )
+
+
+def test_a_correction_covering_no_topic_is_refused(practising):
+    """A question covering nothing could never be asked, exactly as when written."""
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    with pytest.raises(MissingTopicLinkError):
+        author.update(written.id, QuestionChanges(content=a_correction(topic_ids=())))
+
+
+def test_a_correction_naming_a_topic_that_is_not_stored_is_refused(practising):
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    with pytest.raises(UnknownTopicError):
+        author.update(written.id, QuestionChanges(content=a_correction(topic_ids=(uuid.uuid4(),))))
+
+
+def test_correcting_moves_nothing_else(practising):
+    """No quiz, no attempt, no stage, no plan, and no revision."""
+    author = practising.author()
+    written = author.write(a_question(topic_ids=(practising.topic.id,)))
+
+    author.update(
+        written.id, QuestionChanges(content=a_correction(topic_ids=(practising.topic.id,)))
+    )
+
+    assert practising.practice.quizzes == []
+    assert practising.practice.attempts == []

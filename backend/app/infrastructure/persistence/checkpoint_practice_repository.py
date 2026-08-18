@@ -142,9 +142,14 @@ class SqlAlchemyCheckpointPracticeRepository:
     def update_question(self, record: QuestionRecord) -> None:
         """Store a changed question.
 
-        Only `status` may differ; see `QuestionChanges`. The prompt, options,
-        expected answer, and explanation are written back unchanged rather than
-        left out, so this mapping stays complete if that rule is ever revisited.
+        `status` may differ, and so may the prompt, options, expected answer, and
+        explanation once ADR-035 allowed a question no quiz has asked to be
+        corrected. The use case decides whether a rewrite is permitted; this
+        writes whatever it was given.
+
+        The `jsonb` payloads are shaped here and nowhere else, exactly as
+        `add_question` shapes them, so no layer above persistence knows the
+        stored form.
 
         Raises:
             LookupError: The question is not stored. The use case has already
@@ -155,6 +160,27 @@ class SqlAlchemyCheckpointPracticeRepository:
         if row is None:
             raise LookupError(f"No practice question is stored with identifier {record.id}.")
         row.status = record.status
+        row.prompt = record.prompt
+        row.options = [{"key": option.key, "text": option.text} for option in record.options]
+        row.expected_answer = {OPTION_KEY: record.expected_option_key}
+        row.explanation = record.explanation
+
+    def has_been_asked(self, question_id: uuid.UUID) -> bool:
+        """Whether any assembled quiz asks this question.
+
+        A boolean, never a count: how many quizzes ask a question is a figure
+        nothing needs. `EXISTS` also stops at the first row rather than walking
+        every quiz the question appears in.
+        """
+        return bool(
+            self._session.scalar(
+                select(
+                    select(QuizQuestion.checkpoint_quiz_id)
+                    .where(QuizQuestion.question_id == question_id)
+                    .exists()
+                )
+            )
+        )
 
     def replace_question_topic_links(
         self, *, question_id: uuid.UUID, topic_ids: Sequence[uuid.UUID]

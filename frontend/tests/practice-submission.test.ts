@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   readAttemptSubmission,
+  readQuestionCorrection,
   readQuestionStatusSubmission,
   readQuestionSubmission,
   readQuizTopics,
@@ -130,6 +131,53 @@ describe("readQuestionSubmission", () => {
     );
 
     expect(submission?.topic_ids).toEqual(["topic-1", "topic-2", "topic-3"]);
+  });
+});
+
+describe("readQuestionCorrection", () => {
+  it("reads the question it corrects alongside the whole content", () => {
+    expect(readQuestionCorrection(form([...A_QUESTION, ["question_id", "question-1"]]))).toEqual({
+      questionId: "question-1",
+      prompt: "How many bits address 1 KiB?",
+      options: ["8", "10", "16", "1024"],
+      correct_option_index: 1,
+      explanation: null,
+      topic_ids: ["topic-1"],
+    });
+  });
+
+  it("clears an explanation the learner emptied, because the content is one group", () => {
+    const correction = readQuestionCorrection(
+      form([...A_QUESTION, ["question_id", "question-1"], ["explanation", "   "]]),
+    );
+
+    expect(correction?.explanation).toBeNull();
+  });
+
+  it("sends nothing when the question is not named", () => {
+    expect(readQuestionCorrection(form(A_QUESTION))).toBeNull();
+  });
+
+  it("sends nothing when the form asks for something unsendable", () => {
+    expect(
+      readQuestionCorrection(
+        form([
+          ["question_id", "question-1"],
+          ["prompt", "How many bits address 1 KiB?"],
+          ["option_0", "8"],
+          ["correct_option", "0"],
+          ["topic_ids", "topic-1"],
+        ]),
+      ),
+    ).toBeNull();
+  });
+
+  it("decides nothing about whether the question may still be corrected", () => {
+    // Whether a quiz has asked it is a backend fact this form cannot see, so
+    // the reading never refuses on that ground.
+    expect(
+      readQuestionCorrection(form([...A_QUESTION, ["question_id", "question-1"]])),
+    ).not.toBeNull();
   });
 });
 

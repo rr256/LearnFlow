@@ -20,6 +20,7 @@ related:
   - ../database/schema.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
+  - ../adr/ADR-035-practice-question-correction.md
 ---
 
 # LearnFlow Domain Entities
@@ -236,7 +237,7 @@ Represents one answerable item in a checkpoint quiz or a verified practice sourc
 
 **Responsible for:** storing the prompt, answer format, possible options where applicable, expected answer, explanation, source type, difficulty, and topic links.
 
-As built, it is **written by the learner** and stores no difficulty: no controlled vocabulary decides one, and a difficulty would rank one question above another. It is **never edited** — a learner corrects one by setting it aside and writing another. Option keys are assigned by position rather than accepted from a caller. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
+As built, it is **written by the learner** and stores no difficulty: no controlled vocabulary decides one, and a difficulty would rank one question above another. It is **never edited once a quiz has asked it** — from then on a learner corrects one by setting it aside and writing another, because an attempt marked against it references it by identifier. Until then it may be corrected in place, keeping the same record, with its content replaced as a whole; one already set aside is read-only until brought back, and **no past result ever changes**. Option keys are assigned by position rather than accepted from a caller. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md), amended by [ADR-035](../adr/ADR-035-practice-question-correction.md).
 
 **Key relationships:** belongs to a checkpoint quiz or reusable question bank; may link to multiple topics; receives learner answers through quiz attempts.
 

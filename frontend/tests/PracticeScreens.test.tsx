@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // disabled.
 vi.mock("@/features/practice/actions", () => ({
   writeQuestionAction: vi.fn(),
+  correctQuestionAction: vi.fn(),
   saveQuestionStatus: vi.fn(),
   startQuizAction: vi.fn(),
   submitAnswersAction: vi.fn(),
@@ -148,10 +149,11 @@ describe("QuestionForm", () => {
     expect(screen.getByRole("option", { name: "CPU scheduling" })).toBeTruthy();
   });
 
-  it("says a question cannot be edited afterwards", () => {
+  it("says a question can be corrected only until a quiz has asked it", () => {
     render(<QuestionForm topicGroups={topicGroups} />);
 
-    expect(screen.getByText(/cannot be edited/i)).toBeTruthy();
+    expect(screen.getByText(/until a quiz has asked it/i)).toBeTruthy();
+    expect(screen.getByText(/set it aside and write another/i)).toBeTruthy();
   });
 
   it("offers no way to generate a question", () => {
@@ -170,27 +172,64 @@ describe("QuestionForm", () => {
 
 describe("QuestionBank", () => {
   it("lists what the learner wrote, with the expected answer named in words", () => {
-    render(<QuestionBank questions={[question()]} />);
+    render(<QuestionBank questions={[question()]} topicGroups={topicGroups} />);
 
-    expect(screen.getByText("How many bits address 1 KiB?")).toBeTruthy();
-    expect(screen.getByText(/the expected answer/i)).toBeTruthy();
+    // The prompt also fills the correction form's textarea, so this asserts it
+    // is *shown* as text rather than only being editable.
+    const shown = screen.getAllByText("How many bits address 1 KiB?");
+    expect(shown.some((node) => node.tagName === "P")).toBe(true);
+    // The correction form labels its radios with the same phrase, so this
+    // asserts the note the bank writes beside the option itself.
+    const named = screen.getAllByText(/the expected answer/i);
+    expect(named.some((node) => node.tagName === "SPAN")).toBe(true);
+  });
+
+  it("offers a correction form for a question still in use", () => {
+    render(<QuestionBank questions={[question()]} topicGroups={topicGroups} />);
+
+    expect(screen.getByText(/correct this question/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /save this correction/i })).toBeTruthy();
+  });
+
+  it("starts the correction form filled with what the question already says", () => {
+    render(<QuestionBank questions={[question()]} topicGroups={topicGroups} />);
+
+    const prompt = screen.getByRole("textbox", { name: /question/i }) as HTMLTextAreaElement;
+    expect(prompt.value).toBe("How many bits address 1 KiB?");
+  });
+
+  it("keeps the correction form closed until the learner opens it", () => {
+    const { container } = render(<QuestionBank questions={[question()]} topicGroups={topicGroups} />);
+
+    // `details` opens with no JavaScript, so the form is reachable on a page
+    // that never hydrates.
+    const details = container.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details?.hasAttribute("open")).toBe(false);
+  });
+
+  it("offers no correction for a question set aside, and says why", () => {
+    render(<QuestionBank questions={[question({ status: "retired" })]} topicGroups={topicGroups} />);
+
+    expect(screen.queryByRole("button", { name: /save this correction/i })).toBeNull();
+    expect(screen.getByText(/bring this back into use to correct it/i)).toBeTruthy();
   });
 
   it("still lists a question that has been set aside, so it can be brought back", () => {
-    render(<QuestionBank questions={[question({ status: "retired" })]} />);
+    render(<QuestionBank questions={[question({ status: "retired" })]} topicGroups={topicGroups} />);
 
     expect(screen.getByText("Set aside")).toBeTruthy();
     expect(screen.getByRole("button", { name: /use it again/i })).toBeTruthy();
   });
 
   it("says so plainly when nothing has been written", () => {
-    render(<QuestionBank questions={[]} />);
+    render(<QuestionBank questions={[]} topicGroups={topicGroups} />);
 
     expect(screen.getByText(/have not written any yet/i)).toBeTruthy();
   });
 
   it("states no figure about how many questions there are", () => {
-    const { container } = render(<QuestionBank questions={[question(), question({ id: "q2" })]} />);
+    const { container } = render(<QuestionBank questions={[question(), question({ id: "q2" })]} topicGroups={topicGroups} />);
 
     // The only digits belong to the question text itself, never to a tally.
     expect(digitsIn(container).every((value) => !value.endsWith("%"))).toBe(true);

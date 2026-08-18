@@ -38,7 +38,9 @@ from app.application.use_cases.manage_practice_questions import (
     ManagePracticeQuestions,
     MissingPromptError,
     MissingTopicLinkError,
+    QuestionAlreadyAskedError,
     QuestionNotFoundError,
+    RetiredQuestionEditError,
     TooManyTopicLinksError,
     UnknownExpectedAnswerError,
     UnknownQuestionStatusError,
@@ -175,28 +177,40 @@ def list_questions(
 
 @router.patch(
     "/{question_id}",
-    summary="Set a practice question aside, or bring it back",
+    summary="Correct a practice question, set it aside, or bring it back",
     response_model=QuestionResponse,
     responses=_NOT_FOUND_RESPONSE | _CONFLICT_RESPONSE,
 )
 def update_question(
     question_id: uuid.UUID, request: UpdateQuestionRequest, author: Author
 ) -> QuestionResponse:
-    """Retire a question so no new quiz asks it, or make it askable again.
+    """Correct a question, retire it so no new quiz asks it, or bring it back.
 
-    **Status is the only thing this changes.** A prompt, its options, its expected
-    answer, its explanation, and its topics are fixed once written, because
-    `quiz_attempt_answers` references the question by identifier: rewriting a
-    prompt would silently rewrite the history of every attempt already marked
-    against it. Correct a question by retiring it and writing another — both stay
-    readable, which is the position ADR-022 takes for a superseded plan.
+    **A question may be corrected only while no quiz has asked it**, and only
+    while it is `ready`. Once a quiz has asked it, `quiz_attempt_answers`
+    references the question by identifier and a stored `is_correct` was decided
+    against the wording as it then stood, so rewriting it would change what every
+    past result says the learner answered: that is refused with `409`, and the
+    learner sets it aside and writes the corrected question instead — both stay
+    readable, which is the position ADR-022 takes for a superseded plan. ADR-033
+    fixed this rule for every question; ADR-035 narrows it to an asked one.
+
+    A question already set aside is read-only and is refused with `409` too: the
+    learner brings it back, then corrects it, which is ADR-032's two-step for an
+    archived resource.
+
+    **The content is corrected as a whole.** An explanation left out of a supplied
+    group is cleared and the topic links are replaced, which is ADR-019's rule for
+    planning preferences. Option keys are reassigned by position, never accepted
+    from a caller.
 
     **Retiring is reversible and destroys nothing.** A retired question stays in
     every quiz already assembled from it, because those quizzes have attempts
     marked against them.
 
     **Only the named question moves.** No quiz, no attempt, no learning stage, no
-    plan, no plan item, and no revision.
+    plan, no plan item, and no revision — and no past result changes, by
+    construction rather than by care.
 
     QZ-010. Serves FR-009.
     """
@@ -208,6 +222,26 @@ def update_question(
         raise _rejected("body", str(error), "empty_update") from error
     except UnknownQuestionStatusError as error:
         raise _rejected("body.status", str(error), "unknown_question_status") from error
+    except MissingPromptError as error:
+        raise _rejected("body.prompt", str(error), "missing_prompt") from error
+    except DuplicateOptionError as error:
+        raise _rejected("body.options", str(error), "duplicate_option") from error
+    except UnusableOptionsError as error:
+        raise _rejected("body.options", str(error), "unusable_options") from error
+    except UnknownExpectedAnswerError as error:
+        raise _rejected(
+            "body.correct_option_index", str(error), "unknown_expected_answer"
+        ) from error
+    except MissingTopicLinkError as error:
+        raise _rejected("body.topic_ids", str(error), "missing_topic") from error
+    except UnknownTopicError as error:
+        raise _rejected("body.topic_ids", str(error), "unknown_topic") from error
+    except DuplicateTopicLinkError as error:
+        raise _rejected("body.topic_ids", str(error), "duplicate_topic") from error
+    except TooManyTopicLinksError as error:
+        raise _rejected("body.topic_ids", str(error), "too_many_topics") from error
+    except (RetiredQuestionEditError, QuestionAlreadyAskedError) as error:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
     except AmbiguousLocalLearnerError as error:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
     return QuestionResponse(data=QuestionSchema.of(question))

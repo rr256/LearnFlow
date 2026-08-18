@@ -193,23 +193,55 @@ class NewQuestion:
 
 
 @dataclass(frozen=True, slots=True)
-class QuestionChanges:
-    """The field a question update asks to change (QZ-010).
+class QuestionContent:
+    """What a question says, as an update asks to rewrite it (QZ-010).
 
-    **`status` is the only one.** A question's prompt, options, expected answer,
-    explanation, and topics are all fixed once written, because
-    `quiz_attempt_answers` references the question by identifier: editing a
-    prompt would silently rewrite the history of every attempt already marked
-    against it. A learner corrects a question by retiring it and writing another,
-    which keeps both readable — the position ADR-022 takes for a superseded plan.
+    **The whole content is replaced together**, which is the group-replacement
+    shape ADR-019 fixed for planning preferences and ADR-018 for a study week: an
+    explanation left out of a supplied group is cleared, not kept. The four other
+    members travel as one because option keys are assigned by position and the
+    expected answer is an index into the options, so a prompt edited without its
+    options, or options edited without the index, could not be interpreted.
+
+    Attributes:
+        prompt: The question, in the learner's own words.
+        option_texts: The options offered, in order. Keys are reassigned by
+            position by the domain rule, never accepted from a caller.
+        correct_option_index: Which of `option_texts` is now expected, from zero.
+        explanation: Why that answer is expected, or `None` to carry none.
+        topic_ids: The topics this question now covers, replacing its links.
+    """
+
+    prompt: str
+    option_texts: tuple[str, ...]
+    correct_option_index: int
+    explanation: str | None = None
+    topic_ids: tuple[uuid.UUID, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class QuestionChanges:
+    """What a question update asks to change (QZ-010).
+
+    Either or both of a `status` and a whole `content` group.
+
+    **Content may be rewritten only while no quiz has asked the question.** Once
+    one has, `quiz_attempt_answers` references it by identifier and a stored
+    `is_correct` was decided against the wording as it then stood, so an edit
+    would silently rewrite the history of every attempt marked against it. The
+    learner corrects an asked question by retiring it and writing another, which
+    keeps both readable — the position ADR-022 takes for a superseded plan.
+    ADR-033 fixed that rule for every question; ADR-035 narrows it to an asked
+    one, and the reasoning is unchanged.
     """
 
     status: str | None = None
+    content: QuestionContent | None = None
 
     @property
     def is_empty(self) -> bool:
         """Whether the update asks for nothing at all."""
-        return self.status is None
+        return self.status is None and self.content is None
 
 
 @dataclass(frozen=True, slots=True)

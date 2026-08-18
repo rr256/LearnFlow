@@ -82,3 +82,32 @@
   color: var(--colour-text-muted);
   font-size: 0.875rem;
 }
+
+/*
+ * The correction form, behind a native disclosure. `details` needs no
+ * JavaScript, so the form is reachable on a page that never hydrates -- the rule
+ * every write path in this product follows, and the shape the resource
+ * catalogue uses for the same job.
+ */
+.correct {
+  margin-top: var(--space-2);
+}
+
+.correct summary {
+  cursor: pointer;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+/* The form inside sits flush with the item rather than adding a second border. */
+.correct > form {
+  margin-top: var(--space-3);
+  border: 0;
+  padding: 0;
+}
+
+.setAsideNote {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
