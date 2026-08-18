@@ -2,7 +2,7 @@
 title: LearnFlow Domain Terminology
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-19
+last_updated: 2026-08-18
 related:
   - ../00-project-context.md
   - domain-model.md

@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-19
+last_updated: 2026-08-18
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md

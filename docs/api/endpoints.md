@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-19
+last_updated: 2026-08-18
 related:
   - ../00-project-context.md
   - conventions.md

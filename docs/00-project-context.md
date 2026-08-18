@@ -2,7 +2,7 @@
 title: LearnFlow Project Context
 status: approved
 owner: project-governance
-last_updated: 2026-08-19
+last_updated: 2026-08-18
 audience: all-contributors-and-ai-assistants
 read_before: any-design-or-implementation-task
 related:

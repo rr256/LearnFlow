@@ -2,7 +2,7 @@
 title: "ADR-036: Show a Topic's Material Beside the Plan Items That Name It, Read-Only"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-19
+last_updated: 2026-08-18
 related:
   - ../00-project-context.md
   - ADR-015-frontend-foundation-and-server-rendered-api-access.md
@@ -29,7 +29,7 @@ related:
 
 ## Status
 
-Accepted — 2026-08-19. Proposed 2026-08-19.
+Accepted — 2026-08-18. Proposed 2026-08-18.
 
 It **amends [ADR-032](ADR-032-learning-resource-catalogue.md) on one point of substance** and
 overturns none of its reasoning. ADR-032 is **accepted**, and everything else in it stands: a

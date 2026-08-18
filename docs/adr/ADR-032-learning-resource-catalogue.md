@@ -2,7 +2,7 @@
 title: "ADR-032: Catalogue Learner-Owned Study Material as Metadata, Linked to Topics"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-19
+last_updated: 2026-08-18
 related:
   - ../00-project-context.md
   - ADR-008-assessment-and-mistake-evidence-model.md
@@ -76,7 +76,7 @@ altered.
 
 ## Implementation status
 
-**2026-08-19 — a topic's material is now also shown on `/plan` and `/plan/today`.**
+**2026-08-18 — a topic's material is now also shown on `/plan` and `/plan/today`.**
 
 Active topic-linked resources are shown **read-only** beside the plan items that name their topic, on
 the plan screen and the daily study view, alongside the curriculum view and `/revisions` this
