@@ -23,6 +23,7 @@ related:
   - ../database/schema.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
+  - ../adr/ADR-035-practice-question-correction.md
 ---
 
 # LearnFlow Domain Model
@@ -225,7 +226,7 @@ The learner's response to a checkpoint quiz. It records answers, feedback, and t
 
 **As built, an attempt records no score and no mistakes.** A result states what became of each question — correct, not correct, or *unanswered* — with the expected answer and the explanation, and states no total, mark, or percentage: a figure like "3 of 5" measures the learner rather than the work, which [terminology](terminology.md) forbids. An **unanswered question is not a wrong one**, which is why the three outcomes are kept apart rather than collapsed. Mistake evidence waits on the external-evidence tables two of its four discovery sources reference. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
 
-**A question is never edited**, only retired and rewritten: an answer references its question by identifier, so rewriting a prompt would silently rewrite a result the learner has already read.
+**A question is never edited once a quiz has asked it**, only retired and rewritten: an answer references its question by identifier, so rewriting a prompt would silently rewrite a result the learner has already read. A question no quiz holds has no answer referencing it and no history to rewrite, so it may be corrected in place — the same record, with its content replaced as a whole. A question already retired is read-only until it is brought back. See [ADR-035](../adr/ADR-035-practice-question-correction.md), which amends [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) on this point.
 
 A quiz attempt informs learner topic progress through its answers and the topic links on the questions answered. Quiz outcomes are not topic performance evidence, which records only what a learner transcribed from an external test report.
 

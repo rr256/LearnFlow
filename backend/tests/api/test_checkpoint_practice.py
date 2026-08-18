@@ -190,13 +190,103 @@ def test_a_question_can_be_retired_and_brought_back(practice_client, practising)
     assert restored.json()["data"]["status"] == "ready"
 
 
-def test_a_question_cannot_be_edited(practice_client, practising):
-    """Only `status` is accepted: rewriting a prompt would rewrite marked history."""
+def test_a_partly_supplied_correction_is_refused(practice_client, practising):
+    """The content travels as one group: a prompt alone could not be interpreted."""
     question_id = write(practice_client, practising).json()["data"]["id"]
 
     response = practice_client.patch(f"{QUESTIONS}/{question_id}", json={"prompt": "Different"})
 
     assert response.status_code == 422
+
+
+# -- correcting a question ----------------------------------------------------
+
+
+def a_correction(practising, **fields):
+    """A whole replacement content group, overridable field by field."""
+    body = {
+        "prompt": "How many bits address 1 MiB?",
+        "options": ["10", "20", "16"],
+        "correct_option_index": 1,
+        "explanation": "1 MiB is 2^20 bytes.",
+        "topic_ids": [str(practising.topic.id)],
+    }
+    body.update(fields)
+    return body
+
+
+def test_a_question_no_quiz_has_asked_can_be_corrected(practice_client, practising):
+    question_id = write(practice_client, practising).json()["data"]["id"]
+
+    response = practice_client.patch(f"{QUESTIONS}/{question_id}", json=a_correction(practising))
+
+    assert response.status_code == 200
+    corrected = response.json()["data"]
+    assert corrected["prompt"] == "How many bits address 1 MiB?"
+    assert [option["text"] for option in corrected["options"]] == ["10", "20", "16"]
+    assert corrected["expected_option_key"] == "b"
+    assert corrected["id"] == question_id
+
+
+def test_a_correction_replaces_the_topics_the_question_covers(practice_client, practising):
+    question_id = write(practice_client, practising).json()["data"]["id"]
+
+    response = practice_client.patch(
+        f"{QUESTIONS}/{question_id}",
+        json=a_correction(practising, topic_ids=[str(practising.other_topic.id)]),
+    )
+
+    assert [topic["id"] for topic in response.json()["data"]["topics"]] == [
+        str(practising.other_topic.id)
+    ]
+
+
+def test_a_correction_leaving_out_an_explanation_clears_it(practice_client, practising):
+    question_id = write(practice_client, practising).json()["data"]["id"]
+    body = a_correction(practising)
+    del body["explanation"]
+
+    response = practice_client.patch(f"{QUESTIONS}/{question_id}", json=body)
+
+    assert response.json()["data"]["explanation"] is None
+
+
+def test_a_question_a_quiz_has_asked_cannot_be_corrected(practice_client, practising):
+    """A past result was marked against the wording as it then stood."""
+    question_id = write(practice_client, practising).json()["data"]["id"]
+    assemble(practice_client, practising)
+
+    response = practice_client.patch(f"{QUESTIONS}/{question_id}", json=a_correction(practising))
+
+    assert response.status_code == 409
+
+
+def test_a_question_a_quiz_has_asked_can_still_be_set_aside(practice_client, practising):
+    question_id = write(practice_client, practising).json()["data"]["id"]
+    assemble(practice_client, practising)
+
+    response = practice_client.patch(f"{QUESTIONS}/{question_id}", json={"status": "retired"})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "retired"
+
+
+def test_a_question_set_aside_cannot_be_corrected_as_it_stands(practice_client, practising):
+    question_id = write(practice_client, practising).json()["data"]["id"]
+    practice_client.patch(f"{QUESTIONS}/{question_id}", json={"status": "retired"})
+
+    response = practice_client.patch(f"{QUESTIONS}/{question_id}", json=a_correction(practising))
+
+    assert response.status_code == 409
+
+
+def test_an_empty_update_is_refused(practice_client, practising):
+    question_id = write(practice_client, practising).json()["data"]["id"]
+
+    response = practice_client.patch(f"{QUESTIONS}/{question_id}", json={})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["type"] == "empty_update"
 
 
 def test_a_question_that_is_not_stored_is_reported_as_missing(practice_client):

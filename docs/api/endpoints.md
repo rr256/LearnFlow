@@ -34,6 +34,7 @@ related:
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-034-checkpoint-practice-history.md
+  - ../adr/ADR-035-practice-question-correction.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -1269,7 +1270,7 @@ against a number that rates the learner, applied to an assessment.
 | QZ-007 | `GET /api/v1/quiz-attempts/{attempt_id}` | Read a completed/in-progress attempt with permitted feedback. | Attempt details. |
 | QZ-008 | `POST /api/v1/practice-questions` | Write one practice question against the topics it covers. | Question record with its topics. |
 | QZ-009 | `GET /api/v1/practice-questions` | List the questions the learner has written. | Question collection, filterable by topic and status. |
-| QZ-010 | `PATCH /api/v1/practice-questions/{question_id}` | Set a question aside, or bring it back. | Updated question. **`status` is the only field**; see below. |
+| QZ-010 | `PATCH /api/v1/practice-questions/{question_id}` | Correct a question, set it aside, or bring it back. | Updated question. **Correctable only until a quiz has asked it**; see below. |
 
 QZ-008 to QZ-010 were added by [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). The
 catalogue had no endpoint for creating a question, because who writes one had never been decided.
@@ -1401,14 +1402,35 @@ wrote. A quiz being taken reads QZ-002 instead.
 
 ### QZ-010 — `PATCH /api/v1/practice-questions/{question_id}`
 
-**`status` is the only field.** A prompt, its options, its expected answer, its explanation, and its
-topics are all fixed once written, because `quiz_attempt_answers` references a question by identifier
-and rewriting a prompt would silently rewrite the history of every attempt already marked against it.
-A learner corrects a question by retiring it and writing another; both stay readable.
+Carries a `status`, the question's content, or both. An empty body is `422`.
 
-`ready` and `retired` only, in either direction. **Retiring is reversible and deletes nothing**: a
-retired question is asked by no *new* quiz, and goes on being asked by every quiz already assembled
-from it. `404` when the question is not the learner's.
+**A question may be corrected only until a quiz has asked it.** A past result is assembled from the
+**live** question row, and `quiz_attempt_answers` references the question by identifier, so once a
+quiz asks it the wording is fixed: correcting it would change what an attempt already marked against
+it says the learner answered. That is `409`, and the learner sets the question aside and writes
+another instead — both stay readable. A question no quiz holds has no attempt referencing it and no
+history to rewrite. Contracted by [ADR-035](../adr/ADR-035-practice-question-correction.md), which
+amends [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) on this one point.
+
+**A question already set aside is read-only** and is `409` too: bring it back, then correct it, which
+is RES-004's rule for archived material. Both refusals are read from what is **stored**, never from
+the request, so a caller cannot edit an asked question by also asking to bring it back.
+
+**The content travels as one group** — `prompt`, `options`, `correct_option_index`, and `topic_ids`
+together, or none of them; a partly supplied group is `422`. An `explanation` left out of a supplied
+group is **cleared**, which is the group-replacement rule GOAL-001 and GOAL-005 follow. Option keys
+are **reassigned by position**, exactly as when the question was written, so a stored expected answer
+always names an option the question offers. The topic links are replaced wholesale.
+
+A correction is **the same question said better**: the identifier is kept, no second record is
+written, and the order a quiz asks in does not move.
+
+`ready` and `retired` only for `status`, in either direction. **Retiring is reversible and deletes
+nothing**: a retired question is asked by no *new* quiz, and goes on being asked by every quiz
+already assembled from it. `404` when the question is not the learner's.
+
+**No field reports whether a question may still be corrected.** QZ-009 gains none, so a client offers
+the correction and shows the refusal when one arrives.
 
 ### FR-009 acceptance criteria
 
@@ -1522,3 +1544,4 @@ Implement in an order that enables one working learner flow:
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the panel that added no read and no contract, and what PRG-001 waits on now
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the four resource contracts above, why the other four stay unimplemented, and what a resource may point at
 - [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — why the history reads QZ-006 unchanged, and why `pagination.total` is never read
+- [ADR-035: Let a practice question be corrected until a quiz has asked it](../adr/ADR-035-practice-question-correction.md) — QZ-010's content group, and the two `409` refusals

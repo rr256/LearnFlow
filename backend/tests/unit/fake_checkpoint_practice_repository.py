@@ -98,6 +98,15 @@ class FakeCheckpointPracticeRepository:
                 return
         raise LookupError(f"No practice question is stored with identifier {record.id}.")
 
+    def has_been_asked(self, question_id: uuid.UUID) -> bool:
+        """Whether any assembled quiz asks this question.
+
+        Reads the same `quiz_questions` mapping `add_quiz_questions` writes, so a
+        test that assembles a quiz makes its questions un-correctable exactly as
+        the database would.
+        """
+        return any(question_id in asked for asked in self.quiz_questions.values())
+
     def replace_question_topic_links(
         self, *, question_id: uuid.UUID, topic_ids: Sequence[uuid.UUID]
     ) -> None:

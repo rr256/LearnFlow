@@ -121,6 +121,32 @@ export function readQuestionSubmission(form: FormData): QuestionSubmission | nul
   };
 }
 
+/** What the correction form asks for, ready to send to QZ-010. */
+export interface QuestionCorrectionSubmission extends QuestionSubmission {
+  questionId: string;
+}
+
+/**
+ * Read the correction form, or null when it asks for nothing sendable.
+ *
+ * The same reading as a newly written question, plus the question it corrects.
+ * The content travels as one group, so a correction sends every field the write
+ * form sends — an explanation left blank clears the stored one, which is what
+ * QZ-010 documents and ADR-019 fixed for a preference group.
+ *
+ * Whether the question may still be corrected is **not** decided here: a quiz
+ * having already asked it is a backend fact this screen cannot see, and the
+ * refusal it returns is shown to the learner rather than guessed at.
+ */
+export function readQuestionCorrection(form: FormData): QuestionCorrectionSubmission | null {
+  const questionId = trimmed(form.get("question_id"));
+  const submission = readQuestionSubmission(form);
+  if (!questionId || !submission) {
+    return null;
+  }
+  return { questionId, ...submission };
+}
+
 /** What the status control asks for, ready to send to QZ-010. */
 export interface QuestionStatusSubmission {
   questionId: string;

@@ -1,5 +1,7 @@
 import styles from "@/features/practice/QuestionBank.module.css";
+import { QuestionForm } from "@/features/practice/QuestionForm";
 import { QuestionStatusControl } from "@/features/practice/QuestionStatusControl";
+import type { SubjectTopicOptions } from "@/features/resources/topic-options";
 import {
   QUESTION_STATE_LABELS,
   type PracticeQuestion,
@@ -8,6 +10,8 @@ import {
 
 interface QuestionBankProps {
   questions: PracticeQuestion[];
+  /** The curriculum's topics, for the correction form's picker. */
+  topicGroups: SubjectTopicOptions[];
 }
 
 /** How a question's state reads, falling back to the stored word. */
@@ -27,12 +31,20 @@ function stateLabel(status: string): string {
  * bringing it back is possible from the same place. Nothing is hidden and
  * nothing is deleted.
  *
+ * **A question in use can be corrected here**, behind a `<details>` disclosure
+ * that a browser opens on its own, so the form is reachable with no JavaScript —
+ * the shape the resource catalogue uses for the same job. One a quiz has already
+ * asked is refused by the backend, and the refusal explains why: a past result
+ * was marked against the wording as it then stood. A question set aside is
+ * read-only until it is brought back, which is ADR-032's rule for archived
+ * material.
+ *
  * The expected answer is shown here, unlike on a quiz being taken: this is the
  * author reading back what they wrote.
  *
  * A server component. It renders what it was given and derives nothing.
  */
-export function QuestionBank({ questions }: QuestionBankProps) {
+export function QuestionBank({ questions, topicGroups }: QuestionBankProps) {
   return (
     <section aria-labelledby="your-questions" className={styles.panel}>
       <h2 id="your-questions">Your practice questions</h2>
@@ -82,6 +94,17 @@ export function QuestionBank({ questions }: QuestionBankProps) {
                 questionId={question.id}
                 status={question.status}
               />
+
+              {question.status === "ready" ? (
+                <details className={styles.correct}>
+                  <summary>Correct this question</summary>
+                  <QuestionForm question={question} topicGroups={topicGroups} />
+                </details>
+              ) : (
+                <p className={styles.setAsideNote}>
+                  Bring this back into use to correct it.
+                </p>
+              )}
             </li>
           ))}
         </ul>

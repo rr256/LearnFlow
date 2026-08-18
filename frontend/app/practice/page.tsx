@@ -139,7 +139,7 @@ async function PracticeSection() {
     <>
       <StartQuizForm topicGroups={data.topicGroups} />
       <QuestionForm topicGroups={data.topicGroups} />
-      <QuestionBank questions={data.questions} />
+      <QuestionBank questions={data.questions} topicGroups={data.topicGroups} />
       <AttemptHistory attempts={data.attempts} hasMore={data.hasMoreAttempts} />
     </>
   );

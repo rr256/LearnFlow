@@ -35,6 +35,7 @@ related:
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-034-checkpoint-practice-history.md
+  - ../adr/ADR-035-practice-question-correction.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -550,6 +551,12 @@ endpoint, no column, no migration, and no backend change — and it **checks no 
 it. **Nothing is counted, scored, or compared** on it, and the pages are not numbered. Contracted by
 [ADR-034](../adr/ADR-034-checkpoint-practice-history.md).
 
+A learner may also **correct a question until a quiz has asked it**, and sets it aside afterwards —
+[ADR-035](../adr/ADR-035-practice-question-correction.md), which amends
+[ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md) on that one point and needs **no endpoint,
+column, table, or migration**. A question already set aside is **read-only until it is brought back**.
+**No past result changes**, because only a question nothing references can be corrected. It **checks no further box here** either.
+
 **No question content ships with LearnFlow.** The learner writes every question, which is the position
 [ADR-032](../adr/ADR-032-learning-resource-catalogue.md) took for study material: no seed, no data
 file, no bundled previous-year paper, and no external fetch, so no third-party licensing question
@@ -574,8 +581,9 @@ taken.
   learner submits the whole attempt in one form post, which works with no JavaScript.
 - [ ] Quiz attempts, feedback, and mistakes are stored. **Attempts and answers are stored.** The feedback a
   learner reads is the explanation held on the question itself, which is why no
-  `quiz_attempt_answers.feedback` column exists: a question is never edited, so its explanation cannot
-  drift from an attempt marked against it. **The item stays open on the word
+  `quiz_attempt_answers.feedback` column exists: a question a quiz has asked is never edited, so its
+  explanation cannot drift from an attempt marked against it, and one no quiz has asked has no
+  attempt to drift from. **The item stays open on the word
   *mistakes***: `mistake_evidence` has four discovery-source foreign keys of which two reference
   `external_test_results` and `study_activities`, neither of which exists, so it cannot be created
   until they are. It arrives with FR-010, below.
@@ -675,3 +683,4 @@ LearnFlow does.
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the Milestone 4 item this opens, and the reasons the rest of that milestone stays closed
 - [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — the two Milestone 5 items this opens, and the reasons the rest of that milestone stays closed
 - [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — the history screen over those two items, which checks no further box here
+- [ADR-035: Let a practice question be corrected until a quiz has asked it](../adr/ADR-035-practice-question-correction.md) — the correction rule over the same two items, which checks no further box either

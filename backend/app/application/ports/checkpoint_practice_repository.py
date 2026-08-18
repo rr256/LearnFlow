@@ -79,14 +79,28 @@ class CheckpointPracticeRepository(Protocol):
         """Store a changed question. The caller owns the transaction."""
         ...
 
+    def has_been_asked(self, question_id: uuid.UUID) -> bool:
+        """Whether any assembled quiz asks this question.
+
+        The one fact that decides whether a question may still be corrected: once
+        a quiz asks it, `quiz_attempt_answers` may reference it and a stored
+        `is_correct` was decided against the wording as it then stood, so the
+        wording is fixed (ADR-035, narrowing ADR-033).
+
+        A **boolean, never a count**. How many quizzes ask a learner's question is
+        a figure about their bank that nothing needs and
+        docs/domain/terminology.md would not let a screen show.
+        """
+        ...
+
     def replace_question_topic_links(
         self, *, question_id: uuid.UUID, topic_ids: Sequence[uuid.UUID]
     ) -> None:
         """Make these topics the question's links, removing any others.
 
         A replacement rather than a merge, as `replace_topic_links` is for a
-        resource. Only a newly written question uses it today, because a
-        question's topics are fixed once written.
+        resource. A newly written question uses it, and so does a correction to
+        one no quiz has asked yet.
         """
         ...
 

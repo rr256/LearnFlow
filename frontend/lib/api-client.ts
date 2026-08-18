@@ -897,9 +897,8 @@ export async function writePracticeQuestion(
 /**
  * QZ-010 -- set a practice question aside, or bring it back.
  *
- * Status is the only thing that may change. A question is never edited: a
- * learner corrects one by setting it aside and writing another, because attempts
- * already marked against it reference it by identifier.
+ * Setting aside is reversible and deletes nothing: a quiz already assembled goes
+ * on asking the question, because attempts are marked against it.
  *
  * @throws ApiError with `isNotFound` when no such question is stored or another
  *   learner wrote it.
@@ -911,6 +910,38 @@ export async function updatePracticeQuestionStatus(
   const body = await requestJson(`/api/v1/practice-questions/${encodeURIComponent(questionId)}`, {
     method: "PATCH",
     body: { status },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed question.", null);
+  }
+  return (body as PracticeQuestionResponse).data;
+}
+
+/**
+ * QZ-010 -- correct a practice question no quiz has asked yet.
+ *
+ * The content travels as one group: everything the write form sends is sent
+ * again, and an explanation left blank clears the stored one.
+ *
+ * **A question a quiz has already asked cannot be corrected**, and neither can
+ * one that has been set aside. Both are refused with `409`, and the refusal
+ * explains why -- a stored `is_correct` was decided against the wording as it
+ * then stood, so rewriting it would change what a past result says.
+ *
+ * @throws ApiError with `isConflict` when a quiz has asked the question, or it
+ *   has been set aside.
+ * @throws ApiError with `isNotFound` when no such question is stored or another
+ *   learner wrote it.
+ */
+export async function correctPracticeQuestion(
+  questionId: string,
+  question: NewPracticeQuestion,
+): Promise<PracticeQuestion> {
+  const body = await requestJson(`/api/v1/practice-questions/${encodeURIComponent(questionId)}`, {
+    method: "PATCH",
+    body: question,
   });
   const data = unwrapData(body);
 

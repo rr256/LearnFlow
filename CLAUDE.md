@@ -113,7 +113,10 @@ practice by
 which is **accepted** and adds QZ-001 to QZ-010 with migration `20260818_01`, and the
 checkpoint-practice history by
 [`docs/adr/ADR-034-checkpoint-practice-history.md`](docs/adr/ADR-034-checkpoint-practice-history.md),
-which is **accepted** and changes no contract, adds no endpoint, and needs no migration.
+which is **accepted** and changes no contract, adds no endpoint, and needs no migration, and
+practice-question correction by
+[`docs/adr/ADR-035-practice-question-correction.md`](docs/adr/ADR-035-practice-question-correction.md),
+which is **accepted**, amends ADR-033 on one point, and needs no migration either.
 No request accepts a `learner_id`; the effective learner is resolved server-side.
 
 A **learning stage** is stored and sent as `snake_case` — `not_explored`, `building_foundation`,
@@ -346,11 +349,17 @@ previous-year paper, scraped, or shipped: `source_type` is always `curated`, and
 `verified_pyq` stay in the `CHECK` unwritten, so **no question content and no third-party licensing
 enters this repository** — ADR-032's position applied to questions. `questions.author_learner_id` is
 **added** beyond the approved schema, nullable, mirroring `resources.owner_learner_id`.
-**A question is never edited**: QZ-010 changes `status` alone, because `quiz_attempt_answers`
-references a question by identifier and rewriting a prompt would silently rewrite the history of every
-attempt already marked against it. A learner corrects one by **retiring it and writing another**;
-`retired` is reversible, **nothing is deleted**, and a quiz already assembled goes on asking a retired
-question. That is a deliberate departure from RES-004, which *does* allow editing.
+**A question is never edited once a quiz has asked it** — ADR-033's rule, narrowed by ADR-035. A past
+result is assembled from the **live** question row, so an asked question's wording is fixed and
+correcting it would change what an attempt already marked against it says; the learner **sets it aside
+and writes another**, and both stay readable. A question **no quiz holds has no history to rewrite**,
+so QZ-010 corrects it in place — same record, same identifier, same order in a quiz — with the content
+replaced as **one group** (an explanation left out is cleared) and option keys **reassigned by
+position**. A question **set aside is read-only** until brought back, which is RES-004's rule for
+archived material; both refusals are `409` and both are read from **what is stored**, never from the
+request. `retired` is reversible, **nothing is deleted**, and a quiz already assembled goes on asking a
+retired question. *Archiving* a question is `retired`, never `archived`. It needed **no endpoint, no
+column, no table, and no migration**, and **no past result changes**.
 **A quiz asks every ready question for the topics chosen, in the order they were written** —
 deterministic, with **no AI provider**, exactly as ADR-020 promised for a plan. LearnFlow selects
 none and leaves none out, because choosing which few to ask is a ranking; there is no cap, no
@@ -427,7 +436,7 @@ over REV-001, schedules them over REV-004, and records what became of each over 
 `/progress` progress overview that gathers LRN-001, GOAL-002, PLN-002, PLN-003, PLN-006, REV-001, and
 PRG-002 with CUR-003 for the recorded learning stages by subject, leads with a priority focus panel
 drawn from those same reads, and **writes nothing at all** either, and a `/practice` checkpoint-practice area that writes the learner's own questions over QZ-008,
-lists them over QZ-009, sets one aside or brings it back over QZ-010, assembles a quiz over QZ-001,
+lists them over QZ-009, corrects one or sets it aside and brings it back over QZ-010, assembles a quiz over QZ-001,
 and lists past attempts over QZ-006 — with `/practice/quizzes/[quizId]` reading the quiz over QZ-002
 and submitting the whole attempt over QZ-003 and QZ-005 in one form post, and
 `/practice/attempts/[attemptId]` reading the result over QZ-007, **read-only and carrying no score**,

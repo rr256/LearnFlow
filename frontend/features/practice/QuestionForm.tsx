@@ -3,17 +3,27 @@
 import { useActionState, useId } from "react";
 
 import styles from "@/features/practice/QuestionForm.module.css";
-import { writeQuestionAction } from "@/features/practice/actions";
+import { correctQuestionAction, writeQuestionAction } from "@/features/practice/actions";
 import {
   INITIAL_QUESTION_FORM_STATE,
   OPTION_FIELD_COUNT,
   type QuestionFormState,
 } from "@/features/practice/submission";
 import type { SubjectTopicOptions } from "@/features/resources/topic-options";
+import type { PracticeQuestion } from "@/types/practice";
 
 interface QuestionFormProps {
   /** The curriculum's topics, grouped by subject, or empty when unavailable. */
   topicGroups: SubjectTopicOptions[];
+  /**
+   * The question being corrected, or omitted to write a new one.
+   *
+   * One component serves both, as `ResourceForm` does: the two ask for the same
+   * five fields and differ only in whether they start filled and which endpoint
+   * they reach. A second copy would be a second thing to keep in step with
+   * QZ-008.
+   */
+  question?: PracticeQuestion;
 }
 
 /**
@@ -32,45 +42,62 @@ const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
  * and fetches none from anywhere: there is no "generate" control, because no AI
  * provider is involved and no previous-year paper is bundled with the product.
  *
- * **A question cannot be edited afterwards** — only set aside and rewritten —
- * because attempts already marked against it reference it, and rewriting a
- * prompt would silently rewrite the history of every one of them. The form says
- * so, so a learner is not surprised later.
+ * **A question can be corrected only until a quiz has asked it.** After that the
+ * wording is fixed: a past result was marked against the question as it then
+ * stood, so rewriting it would change what that result says the learner
+ * answered. From then on a learner sets it aside and writes another, and both
+ * stay readable. The form says so, so a learner is not surprised later.
  *
  * Four option fields are offered because that is what a GATE multiple-choice
- * question conventionally has. Leaving the last ones blank is fine: blanks are
- * dropped before the question is sent, and the backend accepts between two and
- * six.
+ * question conventionally has — or as many as the question being corrected
+ * already offers, so correcting one never quietly drops an option. Leaving the
+ * last ones blank is fine: blanks are dropped before the question is sent, and
+ * the backend accepts between two and six.
  *
  * A client component only so it can report what the last submission did. It
  * calls no API itself: the submission goes to a server action, so the browser
  * still never reaches the backend, and the form posts natively without
  * JavaScript.
  */
-export function QuestionForm({ topicGroups }: QuestionFormProps) {
+export function QuestionForm({ topicGroups, question }: QuestionFormProps) {
+  const correcting = question !== undefined;
   const [state, submit, pending] = useActionState<QuestionFormState, FormData>(
-    writeQuestionAction,
+    correcting ? correctQuestionAction : writeQuestionAction,
     INITIAL_QUESTION_FORM_STATE,
   );
   const promptId = useId();
   const explanationId = useId();
   const topicsId = useId();
   const messageId = useId();
+  const fieldCount = Math.max(OPTION_FIELD_COUNT, question?.options.length ?? 0);
 
   return (
     <form action={submit} className={styles.form}>
-      <h2>Write a practice question</h2>
-      <p className={styles.hint}>
-        Practice questions are yours. LearnFlow writes none of its own and ships none with the
-        product — you write what you want to be asked, and it asks you exactly that. Once written,
-        a question cannot be edited: correct one by setting it aside and writing another, so the
-        results you have already seen stay true to what you answered.
-      </p>
+      {correcting ? (
+        <>
+          <input name="question_id" type="hidden" value={question.id} />
+          <p className={styles.hint}>
+            Correct anything here and save. This is the same question, said better — the quizzes
+            you have not taken yet will ask the corrected version.
+          </p>
+        </>
+      ) : (
+        <>
+          <h2>Write a practice question</h2>
+          <p className={styles.hint}>
+            Practice questions are yours. LearnFlow writes none of its own and ships none with the
+            product — you write what you want to be asked, and it asks you exactly that. You can
+            correct one until a quiz has asked it; after that, set it aside and write another, so
+            the results you have already seen stay true to what you answered.
+          </p>
+        </>
+      )}
 
       <div className={styles.field}>
         <label htmlFor={promptId}>Question</label>
         <textarea
           className={styles.prompt}
+          defaultValue={question?.prompt}
           id={promptId}
           name="prompt"
           placeholder="How many bits are needed to address 1 KiB?"
@@ -85,40 +112,51 @@ export function QuestionForm({ topicGroups }: QuestionFormProps) {
           Fill in at least two. Leave the rest blank if you need fewer. Choose the one that is the
           expected answer.
         </p>
-        {Array.from({ length: OPTION_FIELD_COUNT }, (_, index) => (
-          <div className={styles.option} key={index}>
-            <input
-              aria-label={`Option ${OPTION_LETTERS[index]} is the expected answer`}
-              name="correct_option"
-              type="radio"
-              value={String(index)}
-              defaultChecked={index === 0}
-            />
-            <label className={styles.forScreenReaders} htmlFor={`option-${index}`}>
-              Option {OPTION_LETTERS[index]}
-            </label>
-            <span aria-hidden="true" className={styles.letter}>
-              {OPTION_LETTERS[index]}
-            </span>
-            <input
-              id={`option-${index}`}
-              name={`option_${index}`}
-              placeholder={index < 2 ? "An answer a learner could choose" : "Optional"}
-              type="text"
-            />
-          </div>
-        ))}
+        {Array.from({ length: fieldCount }, (_, index) => {
+          const option = question?.options[index];
+          const expected = correcting
+            ? option !== undefined && option.key === question.expected_option_key
+            : index === 0;
+          return (
+            <div className={styles.option} key={index}>
+              <input
+                aria-label={`Option ${OPTION_LETTERS[index]} is the expected answer`}
+                name="correct_option"
+                type="radio"
+                value={String(index)}
+                defaultChecked={expected}
+              />
+              <label className={styles.forScreenReaders} htmlFor={`option-${index}`}>
+                Option {OPTION_LETTERS[index]}
+              </label>
+              <span aria-hidden="true" className={styles.letter}>
+                {OPTION_LETTERS[index]}
+              </span>
+              <input
+                defaultValue={option?.text}
+                id={`option-${index}`}
+                name={`option_${index}`}
+                placeholder={index < 2 ? "An answer a learner could choose" : "Optional"}
+                type="text"
+              />
+            </div>
+          );
+        })}
       </fieldset>
 
       <div className={styles.field}>
         <label htmlFor={explanationId}>Why that is the answer (optional)</label>
         <textarea
+          defaultValue={question?.explanation ?? undefined}
           id={explanationId}
           name="explanation"
           placeholder="1 KiB is 2^10 bytes, so ten bits address it."
           rows={2}
         />
-        <p className={styles.hint}>Shown to you after you answer, never before.</p>
+        <p className={styles.hint}>
+          Shown to you after you answer, never before.
+          {correcting ? " Clearing this removes the explanation." : null}
+        </p>
       </div>
 
       <div className={styles.field}>
@@ -130,7 +168,14 @@ export function QuestionForm({ topicGroups }: QuestionFormProps) {
           </p>
         ) : (
           <>
-            <select className={styles.topics} id={topicsId} multiple name="topic_ids" size={8}>
+            <select
+              className={styles.topics}
+              defaultValue={question?.topics.map((topic) => topic.id)}
+              id={topicsId}
+              multiple
+              name="topic_ids"
+              size={8}
+            >
               {topicGroups.map((group) => (
                 <optgroup key={group.subjectId} label={group.subjectName}>
                   {group.topics.map((topic) => (
@@ -154,7 +199,7 @@ export function QuestionForm({ topicGroups }: QuestionFormProps) {
         disabled={pending}
         type="submit"
       >
-        Add this question
+        {correcting ? "Save this correction" : "Add this question"}
       </button>
 
       {state.status === "idle" ? null : (

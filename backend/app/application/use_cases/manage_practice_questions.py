@@ -116,6 +116,26 @@ class TooManyTopicLinksError(PracticeQuestionError):
     """More topics named than one request may link."""
 
 
+class QuestionAlreadyAskedError(PracticeQuestionError):
+    """A rewrite of a question some quiz has already asked.
+
+    Refused because `quiz_attempt_answers` references the question by identifier
+    and a stored `is_correct` was decided against the wording as it then stood:
+    rewriting it would silently change what every past result says the learner
+    answered. The learner retires it and writes another instead, which keeps both
+    readable. See ADR-033, narrowed by ADR-035.
+    """
+
+
+class RetiredQuestionEditError(PracticeQuestionError):
+    """A rewrite of a question the learner has set aside.
+
+    Material put aside is read-only, so the learner brings it back and then
+    corrects it — the two-step ADR-032 fixed for an archived resource. Setting
+    aside stays reversible, so nothing here is lost.
+    """
+
+
 class ManagePracticeQuestions:
     """Writes, reads, and retires the practice questions a learner has authored."""
 
@@ -217,32 +237,98 @@ class ManagePracticeQuestions:
         )
 
     def update(self, question_id: uuid.UUID, changes: QuestionChanges) -> QuestionDetail:
-        """Set a question aside, or bring it back.
+        """Correct a question, set it aside, or bring it back.
 
         The caller owns the transaction.
 
-        **Status is the only thing that may change**; see `QuestionChanges`.
-        Retiring is reversible and destroys nothing: a retired question stays
-        readable and stays in every quiz already assembled from it, because those
-        quizzes have attempts marked against them.
+        **A question may be rewritten only while no quiz has asked it.** Once one
+        has, the wording is fixed: `quiz_attempt_answers` references the question
+        by identifier and a stored `is_correct` was decided against the wording as
+        it then stood, so an edit would silently change what every past result
+        says. The learner retires an asked question and writes another, exactly as
+        ADR-033 prescribed for every question; ADR-035 narrows that rule to an
+        asked one and leaves its reasoning untouched.
+
+        **A question set aside is read-only**, the position ADR-032 takes for an
+        archived resource: the learner brings it back, then corrects it.
+
+        **The content travels as one group.** An explanation left out of a
+        supplied group is cleared and the topic links are replaced wholesale,
+        which is ADR-019's rule for planning preferences and ADR-018's for a study
+        week. Option keys are reassigned by position, so an expected answer still
+        names an option the question offers.
+
+        Retiring stays reversible and destroys nothing: a retired question stays
+        readable and stays in every quiz already assembled from it.
 
         Raises:
             QuestionNotFoundError: No such question, or another learner wrote it.
             EmptyQuestionUpdateError: The update names no field to change.
             UnknownQuestionStatusError: A status a learner may not ask for.
+            RetiredQuestionEditError: A rewrite of a question set aside.
+            QuestionAlreadyAskedError: A rewrite of a question a quiz has asked.
+            MissingPromptError: The new prompt is empty.
+            UnusableOptionsError: Too few or too many options, or a blank one.
+            DuplicateOptionError: The same option wording appears twice.
+            UnknownExpectedAnswerError: The expected answer names no option.
+            MissingTopicLinkError: No topic was named.
+            UnknownTopicError: A topic identifier names nothing stored.
+            DuplicateTopicLinkError: A topic was named more than once.
+            TooManyTopicLinksError: More topics than one request may link.
             AmbiguousLocalLearnerError: More than one learner is stored.
         """
         if changes.is_empty:
             raise EmptyQuestionUpdateError(
-                "The request names no field to change. Send a status: "
-                f"{', '.join(QUESTION_STATUSES)}."
+                "The request names no field to change. Send a status — "
+                f"{', '.join(QUESTION_STATUSES)} — or the question's content."
             )
-        status = changes.status
-        if status is None:  # pragma: no cover - `is_empty` above already refused this
-            raise EmptyQuestionUpdateError("The request names no field to change.")
-        _require_known_status(status)
+        if changes.status is not None:
+            _require_known_status(changes.status)
 
         record = self._require_own_question(question_id)
+        if changes.content is None:
+            return self._restated(record, status=changes.status or record.status)
+
+        # Both refusals are read from what is stored, never from the request, so
+        # a caller cannot edit an asked question by also asking to bring it back.
+        if record.status != READY:
+            raise RetiredQuestionEditError(
+                "This question has been set aside, so it cannot be corrected as it stands. "
+                "Bring it back first, then correct it."
+            )
+        if self._practice.has_been_asked(question_id):
+            raise QuestionAlreadyAskedError(
+                "A quiz has already asked this question, so its wording is fixed: changing it "
+                "would alter what an attempt already marked against it says. Set it aside and "
+                "write the corrected question instead — both stay readable."
+            )
+
+        content = changes.content
+        prompt = _require_prompt(content.prompt)
+        options = _validated_options(content.option_texts)
+        expected_key = _expected_key(options, content.correct_option_index)
+        topic_ids = self._validated_topics(content.topic_ids)
+
+        changed = QuestionRecord(
+            id=record.id,
+            author_learner_id=record.author_learner_id,
+            question_type=record.question_type,
+            source_type=record.source_type,
+            prompt=prompt,
+            options=options,
+            expected_option_key=expected_key,
+            explanation=_blank_to_none(content.explanation),
+            status=changes.status or record.status,
+            # Unchanged: a correction is the same question said better, and
+            # `written_at` orders a quiz, so moving it would reorder one.
+            written_at=record.written_at,
+        )
+        self._practice.update_question(changed)
+        self._practice.replace_question_topic_links(question_id=record.id, topic_ids=topic_ids)
+        return self._describe([changed])[0]
+
+    def _restated(self, record: QuestionRecord, *, status: str) -> QuestionDetail:
+        """The question with only its status moved, written back and described."""
         changed = QuestionRecord(
             id=record.id,
             author_learner_id=record.author_learner_id,
