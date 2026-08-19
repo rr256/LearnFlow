@@ -2,15 +2,26 @@ import Link from "next/link";
 
 import styles from "@/features/resources/ResourceCatalogue.module.css";
 import { ResourceForm } from "@/features/resources/ResourceForm";
+import { ResourceNotes } from "@/features/resources/ResourceNotes";
 import { ResourceStatusControl } from "@/features/resources/ResourceStatusControl";
 import { isInCatalogue } from "@/features/resources/by-topic";
 import type { SubjectTopicOptions } from "@/features/resources/topic-options";
 import { resourceTypeLabel, type LearningResource } from "@/types/resource";
+import type { ResourceNote } from "@/types/resource-note";
 
 interface ResourceCatalogueProps {
   resources: LearningResource[];
   /** The curriculum's topics, for the edit form's picker. */
   topicGroups: SubjectTopicOptions[];
+  /**
+   * Each resource's notes, keyed by resource.
+   *
+   * Optional, and absent means the same as empty: a piece of material with no
+   * notes renders the invitation to write one rather than an error. That also
+   * keeps a caller which does not read notes — a test, or a future screen —
+   * from having to supply a map of nothing.
+   */
+  notesByResource?: Record<string, ResourceNote[]>;
 }
 
 /**
@@ -31,7 +42,11 @@ interface ResourceCatalogueProps {
  * have said they are not using, so the way to correct it is to put it back
  * first — one state at a time, each reversible.
  */
-export function ResourceCatalogue({ resources, topicGroups }: ResourceCatalogueProps) {
+export function ResourceCatalogue({
+  resources,
+  topicGroups,
+  notesByResource = {},
+}: ResourceCatalogueProps) {
   const inCatalogue = resources.filter(isInCatalogue);
   const putAside = resources.filter((resource) => !isInCatalogue(resource));
 
@@ -49,7 +64,12 @@ export function ResourceCatalogue({ resources, topicGroups }: ResourceCatalogueP
             </p>
             <ul className={styles.items}>
               {inCatalogue.map((resource) => (
-                <ResourceLine key={resource.id} resource={resource} topicGroups={topicGroups} />
+                <ResourceLine
+                  key={resource.id}
+                  notes={notesByResource[resource.id] ?? []}
+                  resource={resource}
+                  topicGroups={topicGroups}
+                />
               ))}
             </ul>
           </>
@@ -66,7 +86,12 @@ export function ResourceCatalogue({ resources, topicGroups }: ResourceCatalogueP
           </p>
           <ul className={styles.items}>
             {putAside.map((resource) => (
-              <ResourceLine key={resource.id} resource={resource} topicGroups={topicGroups} />
+              <ResourceLine
+                key={resource.id}
+                notes={notesByResource[resource.id] ?? []}
+                resource={resource}
+                topicGroups={topicGroups}
+              />
             ))}
           </ul>
         </section>
@@ -79,9 +104,11 @@ export function ResourceCatalogue({ resources, topicGroups }: ResourceCatalogueP
 function ResourceLine({
   resource,
   topicGroups,
+  notes,
 }: {
   resource: LearningResource;
   topicGroups: SubjectTopicOptions[];
+  notes: ResourceNote[];
 }) {
   return (
     <li className={styles.item}>
@@ -124,6 +151,21 @@ function ResourceLine({
           <ResourceForm resource={resource} topicGroups={topicGroups} />
         </details>
       ) : null}
+
+      {/*
+        The learner's own notes on this material, shown here and on no other
+        screen. A note can run to pages, and the screens that show a topic's
+        material exist to help a learner *find* it -- burying those under text is
+        the reason ADR-036 kept material off `/plan/month` entirely.
+
+        Notes on material that is put aside are read-only, as the material
+        itself is: the learner puts it back before writing or correcting one.
+      */}
+      <ResourceNotes
+        notes={notes}
+        resourceId={resource.id}
+        writable={isInCatalogue(resource)}
+      />
 
       <ResourceStatusControl
         resourceId={resource.id}

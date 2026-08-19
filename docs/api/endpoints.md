@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 related:
   - ../00-project-context.md
   - conventions.md
@@ -32,6 +32,7 @@ related:
   - ../adr/ADR-030-learning-stages-by-subject-panel.md
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-034-checkpoint-practice-history.md
   - ../adr/ADR-035-practice-question-correction.md
@@ -1048,7 +1049,7 @@ is stored.
 
 ## Resource and Ingestion Endpoints
 
-Supports **FR-007 — Learning Resource Organization**, which these four endpoints begin and do not
+Supports **FR-007 — Learning Resource Organization**, which RES-001 to RES-004 begin and do not
 complete, and supplies the **resource half** of
 [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
 [ADR-028](../adr/ADR-028-revision-workflow.md) deferred. The practice half is **deliberately still open**: checkpoint practice exists, but surfacing a quiz beside a review would mean recommending one for a topic, and nothing in LearnFlow recommends. See [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md).
@@ -1063,6 +1064,10 @@ complete, and supplies the **resource half** of
 | RES-006 | `POST /api/v1/resources/{resource_id}/ingestions` | Start/retry text extraction and indexing. | `202` + ingestion reference. | Not implemented |
 | RES-007 | `GET /api/v1/resources/{resource_id}/ingestions` | List ingestion attempts/statuses. | Ingestion collection. | Not implemented |
 | RES-008 | `GET /api/v1/resource-ingestions/{ingestion_id}` | Read a single ingestion status/failure message. | Ingestion details. | Not implemented |
+| RES-009 | `POST /api/v1/resources/{resource_id}/notes` | Keep one of the learner's own written notes against a piece of material. | Resource note. | Implemented |
+| RES-010 | `GET /api/v1/resources/{resource_id}/notes` | List the notes kept against one piece of material, filterable by status. | Resource note collection. | Implemented |
+| RES-011 | `GET /api/v1/resource-notes/{note_id}` | Read one note. | Resource note details. | Implemented |
+| RES-012 | `PATCH /api/v1/resource-notes/{note_id}` | Correct a note's title or text, or put it aside. | Updated resource note. | Implemented |
 
 RES-001 to RES-004 are implemented and contracted by
 [ADR-032](../adr/ADR-032-learning-resource-catalogue.md). None of them accepts a `learner_id`: the
@@ -1079,6 +1084,13 @@ indexes anything: `storage_key`, `metadata`, and `resource_ingestions` are all a
 arrives with the code that maintains it, per
 [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md). RES-006 to RES-008 wait on that
 same table and an extractor.
+
+**RES-009 to RES-012 narrow that sentence on one point and leave the rest standing.** A learner may
+keep their **own written notes and copied-out passages** against a piece of material, which is the
+first study material LearnFlow stores rather than points at. It is text the learner **typed or pasted
+themselves**: still nothing uploaded, still nothing fetched, still no location on their own machine,
+and still nothing extracted, chunked, embedded, indexed, or searched. See
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 
 **Nothing is deleted.** RES-005 is not implemented: a learner puts material aside with
 `status: archived` through RES-004, which is reversible and destroys nothing — the position
@@ -1216,6 +1228,126 @@ Related entities: [learning resource](../domain/entities.md#learning-resource) a
 [topic](../domain/entities.md#topic). Related tables:
 [resources and RAG metadata schema area](../database/schema.md#schema-areas).
 
+### RES-009 — `POST /api/v1/resources/{resource_id}/notes`
+
+`resource_id` is a UUID. Request body: `title` and `body`. An unknown field is rejected. Returns
+`201` with the note under `data`.
+
+**This endpoint stores text and does nothing else with it.** It is not sent to any AI, embedding, or
+retrieval provider, indexed, searched, summarised, or read by anything at all; nothing in this build
+reads a note. Nothing uploads a file, fetches an address, downloads a page, extracts text from a
+document, or runs OCR to fill it.
+
+- `title` is what the learner calls the note, so they can find it again without opening it. Required,
+  at most 300 characters.
+- `body` is what they wrote or pasted. Required, at most **20,000 characters**, and stored **as the
+  learner wrote it**: their line breaks, blank lines, and indentation survive. Exactly two things are
+  done to it — line terminators are canonicalised to `LF`, and surrounding whitespace is removed.
+  The canonicalisation undoes a choice the *transport* made rather than one the learner did: the HTML
+  form-data encoding algorithm normalises newlines to `CRLF`, so a form posted with JavaScript
+  disabled would otherwise store the same note differently from one posted through a hydrated server
+  action. It is plain text: nothing here parses it as markup, and nothing renders it as any.
+- There is deliberately **no `status`**: every note is written `active`, and putting one aside is a
+  later statement made through RES-012 — the shape RES-001 uses for a resource.
+- There is deliberately **no `resource_id` in the body.** The path names it, so a body cannot
+  disagree with the resource whose ownership was just checked.
+- A note carries **no `topic_ids`**. It inherits the topics its resource covers, so correcting what a
+  resource covers moves its notes with it and the two can never disagree.
+
+**One resource holds at most 200 notes**, notes put aside included — a bound on one note is no bound
+at all without a bound on their number. **That figure is never reported**: it is read to decide
+whether one more note may be written, and reaches no response and no screen, because a count
+beside a learner's own writing would measure the learner.
+
+RES-010's `pagination.total` is a different number and is **not** that figure — it is the documented
+pagination block every collection carries, per
+[ADR-014](../adr/ADR-014-api-response-contract.md). The `/resources` screen **never reads it**, which
+is the position [ADR-034](../adr/ADR-034-checkpoint-practice-history.md) fixed for QZ-006 for the
+same reason.
+
+A note response carries `id`, `resource_id`, `title`, `body`, and `status`.
+
+Errors: `404` `not_found` when no such resource is stored *or it belongs to another learner*; `409`
+`conflict` when the material is **put aside**, because archived material is read-only — the learner
+brings it back through RES-004 first — or when more than one learner is stored; `422`
+`validation_error` when the title or the text is empty, either is too long, the resource already
+holds as many notes as it may, or the request names an unknown field. **No refusal echoes the
+learner's text**, which is the [conventions](conventions.md#error-codes) rule applied where it
+matters most: the rejected value is their own study material.
+
+### RES-010 — `GET /api/v1/resources/{resource_id}/notes`
+
+`resource_id` is a UUID. Query parameters `status` (optional), `limit`, and `offset`. Returns `200`
+with a page of notes under `data`, **newest first**, and the documented pagination block.
+
+**No status is assumed.** A caller wanting only what the learner is using asks for `active`, and one
+wanting what has been put aside asks for `archived` — how RES-002, PLN-002, and REV-001 each treat
+their own.
+
+**The notes of archived material are readable.** Putting material aside stops it being written to and
+takes it off the screens that show a topic's material; it destroys nothing and hides nothing a
+learner goes looking for.
+
+There is deliberately **no query parameter that searches note text**. Searching across a learner's
+notes is retrieval under another name, and it arrives with the decision that builds retrieval.
+
+Errors: `404` `not_found` as for RES-009; `422` `validation_error` for a `status` outside the
+documented values — `details` names `query.status`; `409` `conflict` when more than one learner is
+stored.
+
+### RES-011 — `GET /api/v1/resource-notes/{note_id}`
+
+`note_id` is a UUID. Returns `200` with one note under `data`, in the shape RES-009 returns, and its
+text **exactly as the learner stored it**.
+
+Addressed by the note's own identifier rather than nested under its resource - the flat shape
+RES-008 already sketches — so a note has one address wherever it is reached from.
+
+Errors: `404` `not_found` when no such note is stored *or its resource belongs to another learner*.
+Both are reported as missing: a caller who may not read the note may not learn that its resource
+exists either. `409` `conflict` when more than one learner is stored.
+
+### RES-012 — `PATCH /api/v1/resource-notes/{note_id}`
+
+`note_id` is a UUID. Request body: `title`, `body`, and `status`, all optional; an unknown field is
+rejected. Returns `200` with the updated note.
+
+A field the request omits is left alone. **No field may be null**: a note always has a title, a body,
+and a status, the rule LRN-002 applies to a timezone, GOAL-004 to a status, and RES-004 to a
+resource's title. There is nothing to clear.
+
+**A note is corrected in place, as often as the learner likes.** That is where a note differs from a
+practice question, whose wording [ADR-035](../adr/ADR-035-practice-question-correction.md) fixes once
+a quiz has asked it: a stored attempt is assembled from the live question row, so rewriting a prompt
+would rewrite a result the learner already read. **Nothing reads a note**, so no stored record can be
+made to disagree with a correction, and no such rule is needed. A correction keeps the same record
+and the same identifier.
+
+**`status` accepts `active` and `archived` only.** Archiving **is reversible** and destroys nothing:
+there is no `DELETE`, and nothing here removes a note.
+
+A note cannot be moved to another resource - `resource_id` is not an accepted field. It belongs to
+the material it was written against.
+
+Sending the values already stored is accepted and writes nothing, as it is under GOAL-004, GOAL-005,
+PLN-004, PRG-004, REV-003, and RES-004.
+
+**Only the named note moves.** No other note, no resource, no topic link, no learning stage, no plan,
+no plan item, no revision, and no quiz.
+
+The `/resources` screen calls this endpoint two ways, deliberately kept apart, exactly as it does
+RES-004: a **correction** form sends `title` and `body` and never `status`, and a **put aside**
+control sends `status` alone.
+
+Errors: `404` `not_found` as for RES-011; `409` `conflict` when the note's material is **put aside**,
+or when more than one learner is stored; `422` `validation_error` when the update names no field to
+change, names an unknown status, empties the title or the text, or breaks any rule RES-009
+documents. **No refusal echoes the learner's text.**
+
+Related entities: [resource note](../domain/entities.md#resource-note) and
+[learning resource](../domain/entities.md#learning-resource). Related table:
+[`resource_notes`](../database/schema.md#resource_notes).
+
 ### FR-007 acceptance criteria
 
 **Two of [FR-007](../requirements/functional.md#fr-007-learning-resource-organization)'s four
@@ -1237,6 +1369,14 @@ the count.
   screens. The last two were added by
   [ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md), which changes no contract here and
   leaves this verdict and the count above unchanged: it adds surfaces rather than capability.
+
+**RES-009 to RES-012 leave all four verdicts and the count above unchanged.** Keeping a learner's own
+written notes against a resource is a capability beside FR-007's four criteria rather than one of
+them: it registers nothing, links no topic, records no resource metadata, and adds no way of finding
+a topic's material. It is the first foundation for
+[FR-008](../requirements/functional.md#fr-008-grounded-mentor-assistance), **not met at all** —
+every one of that requirement's criteria needs retrieval and a mentor, and neither exists. See
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 
 ## Mentor Endpoints
 
@@ -1511,7 +1651,7 @@ Implement in an order that enables one working learner flow:
    third criterion — is **now built too**, over PLN-006, so **all three of FR-004's acceptance
    criteria are met**.
 5. Revision reads/updates. **Done** — REV-001 to REV-004, per [ADR-028](../adr/ADR-028-revision-workflow.md).
-6. Resource registration and ingestion status. **Partly done** — RES-001 to RES-004 catalogue the learner's own study material and link it to topics, contracted by [ADR-032](../adr/ADR-032-learning-resource-catalogue.md), with migration `20260816_01` creating `resources` and `resource_topic_links`. RES-005 to RES-008 wait on file storage and an extractor, neither of which exists; **RES-005 also waits on a reason to delete**, since archiving through RES-004 is reversible and destroys nothing.
+6. Resource registration and ingestion status. **Partly done** — RES-009 to RES-012 keep the learner's own written notes against a piece of material, which is storage alone; RES-001 to RES-004 catalogue the learner's own study material and link it to topics, contracted by [ADR-032](../adr/ADR-032-learning-resource-catalogue.md), with migration `20260816_01` creating `resources` and `resource_topic_links`. RES-005 to RES-008 wait on file storage and an extractor, neither of which exists; **RES-005 also waits on a reason to delete**, since archiving through RES-004 is reversible and destroys nothing.
 7. Mentor questions and grounded retrieval.
 8. Checkpoint quizzes and attempts. **Partly done** — QZ-001, QZ-002, QZ-003, QZ-005, QZ-006, and QZ-007 assemble a quiz from the learner's own questions, run an attempt at it, and read the result back, and QZ-008 to QZ-010 hold the question bank they are built from, contracted by [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md), with migration `20260818_01` creating the whole assessment area. **QZ-004 waits on a client with a reason to save partial work.** Nothing is generated by a model and no question content ships with the repository, so `generated` and `verified_pyq` stay unwritten; and **no response carries a score**, which is the conflict ADR-033 resolves in terminology's favour.
 9. External test result entry and analysis.
@@ -1547,5 +1687,6 @@ Implement in an order that enables one working learner flow:
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the seventh and eighth contracts that screen reads, PRG-002 and CUR-003, and why neither gains a filter or a field
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the panel that added no read and no contract, and what PRG-001 waits on now
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the four resource contracts above, why the other four stay unimplemented, and what a resource may point at
+- [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — RES-009 to RES-012, and the boundary around what they store
 - [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — why the history reads QZ-006 unchanged, and why `pagination.total` is never read
 - [ADR-035: Let a practice question be corrected until a quiz has asked it](../adr/ADR-035-practice-question-correction.md) — QZ-010's content group, and the two `409` refusals

@@ -24,13 +24,26 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  readEditNoteSubmission,
+  readNoteStatusSubmission,
+  readWriteNoteSubmission,
+  type ResourceNoteFormState,
+  type ResourceNoteStatusState,
+} from "@/features/resources/note-submission";
+import {
   readEditSubmission,
   readRegisterSubmission,
   readResourceStatusSubmission,
   type ResourceFormState,
   type ResourceStatusState,
 } from "@/features/resources/submission";
-import { ApiError, registerResource, updateResource } from "@/lib/api-client";
+import {
+  ApiError,
+  registerResource,
+  updateResource,
+  updateResourceNote,
+  writeResourceNote,
+} from "@/lib/api-client";
 
 /**
  * Everywhere a change to the catalogue is visible.
@@ -141,6 +154,122 @@ export async function saveResourceStatus(
         submission.status === "archived"
           ? "Put aside. It stays in your catalogue and you can put it back."
           : "Put back in your catalogue.",
+    };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Everywhere a change to a note is visible.
+ *
+ * `/resources` alone. A note is read and written there and nowhere else — the
+ * curriculum view, `/revisions`, `/plan`, and `/plan/today` show a topic's
+ * material without its notes, and `/plan/month` shows no material at all — so
+ * revalidating them would invalidate pages that cannot have changed.
+ */
+function revalidateWhereNotesAppear(): void {
+  revalidatePath("/resources");
+}
+
+/** What a learner reads when a note form asked for something that cannot be sent. */
+const UNUSABLE_NOTE_FORM = "Give the note a title and some text.";
+
+/**
+ * RES-009 — keep one note against a piece of study material.
+ *
+ * **The text is stored and nothing else is done with it.** It is not uploaded,
+ * fetched, extracted, indexed, searched, or sent to any AI provider — nothing in
+ * LearnFlow reads a note at all. It stays on this machine.
+ *
+ * The confirmation names the note rather than saying "saved", so a learner
+ * adding several in a row can see which one landed.
+ */
+export async function writeResourceNoteAction(
+  _previous: ResourceNoteFormState,
+  form: FormData,
+): Promise<ResourceNoteFormState> {
+  const submission = readWriteNoteSubmission(form);
+  if (!submission) {
+    return { status: "error", message: UNUSABLE_NOTE_FORM };
+  }
+
+  try {
+    const note = await writeResourceNote(submission.resourceId, submission.note);
+    revalidateWhereNotesAppear();
+    return { status: "saved", message: `Kept ${note.title} with this material.` };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+    throw error;
+  }
+}
+
+/**
+ * RES-012 — correct what one note says.
+ *
+ * A note can be corrected in place as often as the learner likes: nothing in
+ * LearnFlow reads a note, so no stored record can be made to disagree with a
+ * correction.
+ *
+ * **This cannot archive.** `status` is not among the fields, so correcting a
+ * note and deciding to set it down stay separate actions.
+ *
+ * Only the named note moves: no other note, no resource, no learning stage, no
+ * plan, no plan item, and no revision.
+ */
+export async function saveResourceNoteEdit(
+  _previous: ResourceNoteFormState,
+  form: FormData,
+): Promise<ResourceNoteFormState> {
+  const submission = readEditNoteSubmission(form);
+  if (!submission) {
+    return { status: "error", message: UNUSABLE_NOTE_FORM };
+  }
+
+  try {
+    const note = await updateResourceNote(submission.noteId, submission.changes);
+    revalidateWhereNotesAppear();
+    return { status: "saved", message: `Saved your changes to ${note.title}.` };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+    throw error;
+  }
+}
+
+/**
+ * RES-012 — put one note aside, or bring it back.
+ *
+ * **Nothing is deleted.** Putting a note aside says the learner is not using it
+ * now, and it is reversible from the same control — which is why the material
+ * goes on listing it.
+ *
+ * Only the named note moves.
+ */
+export async function saveResourceNoteStatus(
+  _previous: ResourceNoteStatusState,
+  form: FormData,
+): Promise<ResourceNoteStatusState> {
+  const submission = readNoteStatusSubmission(form);
+  if (!submission) {
+    return { status: "error", message: "That is not something a note can be set to." };
+  }
+
+  try {
+    await updateResourceNote(submission.noteId, { status: submission.status });
+    revalidateWhereNotesAppear();
+    return {
+      status: "saved",
+      message:
+        submission.status === "archived"
+          ? "Put aside. The text is still stored and you can put it back."
+          : "Put back with this material.",
     };
   } catch (error) {
     if (error instanceof ApiError) {

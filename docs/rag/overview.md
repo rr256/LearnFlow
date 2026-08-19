@@ -2,8 +2,9 @@
 title: LearnFlow RAG Overview
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-29
+last_updated: 2026-08-19
 related:
+  - ../adr/ADR-037-learner-written-resource-notes.md
   - ../00-project-context.md
   - ingestion.md
   - retrieval.md
@@ -61,6 +62,42 @@ The model does not permanently “remember” a learner's PDFs. LearnFlow retrie
 | Scanned/image-only PDFs | Register resource; extraction/OCR support is evaluated separately and failure must be visible. |
 | Local video resources | Store a reference/path and topic links; video transcription/indexing is not an MVP requirement. |
 | Screenshots/PDFs of test results | Store as private reference; not automatically used as trusted topic evidence without learner confirmation. |
+
+**A learner's own written notes are not a resource type** and so are absent from the table above: they are text kept *against* a resource of any type, and they are the one thing in this document that is stored today. See below.
+
+## Learner-Written Text: a Source With No File
+
+Every source above is a **file** the learner already has, and the pipeline below exists to get usable
+text out of one. There is a second kind of source that skips all of that: text the learner **typed or
+pasted themselves**, kept against a resource as a *resource note*.
+
+**This is the only content LearnFlow stores today.** It is the first study material the product holds
+rather than points at — learner-written practice questions are stored too, but a question is
+something the learner *made*, not material they *study from*. Nothing else on this page is built: no file is uploaded or stored, no
+text is extracted, nothing is normalised, chunked, embedded, or indexed, no vector store exists, and
+no mentor answers anything.
+
+A note is a source with no file, so four of the ingestion steps have nothing to do:
+
+```text
+Learner types or pastes text
+        ↓
+Stored verbatim against one resource        (no file to store, nothing to extract)
+        ↓
+[ not chunked, not embedded, not indexed — none of this exists yet ]
+```
+
+Two consequences worth stating before retrieval is built:
+
+- **A note needs no extraction and has no extraction failure mode.** The honest-failure rules below
+  exist because a scanned PDF may yield nothing; typed text always yields itself.
+- **A note is not normalised.** [Ingestion](ingestion.md#step-3-normalize-content) prescribes
+  normalisation before chunking, and it is deliberately not applied: rewriting what a learner typed
+  would change what they wrote. Whether a note is normalised *when it is chunked* is a decision for
+  the change that builds chunking.
+
+Whether notes ever become retrieval context is **not decided here**. See
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 
 ## Data Boundaries
 
@@ -152,6 +189,7 @@ Detailed chunking, embedding, retrieval-ranking, and evaluation rules belong in 
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the generation and embedding choice behind this pipeline
 - [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why retrieval and embeddings stay replaceable
 - [RAG ingestion](ingestion.md)
+- [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — the file-free source this page now records, and the boundary around it
 - [RAG retrieval](retrieval.md)
 - [Embeddings](embeddings.md)
 - [Provider pattern](../architecture/provider-pattern.md)

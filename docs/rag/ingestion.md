@@ -2,8 +2,9 @@
 title: LearnFlow RAG Ingestion
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-29
+last_updated: 2026-08-19
 related:
+  - ../adr/ADR-037-learner-written-resource-notes.md
   - ../00-project-context.md
   - overview.md
   - embeddings.md
@@ -22,6 +23,27 @@ Define how eligible learner-owned resources become searchable knowledge while pr
 The MVP supports text extraction and indexing for eligible text-based study resources such as PDF notes, PYQ PDFs, short notes, and formula sheets.
 
 Video transcription, unrestricted website ingestion, and fully automated OCR for scanned PDFs are not MVP requirements.
+
+**Nothing in this document is implemented.** No file is stored, no text is extracted, nothing is
+normalised, chunked, embedded, or indexed, and `resource_ingestions` does not exist. The lifecycle
+below is the approved target for **file-based** sources.
+
+### Learner-written text enters no lifecycle
+
+There is one source that is stored today and does **not** pass through any of it: text the learner
+**typed or pasted themselves**, kept against a resource as a *resource note*
+([ADR-037](../adr/ADR-037-learner-written-resource-notes.md)).
+
+Every step below assumes a file. A note has none, so the first four have nothing to do — there is no
+storage reference to validate, no original to keep, nothing to extract, and no extraction that could
+fail. It is stored **verbatim** and, deliberately, is **not normalised**: normalisation exists to
+improve retrieval from extracted text, and rewriting what a learner typed would change what they
+wrote.
+
+A note is therefore **not ingested, not chunked, not embedded, and not indexed**, and it creates no
+ingestion record. Whether it ever becomes retrieval context — and whether it is normalised at the
+point it is chunked — is left to the change that builds chunking. This section records where such a
+source would enter, not that it has.
 
 ## Ingestion Lifecycle
 
@@ -185,6 +207,7 @@ Before marking an ingestion implementation ready:
 - [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why extraction, embedding, and storage stay replaceable
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the embedding implementation this pipeline calls
 - [RAG overview](overview.md)
+- [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — the file-free source that enters none of this lifecycle
 - [Embeddings](embeddings.md)
 - [RAG retrieval](retrieval.md)
 - [Provider pattern](../architecture/provider-pattern.md)

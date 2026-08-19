@@ -31,6 +31,7 @@ from app.application.ports.curriculum_seed_repository import (
 )
 from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
+from app.application.use_cases.manage_resource_notes import ManageResourceNotes
 from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_plans import ManageStudyPlans
@@ -41,6 +42,7 @@ from app.presentation.api.dependencies import (
     CHECKPOINT_QUIZZES_PROVIDER,
     PRACTICE_QUESTIONS_PROVIDER,
     READ_CURRICULUM_PROVIDER,
+    RESOURCE_NOTES_PROVIDER,
     RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
     STUDY_PLANS_PROVIDER,
@@ -49,6 +51,7 @@ from app.presentation.api.dependencies import (
 from tests.api.onboarding_fixtures import Onboarding, install_onboarding
 from tests.unit.fake_curriculum_repository import FakeCurriculumRepository
 from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
+from tests.unit.fake_resource_note_repository import FakeResourceNoteRepository
 from tests.unit.fake_resource_repository import FakeResourceRepository
 from tests.unit.fake_revision_repository import FakeRevisionRepository
 from tests.unit.fake_topic_progress_repository import FakeTopicProgressRepository, topic
@@ -327,9 +330,15 @@ class Cataloguing:
             subject_name="Operating Systems",
         )
         self.resources = FakeResourceRepository(topics=[self.topic, self.heading])
+        self.notes = FakeResourceNoteRepository()
 
     def cataloguer(self) -> ManageResources:
         return ManageResources(learners=self.learners, resources=self.resources)
+
+    def note_keeper(self) -> ManageResourceNotes:
+        return ManageResourceNotes(
+            learners=self.learners, resources=self.resources, notes=self.notes
+        )
 
 
 @pytest.fixture
@@ -343,8 +352,11 @@ def resource_client(cataloguing: Cataloguing) -> Iterator[TestClient]:
     """A client whose resource endpoints share one set of stores.
 
     Shared across requests deliberately: a test can register over RES-001, list
-    over RES-002, and change one over RES-004, which is the sequence the
-    catalogue screen performs.
+    over RES-002, change one over RES-004, and keep a note against it over
+    RES-009, which is the sequence the catalogue screen performs.
+
+    The note use case is installed over the **same** resource store, because a
+    note is reached through its resource and ownership is the resource's.
     """
     app = create_app()
 
@@ -352,7 +364,12 @@ def resource_client(cataloguing: Cataloguing) -> Iterator[TestClient]:
     def provide() -> Iterator[ManageResources]:
         yield cataloguing.cataloguer()
 
+    @contextmanager
+    def provide_notes() -> Iterator[ManageResourceNotes]:
+        yield cataloguing.note_keeper()
+
     setattr(app.state, RESOURCES_PROVIDER, provide)
+    setattr(app.state, RESOURCE_NOTES_PROVIDER, provide_notes)
     with TestClient(app) as client:
         yield client
 

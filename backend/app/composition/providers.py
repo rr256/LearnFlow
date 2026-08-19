@@ -25,6 +25,7 @@ from app.application.ports.clock import Clock
 from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
+from app.application.use_cases.manage_resource_notes import ManageResourceNotes
 from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
@@ -41,6 +42,9 @@ from app.infrastructure.persistence.examination_schedule_repository import (
     SqlAlchemyExaminationScheduleRepository,
 )
 from app.infrastructure.persistence.learner_repository import SqlAlchemyLearnerRepository
+from app.infrastructure.persistence.resource_note_repository import (
+    SqlAlchemyResourceNoteRepository,
+)
 from app.infrastructure.persistence.resource_repository import SqlAlchemyResourceRepository
 from app.infrastructure.persistence.revision_repository import SqlAlchemyRevisionRepository
 from app.infrastructure.persistence.study_goal_management_repository import (
@@ -58,6 +62,7 @@ StudyGoalsProvider = Callable[[], AbstractContextManager[ManageStudyGoals]]
 StudyPlansProvider = Callable[[], AbstractContextManager[ManageStudyPlans]]
 RevisionsProvider = Callable[[], AbstractContextManager[ManageRevisions]]
 ResourcesProvider = Callable[[], AbstractContextManager[ManageResources]]
+ResourceNotesProvider = Callable[[], AbstractContextManager[ManageResourceNotes]]
 TopicProgressProvider = Callable[[], AbstractContextManager[ManageTopicProgress]]
 PracticeQuestionsProvider = Callable[[], AbstractContextManager[ManagePracticeQuestions]]
 CheckpointQuizzesProvider = Callable[[], AbstractContextManager[ManageCheckpointQuizzes]]
@@ -238,6 +243,41 @@ def build_resources_provider(
                 yield ManageResources(
                     learners=SqlAlchemyLearnerRepository(session),
                     resources=SqlAlchemyResourceRepository(session),
+                )
+            except BaseException:
+                session.rollback()
+                raise
+            session.commit()
+
+    return provide
+
+
+def build_resource_notes_provider(
+    session_factory: sessionmaker[Session],
+) -> ResourceNotesProvider:
+    """Build the provider that hands the resource-note use case to one request.
+
+    It writes, so it owns the transaction like the other learner-owned providers.
+
+    It binds three repositories and **no provider**: learners, to resolve who is
+    asking; resources, to check that the material is theirs and still in the
+    catalogue; and notes. There is deliberately no AI provider, no embedding
+    provider, and no retrieval provider here — a learner's note has no path out
+    of this process, and adding one to this constructor is the visible decision
+    that would change that (NFR-001).
+
+    It reads no clock and no configuration. Nothing about a note depends on the
+    date, so there is no timezone to resolve and no `Clock` port to bind.
+    """
+
+    @contextmanager
+    def provide() -> Iterator[ManageResourceNotes]:
+        with session_factory() as session:
+            try:
+                yield ManageResourceNotes(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    resources=SqlAlchemyResourceRepository(session),
+                    notes=SqlAlchemyResourceNoteRepository(session),
                 )
             except BaseException:
                 session.rollback()

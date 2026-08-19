@@ -18,6 +18,7 @@ from app.composition.providers import (
     build_practice_questions_provider,
     build_read_curriculum_provider,
     build_read_examination_schedules_provider,
+    build_resource_notes_provider,
     build_resources_provider,
     build_revisions_provider,
     build_study_goals_provider,
@@ -31,6 +32,7 @@ from app.presentation.api.dependencies import (
     PRACTICE_QUESTIONS_PROVIDER,
     READ_CURRICULUM_PROVIDER,
     READ_EXAMINATION_SCHEDULES_PROVIDER,
+    RESOURCE_NOTES_PROVIDER,
     RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
     STUDY_GOALS_PROVIDER,
@@ -48,6 +50,7 @@ from app.presentation.api.routes import (
     practice_questions,
     progress,
     quiz_attempts,
+    resource_notes,
     resources,
     revisions,
     study_goals,
@@ -113,6 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     setattr(app.state, STUDY_PLANS_PROVIDER, build_study_plans_provider(session_factory))
     setattr(app.state, REVISIONS_PROVIDER, build_revisions_provider(session_factory))
     setattr(app.state, RESOURCES_PROVIDER, build_resources_provider(session_factory))
+    setattr(app.state, RESOURCE_NOTES_PROVIDER, build_resource_notes_provider(session_factory))
     setattr(app.state, TOPIC_PROGRESS_PROVIDER, build_topic_progress_provider(session_factory))
     setattr(
         app.state,
@@ -140,6 +144,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(progress.router)
     app.include_router(revisions.router)
     app.include_router(resources.router)
+    app.include_router(resource_notes.router)
     app.include_router(practice_questions.router)
     app.include_router(checkpoint_quizzes.router)
     app.include_router(quiz_attempts.router)

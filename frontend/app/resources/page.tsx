@@ -8,11 +8,13 @@ import { ResourceCatalogue } from "@/features/resources/ResourceCatalogue";
 import { topicOptions, type SubjectTopicOptions } from "@/features/resources/topic-options";
 import {
   ApiError,
+  listResourceNotes,
   listResources,
   listStudyGoals,
   readCurriculumTree,
 } from "@/lib/api-client";
 import type { LearningResource } from "@/types/resource";
+import type { ResourceNote } from "@/types/resource-note";
 
 /**
  * Rendered per request rather than prerendered.
@@ -25,6 +27,8 @@ interface CatalogueData {
   resources: LearningResource[];
   /** The curriculum's topics for the picker, empty when it could not be read. */
   topicGroups: SubjectTopicOptions[];
+  /** Each resource's notes, keyed by resource, empty where unreadable. */
+  notesByResource: Record<string, ResourceNote[]>;
 }
 
 /**
@@ -55,8 +59,43 @@ async function pickableTopics(): Promise<SubjectTopicOptions[]> {
 }
 
 /**
- * RES-002, GOAL-002, and CUR-003 — the learner's material, and the topics they
- * can link it to.
+ * RES-010 — the notes kept against each piece of material.
+ *
+ * One request per resource, because a note belongs to a resource: RES-010 is
+ * scoped to one, and no endpoint lists a learner's notes across their whole
+ * catalogue. They run together rather than in sequence, so the page waits once
+ * for the slowest rather than once per resource, and every call is made by the
+ * Next.js server to a backend beside it — no note reaches a browser except as
+ * rendered text.
+ *
+ * A catalogue large enough for this to cost something would need a
+ * learner-scoped note endpoint, which is a compatible addition under
+ * docs/api/versioning.md and deliberately not built before a screen needs it —
+ * the position RES-002's absent `subject_id` filter takes.
+ *
+ * A failure is **not fatal**, and it costs one resource's notes rather than the
+ * page: a learner who cannot read their notes on one piece of material can still
+ * see everything else and still catalogue more.
+ */
+async function notesFor(resources: LearningResource[]): Promise<Record<string, ResourceNote[]>> {
+  const read = await Promise.all(
+    resources.map(async (resource) => {
+      try {
+        return [resource.id, await listResourceNotes(resource.id)] as const;
+      } catch (error) {
+        if (!(error instanceof ApiError)) {
+          throw error;
+        }
+        return [resource.id, []] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(read);
+}
+
+/**
+ * RES-002, GOAL-002, CUR-003, and RES-010 — the learner's material, the topics
+ * they can link it to, and their notes on each piece.
  *
  * The two run together: neither addresses the other's result, so the page waits
  * once instead of twice.
@@ -68,7 +107,7 @@ async function pickableTopics(): Promise<SubjectTopicOptions[]> {
  */
 async function readCatalogue(): Promise<CatalogueData> {
   const [resources, topicGroups] = await Promise.all([listResources(), pickableTopics()]);
-  return { resources, topicGroups };
+  return { resources, topicGroups, notesByResource: await notesFor(resources) };
 }
 
 /**
@@ -112,7 +151,11 @@ async function CatalogueSection() {
   return (
     <>
       <ResourceForm topicGroups={data.topicGroups} />
-      <ResourceCatalogue resources={data.resources} topicGroups={data.topicGroups} />
+      <ResourceCatalogue
+        notesByResource={data.notesByResource}
+        resources={data.resources}
+        topicGroups={data.topicGroups}
+      />
     </>
   );
 }

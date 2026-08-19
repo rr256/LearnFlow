@@ -65,7 +65,8 @@ and `study_goals` — including its two planning-preference columns — `learner
 learner-planning area, `revision_records` arrives with `20260813_01` — the first migration since
 `20260806_03`, creating one table and one index and altering nothing — and `resources` and
 `resource_topic_links` arrive with `20260816_01`, the first two tables of the resource area,
-creating two tables and two indexes and altering nothing, and the **whole assessment area** —
+creating two tables and two indexes and altering nothing, and `resource_notes` arrives with
+`20260819_01`, one table and one index added **beyond the approved schema** and altering nothing, and the **whole assessment area** —
 `checkpoint_quizzes`, `checkpoint_quiz_topics`, `questions`, `question_topic_links`, `quiz_questions`,
 `quiz_attempts`, and `quiz_attempt_answers` — arrives with `20260818_01`, creating seven tables and
 four indexes and altering nothing. Curated content is loaded by idempotent seeds, not by
@@ -324,7 +325,9 @@ mistake evidence alone.** Do not write that FR-011 is complete. Proposed by
 **RES-001 to RES-004 catalogue the learner's own study material against topics** — the first change to
 open **Milestone 4**, and it opens **that milestone's first item only**: nothing is uploaded,
 downloaded, extracted, embedded, indexed, or retrieved, and no mentor exists. **A resource is a record
-of where material is, never the material.** `storage_key`, `metadata`, and `resource_ingestions` are
+of where material is, never the material** — narrowed on one point by RES-009 to RES-012 below, which
+store the learner's own written notes and are the only text LearnFlow holds. `storage_key`,
+`metadata`, and `resource_ingestions` are
 all **absent**, each waiting on the code that would maintain it. **No location on the learner's own
 machine is stored**: `external_reference` accepts an `http` or `https` address and nothing else,
 because a resource endpoint may never return an absolute local filesystem path — the path is refused
@@ -414,6 +417,38 @@ recent-quiz-history criterion stays **not met**, and **FR-009 is unchanged** and
 full. Contracted by
 [`docs/adr/ADR-034-checkpoint-practice-history.md`](docs/adr/ADR-034-checkpoint-practice-history.md).
 
+**RES-009 to RES-012 keep the learner's own written notes against a piece of catalogued material** —
+the **first study material LearnFlow stores rather than points at**, and the **first RAG foundation**. It
+**narrows ADR-032's "metadata, never the material" rule and overturns none of it**: that rule kept out
+uploaded files, fetched web content, and locations on the learner's own machine, and **all three stay
+out**, because text the learner typed is none of them. **It stores text and does nothing else with
+it**: nothing uploads, downloads, fetches an address, extracts, runs OCR, chunks, embeds, indexes,
+searches across notes, ranks, recommends, or answers a question. **No AI, embedding, or retrieval
+provider is reached or configured**, `storage_key`, `metadata`, and `resource_ingestions` all stay
+absent, RES-005 to RES-008 stay unimplemented, and the use case binds **no provider at all** — a test
+asserts it, so adding one to that constructor is a visible decision. The text is stored **as the learner
+wrote it**, so line breaks and indentation survive: exactly two things are done to it — line
+terminators are canonicalised to `LF`, and surrounding whitespace is removed. The canonicalisation
+undoes a choice the **transport** made rather than one the learner did, because a form posted with
+JavaScript disabled delivers `CRLF` where a hydrated server action delivers `LF`, and without it one
+note would store two ways depending on whether a browser ran JavaScript. `docs/rag/ingestion.md`'s
+normalisation step is deliberately **not** applied, because it belongs to a pipeline reading files. It is **rendered as plain text** — no `dangerouslySetInnerHTML`, no Markdown,
+and CSS `white-space: pre-wrap` rather than generated markup — so a pasted tag is read, never run. A
+note belongs to **one resource** and inherits the topics that resource covers, carrying **no topic
+links of its own**. It is **corrected in place** however often the learner likes, which is where it
+differs from ADR-035: nothing reads a note, so no stored record can disagree with a correction.
+**Nothing is deleted** — a note is `archived` reversibly, there is no `DELETE` and no removal method
+on the port — and **material put aside is read-only, notes included** (`409`), while its notes stay
+**readable**. Bounded at **20,000 characters a note and 200 notes a resource**, both application rules
+over an unbounded `text` column, so raising either needs no migration; **no refusal echoes the
+learner's text**. Notes are read and written on **`/resources` alone**, each in a closed disclosure:
+the curriculum view, `/revisions`, `/plan`, and `/plan/today` show a topic's material unchanged and
+gain **no** note text, and `/plan/month` still shows none. Migration `20260819_01` creates
+`resource_notes` — **one table added beyond the approved schema**, altering nothing. **FR-007's four
+criteria are unchanged and FR-008 is not met at all**; do not write that either is complete. Proposed
+by
+[`docs/adr/ADR-037-learner-written-resource-notes.md`](docs/adr/ADR-037-learner-written-resource-notes.md).
+
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
 keeps that name. See [`docs/domain/terminology.md`](docs/domain/terminology.md).
@@ -450,7 +485,9 @@ and submitting the whole attempt over QZ-003 and QZ-005 in one form post, and
 and `/practice/history` reading every attempt over QZ-006 a page at a time, also **read-only**.
 It reuses `features/resources/topic-options.ts` for both topic pickers rather than copying it. And a `/resources`
 learning-resource catalogue that lists the learner's own study material over RES-002, registers it
-over RES-001, and **corrects** it or puts it aside and back over RES-004 — reading GOAL-002 and
+over RES-001, **corrects** it or puts it aside and back over RES-004, and keeps the learner's **own
+written notes** against each piece over RES-009 to RES-012 — read and written there alone, each in a
+closed disclosure, rendered as plain text — reading GOAL-002 and
 CUR-003 to offer the topics it may be linked to. It supports **add, edit, and archive**; material
 put aside is read-only, so a learner puts it back before correcting it, and the edit form never
 sends `status` while the archive control sends nothing else. The curriculum view, `/revisions`, `/plan`, and `/plan/today` also read RES-002 and show a

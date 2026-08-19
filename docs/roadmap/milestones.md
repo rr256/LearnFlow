@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -37,6 +37,7 @@ related:
   - ../adr/ADR-034-checkpoint-practice-history.md
   - ../adr/ADR-035-practice-question-correction.md
   - ../adr/ADR-036-topic-material-on-the-plan-screens.md
+  - ../adr/ADR-037-learner-written-resource-notes.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -490,7 +491,12 @@ which keeps the plan-views item below open even though all four levels are now v
 
 This milestone has been **opened** by the learning-resource catalogue: a learner can record where
 their own study material is and which topics it covers, and find it again from the curriculum, from
-a review, and from the plan items that name its topic. That is the first item below, and deliberately no more of the milestone — nothing is
+a review, and from the plan items that name its topic. It has since gained the **first RAG
+foundation**: a learner can keep their **own written notes and copied-out passages** against a piece
+of that material, which is the first study material LearnFlow stores rather than points at. That is
+**storage and nothing else** — no upload, no fetch, no extraction, no chunking, no embedding, no
+index, no search, and no mentor — and it is **contracted by**
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md) with migration `20260819_01`. That is the first item below, and deliberately no more of the milestone — nothing is
 uploaded, extracted, indexed, or retrieved, and no mentor exists. It also supplies the **resource
 half** of [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
 [ADR-028](../adr/ADR-028-revision-workflow.md) deferred; the practice half still waits on FR-009, so
@@ -516,15 +522,33 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   the storage change below, which gives a file somewhere to live and an opaque `storage_key` to name
   it. **FR-007 is not met in full**;
   [endpoints.md](../api/endpoints.md#fr-007-acceptance-criteria) carries the count.
-- [ ] Supported text-based PDF can be extracted and indexed.
+- [ ] **A learner can keep their own written notes against a piece of material.** **Done**, by
+  RES-009 to RES-012 with migration `20260819_01`: a learner writes or pastes their own notes and
+  copied-out passages against a catalogued resource, corrects them in place, and puts them aside
+  reversibly, all on `/resources`. This is the **first study material LearnFlow stores rather than points
+  at** and the **first RAG foundation** — and it is **storage and nothing else**: nothing uploads,
+  downloads, fetches an address, extracts, chunks, embeds, indexes, searches, ranks, recommends, or
+  answers a question, and no AI, embedding, or retrieval provider is reached or configured. It
+  **narrows** [ADR-032](../adr/ADR-032-learning-resource-catalogue.md)'s *metadata, never the
+  material* rule on one point and leaves the rest standing: no file, no fetched page, and no location
+  on the learner's own machine. Text is stored **exactly as written**, rendered as **plain text**, and
+  **never deleted**. It adds a table beyond the approved schema, `resource_notes`, for the reason
+  [the area review](../database/schema.md#resources-and-rag-metadata-area-second-partial-review-2026-08-19)
+  records. **FR-007's four criteria are unchanged and FR-008 is not met at all.** Contracted by
+  [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
+- [ ] Supported text-based PDF can be extracted and indexed. **Still unbuilt**, and the note item
+  above deliberately does not begin it: a note needs no file storage, no extractor, no chunking
+  policy, no embedding provider, and no vector store, and none of the five exists.
 - [ ] Ingestion shows queued/processing/completed/failed status. `resource_ingestions` is not
   created, and `resources.status` therefore permits neither `processing`, `ready`, nor `failed`: a
   resource could enter one and never leave it.
 - [ ] Mentor retrieves authorized relevant excerpts before grounded answers.
 - [ ] Mentor response shows useful source references when retrieval succeeds.
 - [ ] No-source and provider-unavailable states are honest and understandable.
-- [ ] Original files, resource metadata, and derived vectors are stored separately. **Metadata is
-  stored** and is deliberately all that is: `storage_key` and `metadata` are not created, and nothing
+- [ ] Original files, resource metadata, and derived vectors are stored separately. **No file and
+  no vector is stored**, which is what this item is really about. Metadata is stored, and so now
+  is the text a learner typed themselves — a *resource note* is neither a file nor a derived
+  representation of one, so it separates from nothing: `storage_key` and `metadata` are not created, and nothing
   holds a file or a vector, so the separation is not yet tested by anything.
 - [ ] Retrieval is tested with representative GATE CSE resources/queries.
 - [ ] Catalogue behaviour has API/domain/persistence/frontend tests. **Done for the catalogue**:

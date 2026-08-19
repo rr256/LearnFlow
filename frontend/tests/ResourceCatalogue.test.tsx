@@ -8,6 +8,11 @@ vi.mock("@/features/resources/actions", () => ({
   saveResourceStatus: vi.fn(),
   registerResourceAction: vi.fn(),
   saveResourceEdit: vi.fn(),
+  // The catalogue now renders each resource's notes, which reach the note
+  // actions. Their own parsing is covered by tests/resource-note-submission.test.ts.
+  writeResourceNoteAction: vi.fn(),
+  saveResourceNoteEdit: vi.fn(),
+  saveResourceNoteStatus: vi.fn(),
 }));
 
 const { ResourceCatalogue } = await import("@/features/resources/ResourceCatalogue");
