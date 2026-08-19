@@ -2,9 +2,10 @@
 title: LearnFlow RAG Ingestion
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../adr/ADR-037-learner-written-resource-notes.md
+  - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../00-project-context.md
   - overview.md
   - embeddings.md
@@ -40,10 +41,25 @@ fail. It is stored **verbatim** and, deliberately, is **not normalised**: normal
 improve retrieval from extracted text, and rewriting what a learner typed would change what they
 wrote.
 
-A note is therefore **not ingested, not chunked, not embedded, and not indexed**, and it creates no
-ingestion record. Whether it ever becomes retrieval context — and whether it is normalised at the
-point it is chunked — is left to the change that builds chunking. This section records where such a
-source would enter, not that it has.
+A note is therefore **not ingested, not chunked, and not embedded**, and it creates no ingestion
+record. Whether it is normalised at the point it is chunked is left to the change that builds
+chunking. This section records where such a source would enter, not that it has.
+
+**One narrow exception, on the word *indexed*.** A note's text **does** have a local index: a
+PostgreSQL full-text (GIN) index over every note's title and body, added for RES-013 so a learner
+can ask for passages on a topic they choose. Only **active** notes on registered material are ever
+searched, but that is a filter the query applies, not a condition of the index ([ADR-038](../adr/ADR-038-local-topic-note-retrieval.md)). That is an ordinary database
+index over text already in the table — it is **not** the vector indexing this document means. To be
+explicit about what that index is and is not:
+
+- **Not embedded**, and no embedding provider exists.
+- **Not stored in a vector database**, and no ChromaDB service exists.
+- **Not chunked**; the note is indexed whole.
+- **Not sent anywhere.** It is read on the learner's own machine, by one query, only when they ask.
+- **Nothing derived is persisted** — no chunk, no vector, no cached extract, no search history.
+
+Everything else in this document is unchanged: a note still enters no ingestion lifecycle, and
+`resource_ingestions` still does not exist.
 
 ## Ingestion Lifecycle
 
@@ -208,6 +224,7 @@ Before marking an ingestion implementation ready:
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the embedding implementation this pipeline calls
 - [RAG overview](overview.md)
 - [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — the file-free source that enters none of this lifecycle
+- [ADR-038: Retrieve passages from a learner's own notes locally, when they ask](../adr/ADR-038-local-topic-note-retrieval.md) — the full-text index an active note has, and why it is not vector indexing
 - [Embeddings](embeddings.md)
 - [RAG retrieval](retrieval.md)
 - [Provider pattern](../architecture/provider-pattern.md)

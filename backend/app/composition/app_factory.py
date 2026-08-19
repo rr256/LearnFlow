@@ -23,6 +23,7 @@ from app.composition.providers import (
     build_revisions_provider,
     build_study_goals_provider,
     build_study_plans_provider,
+    build_topic_note_retrieval_provider,
     build_topic_progress_provider,
 )
 from app.infrastructure.persistence.engine import create_database_engine, create_session_factory
@@ -37,6 +38,7 @@ from app.presentation.api.dependencies import (
     REVISIONS_PROVIDER,
     STUDY_GOALS_PROVIDER,
     STUDY_PLANS_PROVIDER,
+    TOPIC_NOTE_RETRIEVAL_PROVIDER,
     TOPIC_PROGRESS_PROVIDER,
 )
 from app.presentation.api.errors import register_error_handlers
@@ -46,6 +48,7 @@ from app.presentation.api.routes import (
     examination_schedules,
     health,
     learner,
+    note_search,
     plan_items,
     practice_questions,
     progress,
@@ -117,6 +120,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     setattr(app.state, REVISIONS_PROVIDER, build_revisions_provider(session_factory))
     setattr(app.state, RESOURCES_PROVIDER, build_resources_provider(session_factory))
     setattr(app.state, RESOURCE_NOTES_PROVIDER, build_resource_notes_provider(session_factory))
+    setattr(
+        app.state,
+        TOPIC_NOTE_RETRIEVAL_PROVIDER,
+        build_topic_note_retrieval_provider(session_factory),
+    )
     setattr(app.state, TOPIC_PROGRESS_PROVIDER, build_topic_progress_provider(session_factory))
     setattr(
         app.state,
@@ -144,6 +152,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(progress.router)
     app.include_router(revisions.router)
     app.include_router(resources.router)
+    # Registered *before* `resource_notes`, whose `/resource-notes/{note_id}`
+    # would otherwise capture `/resource-notes/search`: a path parameter matches
+    # any segment and is only validated as a UUID afterwards, so the collision
+    # would surface as a 422 rather than as a route that never ran.
+    app.include_router(note_search.router)
     app.include_router(resource_notes.router)
     app.include_router(practice_questions.router)
     app.include_router(checkpoint_quizzes.router)

@@ -84,17 +84,60 @@ def test_upgrade_creates_every_curriculum_table(migrated_database: Engine):
     assert CURRICULUM_TABLES <= tables
 
 
+EXPRESSION_INDEXES = frozenset({"ix_resource_notes_search"})
+"""Indexes built over an expression rather than over columns.
+
+Alembic **cannot compare these**. `compare_metadata` renders a textual index
+element opaquely, so an expression index that is present and identical in both
+the database and the models is reported as a drop *and* an add on every run --
+not as agreement. Comparing them here would mean asserting a difference that is
+always there.
+
+They are excluded from this comparison and checked somewhere stronger instead:
+`tests/integration/test_note_search_migration.py` reads the definition
+PostgreSQL actually stored and compares it against the expression the repository
+compiles, which catches the drift that matters -- an index the search no longer
+uses. Column indexes are still compared here as before.
+"""
+
+
 def test_models_match_the_migrated_schema(migrated_database: Engine):
     """The hand-written migration must describe exactly what the models map.
 
     Drift here means a fresh database and a developer's models disagree, which
     surfaces later as a failing query rather than a failing migration.
+
+    Expression indexes are exempt for the reason `EXPRESSION_INDEXES` records,
+    and are covered by a comparison Alembic can actually make.
     """
+
+    def comparable(
+        obj: object, name: str | None, type_: str, reflected: bool, compare_to: object
+    ) -> bool:
+        return not (type_ == "index" and name in EXPRESSION_INDEXES)
+
     with migrated_database.connect() as connection:
-        context = MigrationContext.configure(connection, opts={"compare_type": True})
+        context = MigrationContext.configure(
+            connection, opts={"compare_type": True, "include_object": comparable}
+        )
         differences = compare_metadata(context, Base.metadata)
 
     assert differences == []
+
+
+def test_every_exempt_index_actually_exists(migrated_database: Engine):
+    """An exemption must not become a way to lose an index quietly.
+
+    `test_models_match_the_migrated_schema` cannot compare these, so their
+    presence is asserted directly rather than assumed.
+    """
+    stored = {
+        index["name"]
+        for table in inspect(migrated_database).get_table_names()
+        for index in inspect(migrated_database).get_indexes(table)
+    }
+
+    assert EXPRESSION_INDEXES <= stored
 
 
 def test_downgrade_returns_the_database_to_empty(migrated_database: Engine, alembic_config: Config):

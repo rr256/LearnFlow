@@ -66,7 +66,7 @@ learner-planning area, `revision_records` arrives with `20260813_01` — the fir
 `20260806_03`, creating one table and one index and altering nothing — and `resources` and
 `resource_topic_links` arrive with `20260816_01`, the first two tables of the resource area,
 creating two tables and two indexes and altering nothing, and `resource_notes` arrives with
-`20260819_01`, one table and one index added **beyond the approved schema** and altering nothing, and the **whole assessment area** —
+`20260819_01`, one table and one index added **beyond the approved schema** and altering nothing, and its full-text GIN index arrives with `20260820_01`, **one index and no column**, altering nothing and installing no extension, and the **whole assessment area** —
 `checkpoint_quizzes`, `checkpoint_quiz_topics`, `questions`, `question_topic_links`, `quiz_questions`,
 `quiz_attempts`, and `quiz_attempt_answers` — arrives with `20260818_01`, creating seven tables and
 four indexes and altering nothing. Curated content is loaded by idempotent seeds, not by
@@ -423,7 +423,7 @@ the **first study material LearnFlow stores rather than points at**, and the **f
 uploaded files, fetched web content, and locations on the learner's own machine, and **all three stay
 out**, because text the learner typed is none of them. **It stores text and does nothing else with
 it**: nothing uploads, downloads, fetches an address, extracts, runs OCR, chunks, embeds, indexes,
-searches across notes, ranks, recommends, or answers a question. **No AI, embedding, or retrieval
+searches across notes *(narrowed by RES-013 below: a local topic search reads a note when the learner asks and stores nothing derived from it)*, ranks, recommends, or answers a question. **No AI, embedding, or retrieval
 provider is reached or configured**, `storage_key`, `metadata`, and `resource_ingestions` all stay
 absent, RES-005 to RES-008 stay unimplemented, and the use case binds **no provider at all** — a test
 asserts it, so adding one to that constructor is a visible decision. The text is stored **as the learner
@@ -436,7 +436,7 @@ normalisation step is deliberately **not** applied, because it belongs to a pipe
 and CSS `white-space: pre-wrap` rather than generated markup — so a pasted tag is read, never run. A
 note belongs to **one resource** and inherits the topics that resource covers, carrying **no topic
 links of its own**. It is **corrected in place** however often the learner likes, which is where it
-differs from ADR-035: nothing reads a note, so no stored record can disagree with a correction.
+differs from ADR-035: nothing **derived from** a note is stored, so no record can disagree with a correction.
 **Nothing is deleted** — a note is `archived` reversibly, there is no `DELETE` and no removal method
 on the port — and **material put aside is read-only, notes included** (`409`), while its notes stay
 **readable**. Bounded at **20,000 characters a note and 200 notes a resource**, both application rules
@@ -448,6 +448,8 @@ gain **no** note text, and `/plan/month` still shows none. Migration `20260819_0
 criteria are unchanged and FR-008 is not met at all**; do not write that either is complete. Proposed
 by
 [`docs/adr/ADR-037-learner-written-resource-notes.md`](docs/adr/ADR-037-learner-written-resource-notes.md).
+
+**RES-013 is the first retrieval in LearnFlow** — a learner chooses a curriculum topic and sees **passages from their own notes** that mention it, with the note, material, and topic context beside each one, at `/resources/search`. **It is retrieval alone**: nothing is generated, summarised, paraphrased, or explained, and **no AI model, embedding service, vector database, external API, URL fetcher, file uploader, OCR system, scraper, recommender, or background job is reached or configured**. The search is **PostgreSQL's own full-text search** — `to_tsvector('english', title || ' ' || body)` matched with `websearch_to_tsquery`, ordered by `ts_rank` — local and deterministic, and the use case binds **no provider at all**, asserted by a test. **It runs only when the learner asks**, never from a page render; the screen is a plain `GET` form and needs **no server action**. It **narrows ADR-037's "nothing reads a note"** on one point — the note form now says the text is stored on this computer, never sent anywhere, read by nothing except the topic search which runs locally and only when asked, and seen by no AI model — while **ADR-037's correction argument is untouched**, because the search **stores nothing derived from a note**: no chunk, no embedding, no cached extract, **no search history**. **Only `active` notes on `registered` material the learner linked to that topic** are searched, so archived material drops out as everywhere else. **The topic is the query**: there is **no free-text field**, and nothing records what was searched for. A **passage is an exact substring of the stored note** — one contiguous window of about sixty words, capped at twenty passages — cut **in the application**, never rendered by the database: `ts_headline` was removed because its parser drops text it reads as an HTML tag, so `vector<int>` came back mangled. Every literal survives, nothing is joined or elided, and the **stored note is never altered**. **Relevance decides the order and nothing else**: the rank is discarded before leaving the adapter and appears in no DTO, contract, or screen, and **nothing is counted**. **Three empty answers are told apart** — `no_linked_material`, `no_active_notes`, `no_matching_passage` — because each asks for a different next step. Migration `20260820_01` adds **one GIN index over an expression and no column**, installs **no extension**, reads no row, and its downgrade loses nothing. **MNT-001 and MNT-002 stay unimplemented and there is no mentor.** **FR-007's four criteria are unchanged and FR-008 is not met** — one of six criteria partly met; do not write that either is complete. Contracted by [`docs/adr/ADR-038-local-topic-note-retrieval.md`](docs/adr/ADR-038-local-topic-note-retrieval.md).
 
 **Learner setup** is the canonical name for this capability — in prose, API documentation, and UI
 copy. **Onboarding** names only the first-time UI flow, which is why `frontend/features/onboarding/`
@@ -486,7 +488,7 @@ and `/practice/history` reading every attempt over QZ-006 a page at a time, also
 It reuses `features/resources/topic-options.ts` for both topic pickers rather than copying it. And a `/resources`
 learning-resource catalogue that lists the learner's own study material over RES-002, registers it
 over RES-001, **corrects** it or puts it aside and back over RES-004, and keeps the learner's **own
-written notes** against each piece over RES-009 to RES-012 — read and written there alone, each in a
+written notes** against each piece over RES-009 to RES-012, with `/resources/search` finding passages in those notes for a chosen topic over RES-013 — a plain `GET` form, **read-only**, needing no server action — read and written there alone, each in a
 closed disclosure, rendered as plain text — reading GOAL-002 and
 CUR-003 to offer the topics it may be linked to. It supports **add, edit, and archive**; material
 put aside is read-only, so a learner puts it back before correcting it, and the edit form never

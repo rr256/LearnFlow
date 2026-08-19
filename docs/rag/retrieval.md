@@ -2,9 +2,10 @@
 title: LearnFlow RAG Retrieval
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-07-29
+last_updated: 2026-08-19
 related:
   - ../00-project-context.md
+  - ../adr/ADR-038-local-topic-note-retrieval.md
   - overview.md
   - ingestion.md
   - embeddings.md
@@ -16,6 +17,30 @@ related:
 ## Purpose
 
 Define how LearnFlow finds relevant, authorized learning-resource excerpts for mentor answers, practice generation, and resource recommendations.
+
+## Implementation status
+
+**One retrieval exists, and it is not the one below.** [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md) implements
+RES-013: a learner chooses a curriculum topic and receives passages from their **own active notes**,
+found by **PostgreSQL full-text search running locally**. It satisfies parts of this document and
+deliberately not others:
+
+| This document asks for | RES-013 |
+| --- | --- |
+| Effective-learner ownership filtering | **Done**, in the query rather than after it. |
+| Topic filtering | **Done** — linkage bounds the search, so only material the learner linked to the topic is read. |
+| Resource status filtering | **Done** — active notes on registered material only. |
+| Source references with the excerpt | **Done** — note, material, kind, topic, and subject. |
+| No raw vector IDs, paths, or debug values exposed | **Done** — none exists to expose. |
+| Embedding the query through an embedding provider | **Not done.** There is no embedding provider and no vector search. |
+| A relevance threshold, reranking, duplicate reduction | **Not done.** Ordering is `ts_rank`; nothing is reranked or deduplicated. |
+| Sending selected context to an AI provider | **Not done, and out of scope.** No answer is generated. |
+| Retrieval evaluation against representative questions | **Not done.** Nothing claims this search has been evaluated. |
+
+**The mentor behaviour, grounding, and citation rules below are unimplemented**, because nothing
+generates an answer. The failure modes below assume a vector provider and an ingestion state; the one
+that applies today is *no relevant matches*, which RES-013 reports as its own outcome rather than
+implying the notes are lacking.
 
 ## Retrieval Contract
 
@@ -180,6 +205,7 @@ Keep an evaluation set of learner-authorized or synthetic queries; do not depend
 - [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why vector search stays behind a retrieval port
 - [ADR-004: Use Ollama as the initial local AI provider](../adr/ADR-004-ollama-local-ai-provider.md) — the embedding implementation used for query vectors
 - [RAG overview](overview.md)
+- [ADR-038: Retrieve passages from a learner's own notes locally, when they ask](../adr/ADR-038-local-topic-note-retrieval.md) — the one retrieval implemented, and which parts of this document it satisfies
 - [RAG ingestion](ingestion.md)
 - [Embeddings](embeddings.md)
 - [LearnFlow product agents](../ai/learnflow-agents.md)

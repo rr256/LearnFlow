@@ -2,7 +2,7 @@
 title: "ADR-032: Catalogue Learner-Owned Study Material as Metadata, Linked to Topics"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - ADR-008-assessment-and-mistake-evidence-model.md
@@ -75,6 +75,22 @@ It needs **one migration**: `20260816_01`, two `CREATE TABLE`s and two indexes. 
 altered.
 
 ## Implementation status
+
+**2026-08-20 — a learner's notes can now be searched, locally.**
+
+[ADR-038](ADR-038-local-topic-note-retrieval.md) adds **explicit, local PostgreSQL full-text
+retrieval over a learner's active notes**: they choose a curriculum topic and receive passages from
+the notes on material they linked to it.
+
+**This corrects the note below dated 2026-08-19**, which said that nothing searches a note. Something
+does — on the learner's own machine, and only when they ask for it.
+
+Retrieval returns **exact plain-text substrings** of the stored notes, with nothing highlighted,
+escaped, joined, elided, or rewritten, and it **sends nothing externally**: no AI model, embedding
+service, vector database, or outbound call of any kind is involved, and nothing derived from a note
+is stored.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
 
 **2026-08-19 — a learner's own written notes are now stored against a resource.**
 

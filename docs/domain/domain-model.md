@@ -9,6 +9,7 @@ related:
   - terminology.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-037-learner-written-resource-notes.md
+  - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
@@ -98,7 +99,7 @@ Text the learner typed or pasted themselves, kept against one learning resource:
 
 It belongs to exactly one resource and **inherits the topics that resource covers**, carrying none of its own, so correcting what a resource covers moves its notes with it and the two can never disagree.
 
-This is the **one place the model holds study material rather than a pointer to it**, and the boundary is narrow: the learner types or pastes, and nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, indexes, or searches it. Chunks, embeddings, and vector records remain [non-entities](entities.md#important-non-entities) — derived data belonging in a vector index, rebuildable from the note. A note is corrected in place and put aside rather than deleted. See [entities](entities.md#resource-note) and [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
+This is the **one place the model holds study material rather than a pointer to it**, and the boundary is narrow: the learner types or pastes, and nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, or indexes it into a vector store. One thing reads it: the *topic note search*, a local PostgreSQL full-text search the learner asks for, which stores nothing derived from a note. Chunks, embeddings, and vector records remain [non-entities](entities.md#important-non-entities) — derived data belonging in a vector index, rebuildable from the note. A note is corrected in place and put aside rather than deleted. See [entities](entities.md#resource-note), [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), and [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
 
 ### Examination Schedule
 

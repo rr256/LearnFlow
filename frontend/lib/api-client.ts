@@ -32,6 +32,7 @@ import type {
   LearningResourceUpdate,
   NewLearningResource,
 } from "@/types/resource";
+import type { TopicNoteSearch, TopicNoteSearchResponse } from "@/types/note-search";
 import type {
   NewResourceNote,
   ResourceNote,
@@ -897,6 +898,33 @@ export async function updateResourceNote(
     throw new ApiError("malformed_response", "The API returned a malformed note.", null);
   }
   return (body as ResourceNoteResponse).data;
+}
+
+/**
+ * RES-013 -- find passages in the learner's own notes for one topic.
+ *
+ * **Retrieval only.** No answer is generated, nothing is summarised, and no AI
+ * model, embedding service, or vector store is involved: the search is
+ * PostgreSQL's own full-text search, running locally.
+ *
+ * **The topic is the query.** There is no free-text parameter, deliberately.
+ *
+ * Only the learner's own active notes, on registered material they linked to
+ * this topic, are searched. An empty answer carries an `outcome` saying which of
+ * the three reasons applies.
+ *
+ * @throws ApiError with `isNotFound` when the topic is not stored, or
+ *   `isConflict` when setup has not created a learner yet.
+ */
+export async function searchTopicNotes(topicId: string): Promise<TopicNoteSearch> {
+  const query = new URLSearchParams({ topic_id: topicId });
+  const body = await requestJson(`/api/v1/resource-notes/search?${query.toString()}`);
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed search result.", null);
+  }
+  return (body as TopicNoteSearchResponse).data;
 }
 
 /**

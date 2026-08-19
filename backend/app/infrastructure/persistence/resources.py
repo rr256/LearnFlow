@@ -31,7 +31,7 @@ belonging to nobody would be invisible to every learner-scoped read.
 
 import uuid
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.persistence.base import (
@@ -160,6 +160,19 @@ something aside, per docs/domain/terminology.md.
 """
 
 
+SEARCH_CONFIGURATION = "english"
+"""The PostgreSQL text-search configuration a note is indexed and searched with.
+
+The **same** name must reach the index, the query, and the headline: a
+mismatch silently stops the index being used and changes which passages
+match. `note_search_repository` imports this rather than repeating it, and
+migration `20260820_01` writes it out for itself, as a migration must.
+
+``english`` rather than ``simple`` for its stemming, which is what lets a
+topic called *Process Scheduling* find a note that says "schedulers".
+"""
+
+
 class ResourceNote(UuidPrimaryKeyMixin, TimestampMixin, Base):
     """One note a learner keeps against a piece of their study material.
 
@@ -207,4 +220,23 @@ class ResourceNote(UuidPrimaryKeyMixin, TimestampMixin, Base):
         # pattern every read here uses, mirroring
         # `resources(owner_learner_id, status)` one level down.
         Index("ix_resource_notes_resource_id_status", "resource_id", "status"),
+        # The full-text index RES-013 searches through, added by migration
+        # `20260820_01`. Declared here as well as written out there so the
+        # models and a migrated database do not drift -- the property
+        # `test_models_match_the_migrated_schema` holds for every other object.
+        #
+        # An **expression index, not a stored column**: a generated `tsvector`
+        # column would mean holding a derived representation of note text in a
+        # learner-owned table, which ADR-037 kept out of the schema. See
+        # ADR-038.
+        #
+        # The two-argument `to_tsvector` with a literal configuration is
+        # required. The one-argument form reads `default_text_search_config` at
+        # runtime, which makes it STABLE rather than IMMUTABLE, and PostgreSQL
+        # refuses to index a non-immutable expression.
+        Index(
+            "ix_resource_notes_search",
+            text(f"to_tsvector('{SEARCH_CONFIGURATION}', title || ' ' || body)"),
+            postgresql_using="gin",
+        ),
     )

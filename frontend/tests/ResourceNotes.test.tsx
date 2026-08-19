@@ -136,7 +136,7 @@ describe("ResourceNotes", () => {
     // NFR-001 asks for the data-sharing position to be clear before it matters.
     const { container } = render(<ResourceNotes notes={[]} resourceId="resource-1" writable />);
 
-    expect(container.textContent).toMatch(/not sent anywhere/i);
+    expect(container.textContent).toMatch(/stored on this computer/i);
   });
 
   it("offers no control on material the learner has put aside", () => {
@@ -170,14 +170,29 @@ describe("ResourceNotes", () => {
     expect(container.textContent).not.toMatch(/delete|remove|erase/i);
   });
 
-  it("neither searches notes nor offers to", () => {
-    // Storage only: nothing here searches across notes, and no search control
-    // may suggest that it does.
+  it("offers no search control of its own", () => {
+    // Searching lives at /resources/search, where the learner asks for it. This
+    // area writes and reads one resource's notes and nothing more.
+    //
+    // The wording changed with ADR-038: the copy now *names* the topic search,
+    // because a privacy statement that quietly stopped being true would be worse
+    // than none. What must stay absent is a control here, not the word.
     const { container } = render(
       <ResourceNotes notes={[note()]} resourceId="resource-1" writable />,
     );
 
     expect(container.querySelector('input[type="search"]')).toBeNull();
-    expect(container.textContent).not.toMatch(/search|ask (a|the) (question|mentor)/i);
+    expect(container.textContent).not.toMatch(/ask (a|the) (question|mentor)/i);
+  });
+
+  it("says who reads a note and when, rather than that nothing does", () => {
+    // ADR-038 narrowed ADR-037's promise: the topic search reads notes, locally
+    // and only when asked. The form says so.
+    const { container } = render(<ResourceNotes notes={[]} resourceId="resource-1" writable />);
+
+    expect(container.textContent).toMatch(/never sent anywhere/i);
+    expect(container.textContent).toMatch(/only when you ask/i);
+    expect(container.textContent).toMatch(/no AI model/i);
+    expect(container.textContent).not.toMatch(/nothing reads it/i);
   });
 });
