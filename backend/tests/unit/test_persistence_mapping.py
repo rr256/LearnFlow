@@ -14,7 +14,7 @@ tests/integration/test_examination_schedule_migration.py.
 import uuid
 
 import pytest
-from sqlalchemy import Boolean, Date, DateTime, Integer, String, Uuid
+from sqlalchemy import Boolean, Date, DateTime, Integer, String, Text, Uuid
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex, CreateTable
 
@@ -57,9 +57,11 @@ from app.infrastructure.persistence.progress import (
     RevisionRecord,
 )
 from app.infrastructure.persistence.resources import (
+    RESOURCE_NOTE_STATUSES,
     RESOURCE_TOPIC_ROLES,
     RESOURCE_TYPES,
     Resource,
+    ResourceNote,
     ResourceTopicLink,
 )
 
@@ -86,7 +88,7 @@ LEARNER_PLANNING_TABLES = (
 
 PROGRESS_TABLES = ("learner_topic_progress", "revision_records")
 
-RESOURCE_TABLES = ("resources", "resource_topic_links")
+RESOURCE_TABLES = ("resources", "resource_topic_links", "resource_notes")
 
 ASSESSMENT_TABLES = (
     "checkpoint_quizzes",
@@ -123,6 +125,11 @@ def test_only_the_migrated_tables_are_mapped():
 
     The assessment area arrived whole with the checkpoint-practice code that
     reads it (ADR-033), which is why its seven tables are mapped here.
+
+    `resource_notes` is mapped although docs/database/schema.md's approved area
+    does not list it: it holds text the learner typed themselves, which is
+    neither a file nor a derived representation of one, so no approved table
+    could hold it. See ADR-037.
     """
     assert set(Base.metadata.tables) == set(MAPPED_TABLES)
 
@@ -858,6 +865,75 @@ def test_the_resource_index_matches_the_documented_access_pattern():
     )
 
     assert [column.name for column in index.columns] == ["owner_learner_id", "status"]
+
+
+def test_a_note_belongs_to_one_resource_and_carries_no_topics_of_its_own():
+    """It inherits the topics its resource covers, so the two cannot disagree."""
+    columns = set(ResourceNote.__table__.columns.keys())
+
+    assert "resource_id" in columns
+    assert "topic_id" not in columns
+    assert "resource_note_topic_links" not in Base.metadata.tables
+
+
+def test_a_note_status_is_constrained_to_the_two_a_learner_can_reach():
+    """Both are written, unlike the resource statuses: nothing here waits on
+    storage that does not exist."""
+    ddl = compiled("resource_notes")
+
+    assert "ck_resource_notes_status_is_known" in ddl
+    for status in RESOURCE_NOTE_STATUSES:
+        assert f"'{status}'" in ddl
+    assert "'processing'" not in ddl
+    assert "'ready'" not in ddl
+
+
+def test_a_note_must_have_text_in_it():
+    """A note with an empty body is a title and nothing else.
+
+    A regex rather than `btrim`, whose one-argument form strips spaces alone: a
+    body of newlines and tabs would otherwise pass a check meant to refuse it.
+    """
+    ddl = compiled("resource_notes")
+
+    assert "ck_resource_notes_body_is_not_empty" in ddl
+    assert "body ~ '[^[:space:]]'" in ddl
+
+
+def test_a_note_body_is_unbounded_text_so_its_limit_stays_an_application_rule():
+    """docs/database/schema.md requires `text` for learner-facing prose.
+
+    How much a learner may actually write is MAX_NOTE_BODY_LENGTH, so raising it
+    later is a use-case change rather than a migration.
+    """
+    body = ResourceNote.__table__.columns["body"]
+
+    assert isinstance(body.type, Text)
+    assert body.type.length is None
+    assert body.nullable is False
+
+
+def test_no_derived_representation_is_stored_beside_a_note():
+    """Chunks, embeddings, and vectors are docs/domain/entities.md non-entities.
+
+    If retrieval is ever built they belong in the vector index, rebuildable from
+    this table, never in it.
+    """
+    columns = set(ResourceNote.__table__.columns.keys())
+
+    for absent in ("embedding", "vector", "chunk_index", "embedding_model", "fingerprint"):
+        assert absent not in columns
+
+
+def test_the_note_index_matches_the_access_pattern_every_read_uses():
+    """One resource's notes, and whether they are put aside."""
+    index = next(
+        index
+        for index in ResourceNote.__table__.indexes
+        if index.name == "ix_resource_notes_resource_id_status"
+    )
+
+    assert [column.name for column in index.columns] == ["resource_id", "status"]
 
 
 def test_a_resource_topic_link_is_keyed_on_resource_topic_and_role():

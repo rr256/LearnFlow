@@ -1,0 +1,102 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  margin-top: var(--space-3);
+  max-width: var(--measure);
+}
+
+.hint {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field input {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--colour-surface);
+  color: var(--colour-text);
+  font: inherit;
+  /* A long title shrinks the control rather than the page. */
+  min-width: 0;
+}
+
+/*
+ * The text area inherits the reading font rather than a monospace default: what
+ * a learner pastes is prose as often as it is code, and their own line breaks
+ * are preserved either way.
+ *
+ * `resize: vertical` only, so dragging it cannot widen the page past the layout.
+ */
+.field textarea {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--colour-surface);
+  color: var(--colour-text);
+  font: inherit;
+  line-height: 1.5;
+  min-width: 0;
+  resize: vertical;
+}
+
+.fieldHint {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.actions button {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--colour-surface);
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.actions button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/*
+ * Both outcomes carry their meaning in words as well as colour, so neither
+ * depends on being seen (docs/development/coding-standards.md).
+ */
+.saved {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.failed {
+  margin: 0;
+  border-left: 3px solid var(--colour-notice-border);
+  padding-left: var(--space-2);
+  color: var(--colour-text);
+  font-size: 0.875rem;
+}

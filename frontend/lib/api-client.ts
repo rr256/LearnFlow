@@ -33,6 +33,13 @@ import type {
   NewLearningResource,
 } from "@/types/resource";
 import type {
+  NewResourceNote,
+  ResourceNote,
+  ResourceNoteCollectionResponse,
+  ResourceNoteResponse,
+  ResourceNoteUpdate,
+} from "@/types/resource-note";
+import type {
   Revision,
   RevisionCollectionResponse,
   RevisionResponse,
@@ -804,6 +811,92 @@ export async function updateResource(
     );
   }
   return (body as LearningResourceResponse).data;
+}
+
+/**
+ * RES-010 -- list the notes kept against one piece of study material.
+ *
+ * Newest first. No status is assumed by the API, so a caller wanting only what
+ * the learner is using asks for `active` and one wanting what has been put aside
+ * asks for `archived`.
+ *
+ * The notes of archived material are still readable: putting material aside
+ * stops it being written to and destroys nothing.
+ *
+ * @throws ApiError with `isNotFound` when no such resource is stored or it is
+ *   not the local learner's.
+ */
+export async function listResourceNotes(
+  resourceId: string,
+  { status, limit = MAX_PAGE_SIZE, offset = 0 }: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  } = {},
+): Promise<ResourceNote[]> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (status) {
+    query.set("status", status);
+  }
+  const body = await requestJson(
+    `/api/v1/resources/${encodeURIComponent(resourceId)}/notes?${query.toString()}`,
+  );
+  unwrapCollection(body, "a resource note collection");
+
+  return (body as ResourceNoteCollectionResponse).data;
+}
+
+/**
+ * RES-009 -- keep one note against a piece of study material.
+ *
+ * The text is stored and nothing else is done with it: it is not uploaded,
+ * fetched, extracted, indexed, searched, or sent to any provider. It comes back
+ * exactly as it was written.
+ *
+ * @throws ApiError with a `validation_error` when the note has no text, no
+ *   title, or more text than one note may hold, `isNotFound` when the material
+ *   is not the local learner's, or `isConflict` when the material is put aside.
+ */
+export async function writeResourceNote(
+  resourceId: string,
+  note: NewResourceNote,
+): Promise<ResourceNote> {
+  const body = await requestJson(
+    `/api/v1/resources/${encodeURIComponent(resourceId)}/notes`,
+    { method: "POST", body: note },
+  );
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed note.", null);
+  }
+  return (body as ResourceNoteResponse).data;
+}
+
+/**
+ * RES-012 -- correct a note, or put it aside.
+ *
+ * A field left out of `changes` is not modified. A note may be corrected in
+ * place as often as the learner likes; putting one aside is reversible and
+ * destroys nothing -- there is no delete.
+ *
+ * @throws ApiError with `isNotFound` when no such note is stored or it is not
+ *   the local learner's, or `isConflict` when its material is put aside.
+ */
+export async function updateResourceNote(
+  noteId: string,
+  changes: ResourceNoteUpdate,
+): Promise<ResourceNote> {
+  const body = await requestJson(`/api/v1/resource-notes/${encodeURIComponent(noteId)}`, {
+    method: "PATCH",
+    body: changes,
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed note.", null);
+  }
+  return (body as ResourceNoteResponse).data;
 }
 
 /**

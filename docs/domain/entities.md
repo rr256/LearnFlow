@@ -2,8 +2,9 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 related:
+  - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-028-revision-workflow.md
   - ../00-project-context.md
   - domain-model.md
@@ -87,13 +88,30 @@ Represents a learner-owned or curated study reference, such as a PDF, notes, PYQ
 
 **Key relationships:** may link to multiple topics and subtopics; may later be ingested into the knowledge base.
 
-It records **where the material is, never the material**: nothing is uploaded, extracted, or indexed
-today. A source location is a web link, a *source label* in the learner's own words, or both, and a
+It records **where the material is, never the material**: nothing is uploaded, fetched, extracted,
+or indexed today. The one thing stored *about* it rather than *pointing at* it is a
+[resource note](#resource-note), which the learner typed themselves. A source location is a web link, a *source label* in the learner's own words, or both, and a
 resource carries at least one of the two — **no location on the learner's own machine is stored**.
 A resource is put aside rather than deleted, and a topic's resources are the ones the learner linked
 to it rather than any LearnFlow recommends. Subject-level links are not stored; a resource names
 topics and subtopics, which are the same record. See
 [ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
+
+### Resource Note
+
+Represents text the learner typed or pasted themselves, kept against one learning resource: their own notes on a piece of study material, or a passage they transcribed from it.
+
+**Responsible for:** holding what the learner wrote, exactly as they wrote it, and whether they are still using it.
+
+**Key relationships:** belongs to exactly one learning resource, and inherits the topics that resource covers.
+
+It is the **first study material LearnFlow stores rather than points at**, and deliberately the only kind:
+nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, indexes,
+or searches it, and nothing reads it at all. It carries **no topic links of its own**, so a learner
+correcting what a resource covers moves its notes with it. A note is corrected in place as often as
+the learner likes — nothing reads one, so no stored record can be made to disagree with a correction
+— and it is put aside rather than deleted. Notes on material that is put aside are read-only and stay
+readable. See [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 
 ### Examination Schedule
 
@@ -297,7 +315,7 @@ The labels above are what a learner reads. [Terminology](terminology.md) is auth
 
 The following are important, but are not domain entities in this document:
 
-- **PDF chunks, embeddings, and vector records:** RAG/infrastructure implementation details.
+- **PDF chunks, embeddings, and vector records:** RAG/infrastructure implementation details. They are derived data belonging in a vector index, rebuildable from the source; a *resource note* is not one of them, because the learner wrote it and nothing derived it.
 - **AI provider, storage provider, and vector provider:** architecture interfaces/adapters.
 - **Priority focus area:** a learner-facing *gathering* of records that already exist — an item whose day has passed, a review reported as due, a saved week that falls short — rather than a stored entity. Nothing is calculated, scored, or ranked to produce one; see [terminology](terminology.md) and [ADR-031](../adr/ADR-031-priority-focus-panel.md).
 - **Authentication credentials and roles:** future identity/security concerns; not part of the local single-learner MVP domain behavior.
@@ -319,7 +337,7 @@ Checkpoint Quiz ── Topic (one or more)
 Learning Program ── Curriculum Version ── Subject ── Topic
 Learning Program ── Examination Schedule ── Examination Period
 Topic ── Topic Relationship ── Topic
-Topic ── Learning Resource
+Topic ── Learning Resource ── Resource Note
 ```
 
 ## Related Documents
@@ -341,3 +359,4 @@ Topic ── Learning Resource
 - [Functional requirements](../requirements/functional.md)
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md)
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — what a *learning resource* records today, and what it deliberately does not — the revision record this persists, and why it is not a plan item
+- [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — the *Resource Note* entity, and why it is not a derived representation

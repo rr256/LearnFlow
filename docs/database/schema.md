@@ -2,10 +2,11 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-035-practice-question-correction.md
   - ../00-project-context.md
@@ -37,7 +38,7 @@ Define the initial logical PostgreSQL schema for LearnFlow. This is the baseline
 
 ## Implementation Status
 
-Every table below is approved. Tables are created one schema area per migration, in the milestone
+Every table below is approved, with **one exception**: `resource_notes` was added beyond this document by [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), for the reason [its area review](#resources-and-rag-metadata-area-second-partial-review-2026-08-19) records. Tables are created one schema area per migration, in the milestone
 that introduces the code reading them, per [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md).
 
 The areas are those in [Schema Areas](#schema-areas) below; the milestones are defined in
@@ -50,7 +51,7 @@ tables arrive in more than one migration.
 | Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
 | Learner planning | Implemented — `learners` and `study_goals` arrive in migration `20260801_01`, `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots), `study_goals`' planning preferences in `20260806_02`, as two typed columns rather than the `planning_preferences jsonb` documented [below](#study_goals), and `study_plans` and `plan_items` in `20260806_03`, whose controlled columns are `varchar(32)` guarded by a `CHECK` rather than the `text` documented [below](#study_plans). |
 | Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `revision_records` arrives in `20260813_01` with the revision code that reads it, per [ADR-028](../adr/ADR-028-revision-workflow.md). `study_activities` still arrives with the code that records study work. |
-| Resources and RAG metadata | Partly implemented — `resources` and `resource_topic_links` arrive in migration `20260816_01` with the catalogue code that reads them (RES-001 to RES-004), per [ADR-032](../adr/ADR-032-learning-resource-catalogue.md); two columns of `resources` are deliberately not created, and `resource_ingestions` arrives with the extractor and vector index it tracks. See [below](#resources). |
+| Resources and RAG metadata | Partly implemented — `resources` and `resource_topic_links` arrive in migration `20260816_01` with the catalogue code that reads them (RES-001 to RES-004), per [ADR-032](../adr/ADR-032-learning-resource-catalogue.md); two columns of `resources` are deliberately not created, and `resource_ingestions` arrives with the extractor and vector index it tracks. `resource_notes` arrives in `20260819_01` with the code that reads it (RES-009 to RES-012) and is **added beyond the tables this document approves**, per [ADR-037](../adr/ADR-037-learner-written-resource-notes.md). See [below](#resources). |
 | Assessment | Implemented — all seven tables arrive in migration `20260818_01` with the checkpoint-practice code that reads them (QZ-001 to QZ-010), per [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). Seven columns are deliberately not created and one is added beyond this document; see [the area review](#assessment-area-review-2026-08-18). |
 | External evidence | Not implemented — arrives with FR-010, in the second half of Milestone 5. `mistake_evidence` waits with it: two of its four discovery sources reference tables in this area. |
 
@@ -102,6 +103,7 @@ Progress and revision
 
 Resources and RAG metadata
   resources ↔ resource_topic_links → resource_ingestions
+  resources → resource_notes
 
 Assessment
   checkpoint_quizzes ↔ checkpoint_quiz_topics → topics
@@ -693,6 +695,53 @@ table; [FR-007](../requirements/functional.md#fr-007-learning-resource-organizat
 subjects, topics, or subtopics" is therefore met for two of the three, and a subject-level link is a
 table no requirement has yet constrained.
 
+### `resource_notes`
+
+Stores the learner's own written notes and copied-out passages against one learning resource.
+
+**Added beyond the tables this document originally approved**, by migration `20260819_01` with the
+code that reads it, per [ADR-037](../adr/ADR-037-learner-written-resource-notes.md). This is the
+second such addition, after `questions.author_learner_id`; see
+[the area review](#resources-and-rag-metadata-area-second-partial-review-2026-08-19) below for why no approved table
+could hold it.
+
+| Column | Type | Notes | State |
+| --- | --- | --- | --- |
+| `id` | uuid PK | Note identifier. | Implemented |
+| `resource_id` | uuid FK | References `resources.id`. | Implemented |
+| `title` | text | What the learner calls this note. | Implemented |
+| `body` | text | The learner's own text, with line terminators canonicalised to `LF` and surrounding whitespace removed; nothing else is touched. | Implemented |
+| `status` | varchar(32) | `active` or `archived`. Both are written. | Implemented |
+| `created_at`, `updated_at` | timestamptz | Audit timestamps. | Implemented |
+
+**Constraints:** `status` is constrained to its two values; `body` must contain at least one
+non-whitespace character, enforced by `ck_resource_notes_body_is_not_empty` as
+`body ~ '[^[:space:]]'`. A regex rather than `length(btrim(body)) > 0`, because PostgreSQL's
+one-argument `btrim` strips spaces alone and a body of newlines and tabs would pass a check meant to
+refuse it. **Index:** `resource_notes(resource_id, status)`, mirroring
+`resources(owner_learner_id, status)` one level down.
+
+**`body` is unbounded `text`**, as the *Conventions* above require of learner-facing prose. How much
+a learner may actually write is an **application** rule — 20,000 characters a note, and 200 notes a
+resource — so raising either is a use-case change rather than a migration, the argument
+[ADR-020](../adr/ADR-020-initial-study-plan-generation.md) made for `plan_items.status`. What the
+table enforces is only that a note is not empty.
+
+**This is study material, not a pointer to it**, and deliberately the only kind LearnFlow stores.
+Nothing uploads a file, fetches an address, downloads a page, extracts text, or runs OCR to fill it:
+`resources.storage_key`, `resources.metadata`, and `resource_ingestions` all stay absent, and no
+chunk, embedding, or vector is stored anywhere. Those are
+[non-entities](../domain/entities.md#important-non-entities) belonging to a vector index, rebuildable
+from this table.
+
+**There is no topic link table.** A note belongs to one resource and inherits the topics that
+resource covers, so a learner correcting what a resource covers moves its notes with it and the two
+can never disagree.
+
+**Nothing deletes a note.** A learner puts one aside by moving `status` to `archived`, which is
+reversible — the position `resources.status` takes, and `questions.status` with `retired`. A note on
+**archived material is read-only** until the material is put back, and stays readable throughout.
+
 ### `resource_ingestions`
 
 Tracks extraction and indexing of eligible resources.
@@ -910,6 +959,7 @@ the migration that creates its table; the entries marked below are implemented t
 - `revision_records(learner_id, due_on, status)` — implemented
 - `study_activities(learner_id, topic_id, created_at desc)`
 - `resource_topic_links(topic_id, resource_id)` — implemented
+- `resource_notes(resource_id, status)` — implemented
 - `resources(owner_learner_id, status)` — implemented
 - `resource_ingestions(resource_id, status)`
 - `checkpoint_quiz_topics(topic_id, checkpoint_quiz_id)` — implemented
@@ -1487,6 +1537,48 @@ Covered by this review:
 One table of this area does not exist yet, so it stays **partly reviewed** for the two created and
 unreviewed for `resource_ingestions`.
 
+### Resources and RAG metadata area — second partial review 2026-08-19
+
+This review covers `resource_notes` alone, the one table migration `20260819_01` creates. The
+[2026-08-16 review](#resources-and-rag-metadata-area-partial-review-2026-08-16) stands unchanged for
+`resources` and `resource_topic_links`; `resource_ingestions` remains unreviewed and unimplemented.
+The decision this rests on is [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
+
+**This table is not in the approved area**, which is the point worth recording. The area anticipated
+**derived** representations of learner material — chunks and embeddings in a vector index, with
+`resource_ingestions` tracking the extraction that produced them. Text a learner **typed themselves**
+is neither derived nor a file: there is nothing to extract from it, and no ingestion status it could
+honestly carry. No approved table could hold it, so one was added — the second time this repository
+has gone beyond this document, after `questions.author_learner_id` in
+[the assessment area review](#assessment-area-review-2026-08-18).
+
+- `status` is `snake_case` text guarded by a `CHECK`, in `varchar(32)`, following this document's own
+  *Conventions* and the departure `day_of_week`, `topic_sequencing`, the study-plan columns, the
+  revision columns, and the resource columns each made. **Both its values are written**, unlike
+  `resources.status`: nothing here waits on storage that does not exist.
+- `active` rather than `registered`. *Registering* is what a learner does to a resource and it names
+  where material is; a note is written. `archived` **is** reused deliberately — it is the resources
+  word for putting something aside, per [terminology](../domain/terminology.md).
+- `body` is unbounded `text` and carries only a non-empty check, so the length a learner may write
+  stays an application rule. `ck_resource_notes_body_is_not_empty` uses a regex rather than `btrim`
+  for the reason given above; the migration test asserts the case that distinguishes them.
+- The foreign key to `resources` is **not a cascade**, for the reason `resource_topic_links` gives:
+  nothing deletes a resource, so a cascade would describe a path that does not exist.
+- One index, `ix_resource_notes_resource_id_status`, serves the only access pattern there is — one
+  resource's notes, and whether they are put aside. Its name is 36 characters, comfortably inside
+  PostgreSQL's 63-byte identifier limit.
+- **No derived column exists**: no `embedding`, `vector`, `chunk_index`, `embedding_model`, or
+  content fingerprint. Both the mapping test and the migration test assert their absence, so a change
+  that begins storing derived data has to remove an assertion first.
+
+| Detail this document leaves open | Whether this migration settles it |
+| --- | --- |
+| Numeric precision for score and marks columns | Not applicable to this area, and still open. |
+| Whether `resource_ingestions` is needed at all | **Not settled.** This stores text that needs no extraction; a file still would. |
+
+The area is therefore reviewed for `resources`, `resource_topic_links`, and `resource_notes`, and
+unreviewed for `resource_ingestions`.
+
 ### Assessment area — review 2026-08-18
 
 This is a review of the assessment tables as created by migration
@@ -1604,4 +1696,5 @@ learner records reference, and this document forbids deleting one casually.
 - [Functional requirements](../requirements/functional.md)
 - [API endpoints](../api/endpoints.md)
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the two resource tables above, the two columns they leave uncreated, and why a link is a web address
+- [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — `resource_notes`, the one table added beyond this document
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — `revision_records`, its two departures from the table above, and the revision-scheduling rules this document held pending

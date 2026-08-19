@@ -22,6 +22,7 @@ from fastapi import Request
 from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
+from app.application.use_cases.manage_resource_notes import ManageResourceNotes
 from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_goals import ManageStudyGoals
@@ -39,6 +40,7 @@ STUDY_GOALS_PROVIDER = "study_goals_provider"
 STUDY_PLANS_PROVIDER = "study_plans_provider"
 REVISIONS_PROVIDER = "revisions_provider"
 RESOURCES_PROVIDER = "resources_provider"
+RESOURCE_NOTES_PROVIDER = "resource_notes_provider"
 TOPIC_PROGRESS_PROVIDER = "topic_progress_provider"
 PRACTICE_QUESTIONS_PROVIDER = "practice_questions_provider"
 CHECKPOINT_QUIZZES_PROVIDER = "checkpoint_quizzes_provider"
@@ -93,6 +95,13 @@ def provide_revisions(request: Request) -> Iterator[ManageRevisions]:
 def provide_resources(request: Request) -> Iterator[ManageResources]:
     """Yield the learning-resource use case bound to this request's unit of work."""
     provider = getattr(request.app.state, RESOURCES_PROVIDER)
+    with provider() as use_case:
+        yield use_case
+
+
+def provide_resource_notes(request: Request) -> Iterator[ManageResourceNotes]:
+    """Yield the resource-note use case bound to this request's unit of work."""
+    provider = getattr(request.app.state, RESOURCE_NOTES_PROVIDER)
     with provider() as use_case:
         yield use_case
 

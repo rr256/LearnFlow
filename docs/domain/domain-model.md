@@ -2,12 +2,13 @@
 title: LearnFlow Domain Model
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 related:
   - ../00-project-context.md
   - entities.md
   - terminology.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
+  - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-017-topic-progress-api-and-schema.md
   - ../adr/ADR-018-weekly-availability-slots.md
   - ../adr/ADR-019-study-goal-planning-preferences.md
@@ -43,6 +44,7 @@ Learning Program
   └── Subject
        └── Topic / Subtopic
             ├── Learning Resource
+            │    └── Resource Note
             ├── Learner Topic Progress
             ├── Revision Record
             ├── Checkpoint Quiz and Quiz Attempts
@@ -88,7 +90,15 @@ A learner-owned or curated reference used for study. Examples include PDF notes,
 
 A resource can be linked to one or more subjects, topics, or subtopics. Resource content is distinct from the curriculum structure and from learner progress.
 
-**Only topic and subtopic links are stored today** — the two are the same record — and a resource records **where the material is** rather than the material itself. Subject-level linking stays a model target with no table behind it. See [entities](entities.md#learning-resource) and [ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
+**Only topic and subtopic links are stored today** — the two are the same record — and a resource records **where the material is** rather than the material itself. Subject-level linking stays a model target with no table behind it. The one exception is a **resource note**, defined below. See [entities](entities.md#learning-resource) and [ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
+
+### Resource Note
+
+Text the learner typed or pasted themselves, kept against one learning resource: their own notes on a piece of study material, or a passage they transcribed from it.
+
+It belongs to exactly one resource and **inherits the topics that resource covers**, carrying none of its own, so correcting what a resource covers moves its notes with it and the two can never disagree.
+
+This is the **one place the model holds study material rather than a pointer to it**, and the boundary is narrow: the learner types or pastes, and nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, indexes, or searches it. Chunks, embeddings, and vector records remain [non-entities](entities.md#important-non-entities) — derived data belonging in a vector index, rebuildable from the note. A note is corrected in place and put aside rather than deleted. See [entities](entities.md#resource-note) and [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), which is **proposed and not yet accepted**.
 
 ### Examination Schedule
 
@@ -265,6 +275,7 @@ Learner 1 ── * Learner Topic Progress
 Topic 1 ── * Learner Topic Progress
 
 Topic * ── * Learning Resource
+Learning Resource 1 ── * Resource Note
 Topic 1 ── * Revision Record
 Checkpoint Quiz * ── * Topic (at least one topic per quiz)
 Checkpoint Quiz 1 ── * Quiz Attempt

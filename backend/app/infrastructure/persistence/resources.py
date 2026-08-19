@@ -1,9 +1,15 @@
-"""Persistence models for a learner's study material and what it covers.
+"""Persistence models for a learner's study material, what it covers, and their notes on it.
 
 Implements the *Resources and RAG metadata* schema area of
 docs/database/schema.md, except for ``resource_ingestions``:
 
     resources <-> resource_topic_links -> topics
+    resources -> resource_notes
+
+``resource_notes`` is **added beyond** the tables that document approves, per
+ADR-037. It holds the text a learner typed or pasted themselves, which is the
+first study material LearnFlow stores rather than points at -- and deliberately the only
+kind, since nothing uploads, fetches, or extracts anything to fill it.
 
 The area is created **partially**, per ADR-011. What is absent is absent because
 nothing maintains it:
@@ -137,4 +143,68 @@ class ResourceTopicLink(CreatedAtMixin, Base):
         # Indexes: which resources cover a topic, which is how the curriculum and
         # revision screens read this table.
         Index("ix_resource_topic_links_topic_id_resource_id", "topic_id", "resource_id"),
+    )
+
+
+RESOURCE_NOTE_STATUSES = ("active", "archived")
+"""The statuses ``resource_notes.status`` accepts.
+
+Two states, both reachable in both directions. ``archived`` is the learner
+putting a note aside and it is **reversible**: nothing in LearnFlow deletes a
+note, exactly as nothing deletes a resource.
+
+``active`` rather than ``registered``: *registering* is what a learner does to a
+resource, and it names where material is. A note is written, not registered.
+``archived`` **is** reused deliberately -- it is the resources word for putting
+something aside, per docs/domain/terminology.md.
+"""
+
+
+class ResourceNote(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    """One note a learner keeps against a piece of their study material.
+
+    **The first study material LearnFlow stores rather than points at.** ``body`` holds
+    text the learner typed or pasted themselves -- their own notes, or a passage
+    they transcribed. Nothing uploads a file, fetches an address, or extracts
+    text from a document to fill it: ``resources.storage_key``,
+    ``resources.metadata``, and ``resource_ingestions`` all remain absent.
+
+    ``body`` is ``text`` and unbounded in the column, as docs/database/schema.md
+    requires of learner-facing prose. The length a learner may actually write is
+    an **application** rule (``MAX_NOTE_BODY_LENGTH``), so raising it later is a
+    use-case change rather than a migration.
+
+    A note belongs to exactly one resource and carries **no topic links of its
+    own**: it inherits the topics its resource covers, so a learner correcting
+    what a resource covers moves its notes with it and cannot leave the two
+    disagreeing.
+
+    Nothing derived is stored here. Chunks, embeddings, and vector records are
+    docs/domain/entities.md's non-entities, and they arrive -- if ever -- in the
+    vector index rather than in this table.
+    """
+
+    __tablename__ = "resource_notes"
+
+    resource_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("resources.id"), nullable=False, index=False
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(in_clause("status", RESOURCE_NOTE_STATUSES), name="status_is_known"),
+        # A note with no text in it is a title and nothing else. The application
+        # refuses one first; this is what makes the rule true of the table.
+        #
+        # A regex rather than `length(btrim(body)) > 0`: PostgreSQL's one-argument
+        # `btrim` strips spaces alone, so a body of newlines and tabs would pass
+        # it. This asks the question actually being asked -- is there a character
+        # here that is not whitespace?
+        CheckConstraint("body ~ '[^[:space:]]'", name="body_is_not_empty"),
+        # One resource's notes, and whether they are put aside: the access
+        # pattern every read here uses, mirroring
+        # `resources(owner_learner_id, status)` one level down.
+        Index("ix_resource_notes_resource_id_status", "resource_id", "status"),
     )

@@ -1,0 +1,72 @@
+.notes {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--colour-border);
+  padding-top: var(--space-3);
+}
+
+.heading {
+  margin: 0 0 var(--space-2);
+  font-size: 0.9375rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.item {
+  margin: 0;
+}
+
+.asideHeading {
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+/*
+ * Closed by default, so a piece of material with several long notes stays as
+ * scannable in the catalogue as one with none.
+ */
+.disclosure > summary,
+.edit > summary,
+.add > summary {
+  cursor: pointer;
+  font-size: 0.9375rem;
+}
+
+.disclosure {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+}
+
+/*
+ * `pre-wrap` is what preserves the learner's own line breaks, blank lines, and
+ * indentation. The text is escaped by React before it reaches here -- nothing
+ * renders it as markup -- so this only decides how whitespace is displayed.
+ *
+ * `overflow-wrap` breaks a pasted URL or an unbroken run of characters rather
+ * than letting one line widen the page.
+ */
+.body {
+  margin: var(--space-2) 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  max-width: var(--measure);
+}
+
+.edit,
+.add {
+  margin-top: var(--space-2);
+}
