@@ -57,6 +57,32 @@ adds a capability beside them rather than completing one. **FR-008 is not met at
 record does not claim otherwise — every one of its criteria needs retrieval and a mentor, neither of
 which exists. Do not write that either requirement is complete.
 
+## Implementation status
+
+**2026-08-19 — a learner's notes can now be searched, locally and only when they ask.**
+
+[ADR-038](ADR-038-local-topic-note-retrieval.md) adds RES-013: a learner chooses a curriculum topic
+and sees passages from their own notes. It **narrows this record's `nothing reads a note` on one
+point**, and the distinction matters, because that sentence was doing two jobs here.
+
+**The privacy promise is narrowed.** The note form no longer says *"nothing reads it"*; it says the
+text is stored on this computer, never sent anywhere, read by nothing except a topic search that runs
+locally and only when asked, and seen by no AI model. Everything else this record decided stands:
+nothing is uploaded, fetched, extracted, chunked, embedded, or indexed into a vector store, and
+`storage_key`, `metadata`, and `resource_ingestions` remain absent.
+
+**The correction argument is untouched.** *"Nothing reads a note, so no stored record can be made to
+disagree with a correction"* remains true as written, because the search **stores nothing derived from
+a note** — no chunk, no embedding, no cached extract, and no search history. It reads at the moment it
+is asked, so a corrected note simply changes what the next search finds. A note therefore stays
+correctable in place, which is still where it differs from
+[ADR-035](ADR-035-practice-question-correction.md).
+
+**One verdict below has moved.** This record's Status says *"FR-008 is not met at all"*, and that is no longer true: one of its six criteria is now **partly** met, by the retrieval half of RES-013. FR-007 is unchanged, and
+[endpoints.md](../api/endpoints.md#fr-008-acceptance-criteria) stays authoritative for both counts.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
+
 ## Context
 
 [ADR-032](ADR-032-learning-resource-catalogue.md) opened [Milestone 4](../roadmap/milestones.md#milestone-4-resources-rag-and-mentor)

@@ -187,7 +187,8 @@ export default function ResourcesPage() {
       <p className={styles.lead}>
         What you study from, kept against the topics it covers. Add a piece, correct one, or put
         one aside when you are not using it. Material you link to a topic appears beside that topic
-        in the curriculum and beside a review of it, so you can find it when you need it.
+        in the curriculum and beside a review of it, so you can find it when you need it. When you
+        want a passage rather than a title, search your own notes by topic.
       </p>
       <div className={styles.panels}>
         <Suspense fallback={<p role="status">Loading your material…</p>}>
@@ -196,6 +197,9 @@ export default function ResourcesPage() {
       </div>
       <nav aria-label="Learner actions">
         <ul className={styles.actions}>
+          <li>
+            <Link href="/resources/search">Find it in your notes</Link>
+          </li>
           <li>
             <Link href="/curriculum">Browse the curriculum</Link>
           </li>

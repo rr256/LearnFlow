@@ -33,6 +33,7 @@ from app.application.use_cases.manage_study_plans import ManageStudyPlans
 from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
 from app.application.use_cases.read_examination_schedules import ReadExaminationSchedules
+from app.application.use_cases.retrieve_topic_notes import RetrieveTopicNotes
 from app.infrastructure.clock import SystemClock
 from app.infrastructure.persistence.checkpoint_practice_repository import (
     SqlAlchemyCheckpointPracticeRepository,
@@ -42,6 +43,9 @@ from app.infrastructure.persistence.examination_schedule_repository import (
     SqlAlchemyExaminationScheduleRepository,
 )
 from app.infrastructure.persistence.learner_repository import SqlAlchemyLearnerRepository
+from app.infrastructure.persistence.note_search_repository import (
+    SqlAlchemyNoteSearchRepository,
+)
 from app.infrastructure.persistence.resource_note_repository import (
     SqlAlchemyResourceNoteRepository,
 )
@@ -63,6 +67,7 @@ StudyPlansProvider = Callable[[], AbstractContextManager[ManageStudyPlans]]
 RevisionsProvider = Callable[[], AbstractContextManager[ManageRevisions]]
 ResourcesProvider = Callable[[], AbstractContextManager[ManageResources]]
 ResourceNotesProvider = Callable[[], AbstractContextManager[ManageResourceNotes]]
+TopicNoteRetrievalProvider = Callable[[], AbstractContextManager[RetrieveTopicNotes]]
 TopicProgressProvider = Callable[[], AbstractContextManager[ManageTopicProgress]]
 PracticeQuestionsProvider = Callable[[], AbstractContextManager[ManagePracticeQuestions]]
 CheckpointQuizzesProvider = Callable[[], AbstractContextManager[ManageCheckpointQuizzes]]
@@ -283,6 +288,35 @@ def build_resource_notes_provider(
                 session.rollback()
                 raise
             session.commit()
+
+    return provide
+
+
+def build_topic_note_retrieval_provider(
+    session_factory: sessionmaker[Session],
+) -> TopicNoteRetrievalProvider:
+    """Build the provider that hands topic-note retrieval to one request.
+
+    **A read, so it never commits** -- the shape `build_read_curriculum_provider`
+    uses. A search writes nothing: no note, no resource, and no record that it
+    happened.
+
+    It binds three repositories and **no provider**: learners, to resolve who is
+    asking; resources, to name the topic; and the note search, which is
+    PostgreSQL's own full-text search. There is deliberately no AI provider, no
+    embedding provider, and no retrieval provider here -- a learner's note text
+    has no path out of this process, and adding a port to this constructor is the
+    visible decision that would change that (NFR-001).
+    """
+
+    @contextmanager
+    def provide() -> Iterator[RetrieveTopicNotes]:
+        with session_factory() as session:
+            yield RetrieveTopicNotes(
+                learners=SqlAlchemyLearnerRepository(session),
+                resources=SqlAlchemyResourceRepository(session),
+                notes=SqlAlchemyNoteSearchRepository(session),
+            )
 
     return provide
 

@@ -33,6 +33,7 @@ related:
   - ../adr/ADR-031-priority-focus-panel.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-037-learner-written-resource-notes.md
+  - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-034-checkpoint-practice-history.md
   - ../adr/ADR-035-practice-question-correction.md
@@ -1068,6 +1069,7 @@ complete, and supplies the **resource half** of
 | RES-010 | `GET /api/v1/resources/{resource_id}/notes` | List the notes kept against one piece of material, filterable by status. | Resource note collection. | Implemented |
 | RES-011 | `GET /api/v1/resource-notes/{note_id}` | Read one note. | Resource note details. | Implemented |
 | RES-012 | `PATCH /api/v1/resource-notes/{note_id}` | Correct a note's title or text, or put it aside. | Updated resource note. | Implemented |
+| RES-013 | `GET /api/v1/resource-notes/search` | Find passages in the learner's own notes for one curriculum topic. | Passages with their note, material, and topic context. | Implemented |
 
 RES-001 to RES-004 are implemented and contracted by
 [ADR-032](../adr/ADR-032-learning-resource-catalogue.md). None of them accepts a `learner_id`: the
@@ -1089,7 +1091,7 @@ same table and an extractor.
 keep their **own written notes and copied-out passages** against a piece of material, which is the
 first study material LearnFlow stores rather than points at. It is text the learner **typed or pasted
 themselves**: still nothing uploaded, still nothing fetched, still no location on their own machine,
-and still nothing extracted, chunked, embedded, indexed, or searched. See
+still nothing extracted, chunked, embedded, or indexed into a vector store. Searching those notes arrives with [RES-013](#res-013-get-apiv1resource-notessearch) below. See
 [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 
 **Nothing is deleted.** RES-005 is not implemented: a learner puts material aside with
@@ -1234,8 +1236,8 @@ Related entities: [learning resource](../domain/entities.md#learning-resource) a
 `201` with the note under `data`.
 
 **This endpoint stores text and does nothing else with it.** It is not sent to any AI, embedding, or
-retrieval provider, indexed, searched, summarised, or read by anything at all; nothing in this build
-reads a note. Nothing uploads a file, fetches an address, downloads a page, extracts text from a
+retrieval provider, summarised, or indexed into a vector store. One thing reads a note:
+[RES-013](#res-013-get-apiv1resource-notessearch), a local full-text search the learner asks for. Nothing uploads a file, fetches an address, downloads a page, extracts text from a
 document, or runs OCR to fill it.
 
 - `title` is what the learner calls the note, so they can find it again without opening it. Required,
@@ -1288,8 +1290,9 @@ their own.
 takes it off the screens that show a topic's material; it destroys nothing and hides nothing a
 learner goes looking for.
 
-There is deliberately **no query parameter that searches note text**. Searching across a learner's
-notes is retrieval under another name, and it arrives with the decision that builds retrieval.
+There is deliberately **no query parameter that searches note text**. Searching is its own endpoint:
+see [RES-013](#res-013-get-apiv1resource-notessearch), which is scoped to one topic rather than to
+one resource.
 
 Errors: `404` `not_found` as for RES-009; `422` `validation_error` for a `status` outside the
 documented values — `details` names `query.status`; `409` `conflict` when more than one learner is
@@ -1319,7 +1322,7 @@ resource's title. There is nothing to clear.
 **A note is corrected in place, as often as the learner likes.** That is where a note differs from a
 practice question, whose wording [ADR-035](../adr/ADR-035-practice-question-correction.md) fixes once
 a quiz has asked it: a stored attempt is assembled from the live question row, so rewriting a prompt
-would rewrite a result the learner already read. **Nothing reads a note**, so no stored record can be
+would rewrite a result the learner already read. **Nothing derived from a note is stored** — [RES-013](#res-013-get-apiv1resource-notessearch) reads one live and keeps nothing — so no record can be
 made to disagree with a correction, and no such rule is needed. A correction keeps the same record
 and the same identifier.
 
@@ -1348,6 +1351,57 @@ Related entities: [resource note](../domain/entities.md#resource-note) and
 [learning resource](../domain/entities.md#learning-resource). Related table:
 [`resource_notes`](../database/schema.md#resource_notes).
 
+### RES-013 — `GET /api/v1/resource-notes/search`
+
+Query parameter `topic_id`, a UUID, and nothing else. Returns `200` with one search result under
+`data`.
+
+**This is retrieval, and there is no mentor.** Nothing here generates an answer, summarises,
+paraphrases, or explains; what comes back is the learner's own writing with the material and topic it
+came from named beside it. **No AI model, embedding service, vector database, external API, URL
+fetcher, or background job is reached or configured** — the search is PostgreSQL's own full-text
+search, running locally.
+
+**It runs only when the learner asks.** Nothing triggers a search from a page render or a save.
+
+**The topic is the query.** There is deliberately **no free-text parameter**: the chosen topic's name
+supplies the search terms. A typed query is a different feature with its own question about what is
+recorded, and **nothing here records anything** — there is no search history.
+
+**Only the learner's own material is searched, and only where they said it covers this topic.** A
+note is considered when it is `active`, its resource is `registered` and owned by them, and that
+resource is linked to the topic. Archived material drops out, exactly as it does from the curriculum,
+revision, and plan screens.
+
+A result carries `topic_id`, `topic_name`, `subject_name`, an `outcome`, and `passages`. Each passage
+carries `note_id`, `note_title`, `resource_id`, `resource_title`, `resource_type`, `topic_id`,
+`topic_name`, `subject_name`, and `passage`.
+
+**`passage` is plain text and an exact substring of the stored note** — one contiguous stretch, cut
+on word boundaries. Nothing is highlighted, marked up, escaped, re-encoded, joined, or elided, so
+`vector<int>`, `a < b`, and every other literal arrive exactly as the learner typed them. It is
+shorter than the note when the note is long; `note_id` leads to the rest. At most 20 passages are
+returned.
+
+**`outcome` names one of four results, and tells the three empty ones apart**, because each asks the
+learner to do something different:
+
+- `found` — at least one passage matched.
+- `no_linked_material` — nothing is linked to this topic yet.
+- `no_active_notes` — material is linked, but carries no active note.
+- `no_matching_passage` — active notes exist and none mentions the topic.
+
+**There is no relevance figure, and no count.** Relevance decides the order passages arrive in and is
+then discarded; a number beside a learner's own writing would read as a mark on it. No total says how
+many notes they have written.
+
+Errors: `404` `not_found` when the topic identifier names nothing stored; `409` `conflict` when no
+learner is stored yet, or when more than one is. **No refusal echoes note text.**
+
+Related entities: [resource note](../domain/entities.md#resource-note) and
+[topic](../domain/entities.md#topic). Related table:
+[`resource_notes`](../database/schema.md#resource_notes).
+
 ### FR-007 acceptance criteria
 
 **Two of [FR-007](../requirements/functional.md#fr-007-learning-resource-organization)'s four
@@ -1370,13 +1424,17 @@ the count.
   [ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md), which changes no contract here and
   leaves this verdict and the count above unchanged: it adds surfaces rather than capability.
 
-**RES-009 to RES-012 leave all four verdicts and the count above unchanged.** Keeping a learner's own
-written notes against a resource is a capability beside FR-007's four criteria rather than one of
-them: it registers nothing, links no topic, records no resource metadata, and adds no way of finding
-a topic's material. It is the first foundation for
-[FR-008](../requirements/functional.md#fr-008-grounded-mentor-assistance), **not met at all** —
-every one of that requirement's criteria needs retrieval and a mentor, and neither exists. See
-[ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
+**RES-009 to RES-013 leave all four verdicts and the count above unchanged.** RES-013 searches
+material FR-007 already covers rather than adding a way to register, link, describe, or find it; what
+it advances is FR-008, below.
+
+Keeping a learner's own written notes against a resource, and searching them, are capabilities
+beside FR-007's four criteria rather than any of them: they register nothing, link no topic, record
+no resource metadata, and add no way of finding a topic's *material*. What they advance is
+[FR-008](../requirements/functional.md#fr-008-grounded-mentor-assistance), which is **not met** —
+see [its own count below](#fr-008-acceptance-criteria). See
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md) and
+[ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
 
 ## Mentor Endpoints
 
@@ -1388,6 +1446,31 @@ Supports **FR-008 — Grounded Mentor Assistance**.
 | MNT-002 | `GET /api/v1/mentor/availability` | Report whether configured mentor/retrieval capability is ready. | Safe capability status. |
 
 The mentor endpoint must not silently modify learner progress, learning stage, plans, or revisions.
+
+**Neither MNT endpoint is implemented, and there is no mentor.** Nothing in LearnFlow generates an
+answer, and no AI provider is configured or reached.
+
+### FR-008 acceptance criteria
+
+**One of [FR-008](../requirements/functional.md#fr-008-grounded-mentor-assistance)'s six acceptance
+criteria is partly met and five are not met.** This section is authoritative for the count.
+
+- *"LearnFlow retrieves relevant indexed material before generating an answer when relevant material
+  exists"* — **partly met**, by [RES-013](#res-013-get-apiv1resource-notessearch): the learner's own
+  notes are retrieved for a topic they choose, locally and deterministically. The half that
+  *generates an answer* does not exist, and nothing is *indexed* in the vector sense — the search is
+  PostgreSQL full-text over stored text. See
+  [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
+- *"The learner can ask a learning question for a topic"* — **not met.** A learner chooses a topic;
+  they ask no question, and nothing answers one.
+- *"The mentor can explain concepts, summarize material, answer doubts, and suggest next study
+  actions"* — **not met.** Nothing is generated.
+- *"The mentor can indicate the resources used for a grounded answer where practical"* — **not met**,
+  because there is no answer. RES-013 does name the note, material, and topic behind every passage,
+  which is the source-reference shape [retrieval.md](../rag/retrieval.md) asks for.
+- *"The initial local AI provider is Ollama"* — **not met.** No AI provider is configured or reached.
+- *"A mentor response does not silently update learner progress"* — **not met**, having no mentor
+  response; RES-013 writes nothing at all.
 
 ## Checkpoint Quiz Endpoints
 
@@ -1688,5 +1771,6 @@ Implement in an order that enables one working learner flow:
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the panel that added no read and no contract, and what PRG-001 waits on now
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the four resource contracts above, why the other four stay unimplemented, and what a resource may point at
 - [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — RES-009 to RES-012, and the boundary around what they store
+- [ADR-038: Retrieve passages from a learner's own notes locally, when they ask](../adr/ADR-038-local-topic-note-retrieval.md) — RES-013, and why it sits in the resource family rather than the mentor one
 - [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — why the history reads QZ-006 unchanged, and why `pagination.total` is never read
 - [ADR-035: Let a practice question be corrected until a quiz has asked it](../adr/ADR-035-practice-question-correction.md) — QZ-010's content group, and the two `409` refusals

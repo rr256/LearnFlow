@@ -1,0 +1,78 @@
+.results {
+  margin-top: var(--space-5);
+}
+
+.results h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 1.125rem;
+}
+
+.lead {
+  margin: 0 0 var(--space-4);
+  color: var(--colour-text-muted);
+  max-width: var(--measure);
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.item {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+/*
+ * `pre-wrap` is what preserves the learner's own line breaks and indentation.
+ * The text is escaped by React before it reaches here -- nothing renders it as
+ * markup -- so this only decides how whitespace is displayed.
+ *
+ * `overflow-wrap` breaks an unbroken run of characters rather than letting one
+ * line widen the page.
+ */
+.passage {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  max-width: var(--measure);
+}
+
+/*
+ * Where the passage came from. Stated in words, never as a figure: nothing here
+ * is numbered, ranked, or scored.
+ */
+.source {
+  margin: var(--space-3) 0 0;
+  font-size: 0.9375rem;
+}
+
+.note {
+  font-weight: 600;
+}
+
+.kind {
+  color: var(--colour-text-muted);
+}
+
+.context {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.footnote {
+  margin: var(--space-4) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.empty {
+  margin: 0;
+  max-width: var(--measure);
+}

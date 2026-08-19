@@ -7,6 +7,7 @@ related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-037-learner-written-resource-notes.md
+  - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-035-practice-question-correction.md
   - ../00-project-context.md
@@ -51,7 +52,7 @@ tables arrive in more than one migration.
 | Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
 | Learner planning | Implemented — `learners` and `study_goals` arrive in migration `20260801_01`, `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots), `study_goals`' planning preferences in `20260806_02`, as two typed columns rather than the `planning_preferences jsonb` documented [below](#study_goals), and `study_plans` and `plan_items` in `20260806_03`, whose controlled columns are `varchar(32)` guarded by a `CHECK` rather than the `text` documented [below](#study_plans). |
 | Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `revision_records` arrives in `20260813_01` with the revision code that reads it, per [ADR-028](../adr/ADR-028-revision-workflow.md). `study_activities` still arrives with the code that records study work. |
-| Resources and RAG metadata | Partly implemented — `resources` and `resource_topic_links` arrive in migration `20260816_01` with the catalogue code that reads them (RES-001 to RES-004), per [ADR-032](../adr/ADR-032-learning-resource-catalogue.md); two columns of `resources` are deliberately not created, and `resource_ingestions` arrives with the extractor and vector index it tracks. `resource_notes` arrives in `20260819_01` with the code that reads it (RES-009 to RES-012) and is **added beyond the tables this document approves**, per [ADR-037](../adr/ADR-037-learner-written-resource-notes.md). See [below](#resources). |
+| Resources and RAG metadata | Partly implemented — `resources` and `resource_topic_links` arrive in migration `20260816_01` with the catalogue code that reads them (RES-001 to RES-004), per [ADR-032](../adr/ADR-032-learning-resource-catalogue.md); two columns of `resources` are deliberately not created, and `resource_ingestions` arrives with the extractor and vector index it tracks. `resource_notes` arrives in `20260819_01` with the code that reads it (RES-009 to RES-012), and its full-text search index in `20260820_01` with RES-013 and is **added beyond the tables this document approves**, per [ADR-037](../adr/ADR-037-learner-written-resource-notes.md). See [below](#resources). |
 | Assessment | Implemented — all seven tables arrive in migration `20260818_01` with the checkpoint-practice code that reads them (QZ-001 to QZ-010), per [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). Seven columns are deliberately not created and one is added beyond this document; see [the area review](#assessment-area-review-2026-08-18). |
 | External evidence | Not implemented — arrives with FR-010, in the second half of Milestone 5. `mistake_evidence` waits with it: two of its four discovery sources reference tables in this area. |
 
@@ -742,6 +743,16 @@ can never disagree.
 reversible — the position `resources.status` takes, and `questions.status` with `retired`. A note on
 **archived material is read-only** until the material is put back, and stays readable throughout.
 
+**A note's text is searchable through a GIN index over an expression**, added by migration
+`20260820_01` for RES-013: `to_tsvector('english', title || ' ' || body)`. It is deliberately **an
+index and not a stored `tsvector` column** — a column would mean altering a learner-owned table to
+hold a derived representation of note text, which is what
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md) kept out of the schema. **No derived
+column exists**, and the index stores no text that is not already in the table, so dropping it loses
+nothing. `english` is a built-in configuration, so **no extension is installed**. The same expression
+must be used to build the index and to run the search, or the index is silently unused; an integration
+test compares the two. See [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
+
 ### `resource_ingestions`
 
 Tracks extraction and indexing of eligible resources.
@@ -960,6 +971,7 @@ the migration that creates its table; the entries marked below are implemented t
 - `study_activities(learner_id, topic_id, created_at desc)`
 - `resource_topic_links(topic_id, resource_id)` — implemented
 - `resource_notes(resource_id, status)` — implemented
+- `resource_notes` full-text GIN index over `to_tsvector('english', title || ' ' || body)` — implemented, added by `20260820_01` for RES-013
 - `resources(owner_learner_id, status)` — implemented
 - `resource_ingestions(resource_id, status)`
 - `checkpoint_quiz_topics(topic_id, checkpoint_quiz_id)` — implemented
@@ -1564,9 +1576,12 @@ has gone beyond this document, after `questions.author_learner_id` in
   for the reason given above; the migration test asserts the case that distinguishes them.
 - The foreign key to `resources` is **not a cascade**, for the reason `resource_topic_links` gives:
   nothing deletes a resource, so a cascade would describe a path that does not exist.
-- One index, `ix_resource_notes_resource_id_status`, serves the only access pattern there is — one
-  resource's notes, and whether they are put aside. Its name is 36 characters, comfortably inside
-  PostgreSQL's 63-byte identifier limit.
+- One index, `ix_resource_notes_resource_id_status`, serves the access pattern this migration
+  created — one resource's notes, and whether they are put aside. Its name is 36 characters,
+  comfortably inside PostgreSQL's 63-byte identifier limit. A second index,
+  `ix_resource_notes_search`, arrived later with `20260820_01` for the topic note search; see
+  [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md) and
+  [`resource_notes`](#resource_notes) above.
 - **No derived column exists**: no `embedding`, `vector`, `chunk_index`, `embedding_model`, or
   content fingerprint. Both the mapping test and the migration test assert their absence, so a change
   that begins storing derived data has to remove an assertion first.
@@ -1697,4 +1712,5 @@ learner records reference, and this document forbids deleting one casually.
 - [API endpoints](../api/endpoints.md)
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the two resource tables above, the two columns they leave uncreated, and why a link is a web address
 - [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — `resource_notes`, the one table added beyond this document
+- [ADR-038: Retrieve passages from a learner's own notes locally, when they ask](../adr/ADR-038-local-topic-note-retrieval.md) — the full-text index on `resource_notes`, and why it is an index rather than a column
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md) — `revision_records`, its two departures from the table above, and the revision-scheduling rules this document held pending

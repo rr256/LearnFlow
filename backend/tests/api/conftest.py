@@ -37,6 +37,7 @@ from app.application.use_cases.manage_revisions import ManageRevisions
 from app.application.use_cases.manage_study_plans import ManageStudyPlans
 from app.application.use_cases.manage_topic_progress import ManageTopicProgress
 from app.application.use_cases.read_curriculum import ReadCurriculum
+from app.application.use_cases.retrieve_topic_notes import RetrieveTopicNotes
 from app.composition.app_factory import create_app
 from app.presentation.api.dependencies import (
     CHECKPOINT_QUIZZES_PROVIDER,
@@ -46,11 +47,13 @@ from app.presentation.api.dependencies import (
     RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
     STUDY_PLANS_PROVIDER,
+    TOPIC_NOTE_RETRIEVAL_PROVIDER,
     TOPIC_PROGRESS_PROVIDER,
 )
 from tests.api.onboarding_fixtures import Onboarding, install_onboarding
 from tests.unit.fake_curriculum_repository import FakeCurriculumRepository
 from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
+from tests.unit.fake_note_search_repository import FakeNoteSearchRepository
 from tests.unit.fake_resource_note_repository import FakeResourceNoteRepository
 from tests.unit.fake_resource_repository import FakeResourceRepository
 from tests.unit.fake_revision_repository import FakeRevisionRepository
@@ -340,6 +343,24 @@ class Cataloguing:
             learners=self.learners, resources=self.resources, notes=self.notes
         )
 
+    def retriever(self) -> RetrieveTopicNotes:
+        """Topic-note retrieval over the same material, notes, and links.
+
+        Built from the *same* stores the catalogue writes through, so a test can
+        register a resource, write a note against it, and then search for it --
+        the sequence the screens perform.
+        """
+        return RetrieveTopicNotes(
+            learners=self.learners,
+            resources=self.resources,
+            notes=FakeNoteSearchRepository(
+                resources=self.resources.resources,
+                notes=self.notes.notes,
+                topics=self.resources.topics,
+                links=dict(self.resources.links),
+            ),
+        )
+
 
 @pytest.fixture
 def cataloguing() -> Cataloguing:
@@ -368,8 +389,14 @@ def resource_client(cataloguing: Cataloguing) -> Iterator[TestClient]:
     def provide_notes() -> Iterator[ManageResourceNotes]:
         yield cataloguing.note_keeper()
 
+    @contextmanager
+    def provide_retrieval() -> Iterator[RetrieveTopicNotes]:
+        # Built per request, so a search sees whatever the test wrote before it.
+        yield cataloguing.retriever()
+
     setattr(app.state, RESOURCES_PROVIDER, provide)
     setattr(app.state, RESOURCE_NOTES_PROVIDER, provide_notes)
+    setattr(app.state, TOPIC_NOTE_RETRIEVAL_PROVIDER, provide_retrieval)
     with TestClient(app) as client:
         yield client
 

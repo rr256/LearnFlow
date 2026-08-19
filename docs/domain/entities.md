@@ -5,6 +5,7 @@ owner: product-and-architecture
 last_updated: 2026-08-19
 related:
   - ../adr/ADR-037-learner-written-resource-notes.md
+  - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-028-revision-workflow.md
   - ../00-project-context.md
   - domain-model.md
@@ -99,19 +100,23 @@ topics and subtopics, which are the same record. See
 
 ### Resource Note
 
-Represents text the learner typed or pasted themselves, kept against one learning resource: their own notes on a piece of study material, or a passage they transcribed from it.
+Represents text the learner typed or pasted themselves, kept against one learning resource: their own notes on a piece of study material, or an extract they copied out of it.
 
 **Responsible for:** holding what the learner wrote, exactly as they wrote it, and whether they are still using it.
 
 **Key relationships:** belongs to exactly one learning resource, and inherits the topics that resource covers.
 
-It is the **first study material LearnFlow stores rather than points at**, and deliberately the only kind:
-nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, indexes,
-or searches it, and nothing reads it at all. It carries **no topic links of its own**, so a learner
-correcting what a resource covers moves its notes with it. A note is corrected in place as often as
-the learner likes — nothing reads one, so no stored record can be made to disagree with a correction
-— and it is put aside rather than deleted. Notes on material that is put aside are read-only and stay
-readable. See [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
+It is the **first study material LearnFlow stores rather than points at**, and deliberately the only
+kind: nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, or
+indexes it into a vector store. It carries **no topic links of its own**, so a learner correcting
+what a resource covers moves its notes with it.
+
+It is read by the *topic note search*, locally and only when the learner asks, and by nothing else;
+no AI model sees it. **Nothing derived from a note is stored** — no chunk, no embedding, no cached
+extract, no search history, and nothing beyond the full-text index PostgreSQL maintains for itself — which is why a note is corrected in place as often as the learner likes:
+there is no record that could be made to disagree with a correction. It is put aside rather than
+deleted, and notes on material that is put aside are read-only and stay readable. See
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md) and [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
 
 ### Examination Schedule
 
@@ -315,6 +320,7 @@ The labels above are what a learner reads. [Terminology](terminology.md) is auth
 
 The following are important, but are not domain entities in this document:
 
+- **Passage:** an exact substring of a note, produced by a *topic note search* and stored nowhere. It exists only in one response: nothing derived from a note is persisted, which is why a note stays correctable in place. See [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
 - **PDF chunks, embeddings, and vector records:** RAG/infrastructure implementation details. They are derived data belonging in a vector index, rebuildable from the source; a *resource note* is not one of them, because the learner wrote it and nothing derived it.
 - **AI provider, storage provider, and vector provider:** architecture interfaces/adapters.
 - **Priority focus area:** a learner-facing *gathering* of records that already exist — an item whose day has passed, a review reported as due, a saved week that falls short — rather than a stored entity. Nothing is calculated, scored, or ranked to produce one; see [terminology](terminology.md) and [ADR-031](../adr/ADR-031-priority-focus-panel.md).
@@ -360,3 +366,4 @@ Topic ── Learning Resource ── Resource Note
 - [ADR-028: Schedule revisions from finished work, on the learner's ask](../adr/ADR-028-revision-workflow.md)
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — what a *learning resource* records today, and what it deliberately does not — the revision record this persists, and why it is not a plan item
 - [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — the *Resource Note* entity, and why it is not a derived representation
+- [ADR-038: Retrieve passages from a learner's own notes locally, when they ask](../adr/ADR-038-local-topic-note-retrieval.md) — why a passage is a non-entity, and what reads a note

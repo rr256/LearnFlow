@@ -5,6 +5,7 @@ owner: architecture-and-ai
 last_updated: 2026-08-19
 related:
   - ../adr/ADR-037-learner-written-resource-notes.md
+  - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../00-project-context.md
   - ingestion.md
   - retrieval.md
@@ -71,6 +72,12 @@ Every source above is a **file** the learner already has, and the pipeline below
 text out of one. There is a second kind of source that skips all of that: text the learner **typed or
 pasted themselves**, kept against a resource as a *resource note*.
 
+**A learner's notes are now searchable.** [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md) adds RES-013: a
+learner chooses a topic and sees passages from their own notes, found by **PostgreSQL full-text
+search running locally**. That is retrieval without any of the pipeline below — no file, no
+extraction, no chunking, no embedding, no vector store, and no AI provider — and it is all the
+retrieval there is.
+
 **This is the only content LearnFlow stores today.** It is the first study material the product holds
 rather than points at — learner-written practice questions are stored too, but a question is
 something the learner *made*, not material they *study from*. Nothing else on this page is built: no file is uploaded or stored, no
@@ -84,7 +91,9 @@ Learner types or pastes text
         ↓
 Stored verbatim against one resource        (no file to store, nothing to extract)
         ↓
-[ not chunked, not embedded, not indexed — none of this exists yet ]
+Found by full-text search on a topic       (RES-013, local, only when asked)
+        ↓
+[ not chunked, not embedded, not vector-indexed — none of this exists yet ]
 ```
 
 Two consequences worth stating before retrieval is built:
@@ -190,6 +199,7 @@ Detailed chunking, embedding, retrieval-ranking, and evaluation rules belong in 
 - [ADR-002: Use provider interfaces for external capabilities](../adr/ADR-002-provider-pattern.md) — why retrieval and embeddings stay replaceable
 - [RAG ingestion](ingestion.md)
 - [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — the file-free source this page now records, and the boundary around it
+- [ADR-038: Retrieve passages from a learner's own notes locally, when they ask](../adr/ADR-038-local-topic-note-retrieval.md) — the retrieval that exists, and the pipeline it deliberately does not enter
 - [RAG retrieval](retrieval.md)
 - [Embeddings](embeddings.md)
 - [Provider pattern](../architecture/provider-pattern.md)

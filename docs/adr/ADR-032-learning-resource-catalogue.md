@@ -76,6 +76,22 @@ altered.
 
 ## Implementation status
 
+**2026-08-19 — a learner's notes can now be searched, locally.**
+
+[ADR-038](ADR-038-local-topic-note-retrieval.md) adds **explicit, local PostgreSQL full-text
+retrieval over a learner's active notes**: they choose a curriculum topic and receive passages from
+the notes on material they linked to it.
+
+**This corrects the earlier note below**, which said that nothing searches a note. Something
+does — on the learner's own machine, and only when they ask for it.
+
+Retrieval returns **exact plain-text substrings** of the stored notes, with nothing highlighted,
+escaped, joined, elided, or rewritten, and it **sends nothing externally**: no AI model, embedding
+service, vector database, or outbound call of any kind is involved, and nothing derived from a note
+is stored.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
+
 **2026-08-19 — a learner's own written notes are now stored against a resource.**
 
 [ADR-037](ADR-037-learner-written-resource-notes.md) **narrows this record's "metadata, never the material" rule** on one point: a learner may keep **plain-text notes they wrote or pasted themselves** against a resource — their own notes on it, or a passage they transcribed. The text is **stored locally** and **rendered as plain text only**.

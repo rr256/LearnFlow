@@ -32,10 +32,12 @@ interface ResourceNoteFormProps {
  * import — nothing here reads anything from their machine, which is the same
  * reason `ResourceForm` has no file input either.
  *
- * **What is written stays on this machine.** Nothing sends a note anywhere,
- * indexes it, searches it, or reads it with an AI model; the form says so,
- * because NFR-001 asks for the data-sharing position to be clear before it
- * matters rather than after.
+ * **What is written stays on this machine.** Nothing sends a note anywhere or
+ * reads it with an AI model. One thing does read it: the topic search at
+ * `/resources/search`, which runs locally and only when the learner asks. The
+ * form says exactly that, because NFR-001 asks for the data-sharing position to
+ * be clear before it matters rather than after — and a promise that quietly
+ * stopped being true would be worse than none. See ADR-038.
  *
  * A client component only so it can report what the last submission did. It
  * calls no API itself: the submission goes to a server action, so the browser
@@ -67,7 +69,7 @@ export function ResourceNoteForm({ resourceId, note }: ResourceNoteFormProps) {
       <p className={styles.hint}>
         {editing
           ? "Correct the note and save. Your text replaces what is stored."
-          : "Write or paste what you want to keep from this material — your own notes, or a passage you have copied out. It is stored on this computer, it is not sent anywhere, and nothing reads it."}
+          : "Write or paste what you want to keep from this material — your own notes, or a passage you have copied out. It is stored on this computer and never sent anywhere. Nothing reads your notes except the topic search on this machine, which runs only when you ask for it, and no AI model ever sees them."}
       </p>
 
       <div className={styles.field}>

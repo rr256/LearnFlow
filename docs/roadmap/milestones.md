@@ -38,6 +38,7 @@ related:
   - ../adr/ADR-035-practice-question-correction.md
   - ../adr/ADR-036-topic-material-on-the-plan-screens.md
   - ../adr/ADR-037-learner-written-resource-notes.md
+  - ../adr/ADR-038-local-topic-note-retrieval.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -494,10 +495,13 @@ their own study material is and which topics it covers, and find it again from t
 a review, and from the plan items that name its topic. It has since gained the **first RAG
 foundation**: a learner can keep their **own written notes and copied-out passages** against a piece
 of that material, which is the first study material LearnFlow stores rather than points at. That is
-**storage and nothing else** — no upload, no fetch, no extraction, no chunking, no embedding, no
-index, no search, and no mentor — and it is **contracted by**
-[ADR-037](../adr/ADR-037-learner-written-resource-notes.md) with migration `20260819_01`. That is the first item below, and deliberately no more of the milestone — nothing is
-uploaded, extracted, indexed, or retrieved, and no mentor exists. It also supplies the **resource
+**storage and nothing else** — no upload, no fetch, no extraction, no chunking, no embedding, and
+no mentor — and it is **contracted by**
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md) with migration `20260819_01`. Those
+notes have since become **searchable**: a learner picks a topic and sees passages from them,
+found by PostgreSQL full-text search running locally and only when they ask, which is the third
+item below and still no mentor. Contracted by [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md). Those are the first three items below, and deliberately no more of the milestone — nothing
+is uploaded, extracted, chunked, embedded, or vector-indexed, and no mentor exists. It also supplies the **resource
 half** of [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
 [ADR-028](../adr/ADR-028-revision-workflow.md) deferred; the practice half still waits on FR-009, so
 **FR-006 is still not met in full**. Contracted by
@@ -527,7 +531,8 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   copied-out passages against a catalogued resource, corrects them in place, and puts them aside
   reversibly, all on `/resources`. This is the **first study material LearnFlow stores rather than points
   at** and the **first RAG foundation** — and it is **storage and nothing else**: nothing uploads,
-  downloads, fetches an address, extracts, chunks, embeds, indexes, searches, ranks, recommends, or
+  downloads, fetches an address, extracts, chunks, embeds, indexes, searches *(narrowed by the item
+  below: a local topic search reads a note when the learner asks)*, ranks, recommends, or
   answers a question, and no AI, embedding, or retrieval provider is reached or configured. It
   **narrows** [ADR-032](../adr/ADR-032-learning-resource-catalogue.md)'s *metadata, never the
   material* rule on one point and leaves the rest standing: no file, no fetched page, and no location
@@ -536,13 +541,28 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   [the area review](../database/schema.md#resources-and-rag-metadata-area-second-partial-review-2026-08-19)
   records. **FR-007's four criteria are unchanged and FR-008 is not met at all.** Contracted by
   [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
+- [ ] **A learner can find passages in their own notes for a topic.** **Done**, by RES-013 with
+  migration `20260820_01`: the learner chooses a curriculum topic at `/resources/search` and sees
+  passages from their own active notes on material they linked to it, each named with its note,
+  material, and topic context. This is the **first retrieval in LearnFlow**, and it is **retrieval
+  alone** — nothing is generated, summarised, or explained, and **no AI model, embedding service, or
+  vector database is reached or configured**; the search is PostgreSQL's own full-text search,
+  running locally and **only when the learner asks**. It **narrows**
+  [ADR-037](../adr/ADR-037-learner-written-resource-notes.md)'s *nothing reads a note* promise on one
+  point while leaving its correction argument intact, because nothing derived from a note is stored.
+  The migration creates **one index and no column**. **FR-008 is not met**: one of its six criteria
+  is partly met and there is still no mentor;
+  [endpoints.md](../api/endpoints.md#fr-008-acceptance-criteria) carries the count. Contracted by
+  [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
 - [ ] Supported text-based PDF can be extracted and indexed. **Still unbuilt**, and the note item
   above deliberately does not begin it: a note needs no file storage, no extractor, no chunking
   policy, no embedding provider, and no vector store, and none of the five exists.
 - [ ] Ingestion shows queued/processing/completed/failed status. `resource_ingestions` is not
   created, and `resources.status` therefore permits neither `processing`, `ready`, nor `failed`: a
   resource could enter one and never leave it.
-- [ ] Mentor retrieves authorized relevant excerpts before grounded answers.
+- [ ] Mentor retrieves authorized relevant excerpts before grounded answers. **The retrieval half
+  exists** (RES-013 above), filtered by learner ownership, topic linkage, and status; there is no
+  mentor and no grounded answer, so this item stays open.
 - [ ] Mentor response shows useful source references when retrieval succeeds.
 - [ ] No-source and provider-unavailable states are honest and understandable.
 - [ ] Original files, resource metadata, and derived vectors are stored separately. **No file and
