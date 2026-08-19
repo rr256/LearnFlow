@@ -495,9 +495,8 @@ a review, and from the plan items that name its topic. It has since gained the *
 foundation**: a learner can keep their **own written notes and copied-out passages** against a piece
 of that material, which is the first study material LearnFlow stores rather than points at. That is
 **storage and nothing else** — no upload, no fetch, no extraction, no chunking, no embedding, no
-index, no search, and no mentor — and it is **proposed by**
-[ADR-037](../adr/ADR-037-learner-written-resource-notes.md), which is not yet accepted, with
-migration `20260819_01`. That is the first item below, and deliberately no more of the milestone — nothing is
+index, no search, and no mentor — and it is **contracted by**
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md) with migration `20260819_01`. That is the first item below, and deliberately no more of the milestone — nothing is
 uploaded, extracted, indexed, or retrieved, and no mentor exists. It also supplies the **resource
 half** of [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
 [ADR-028](../adr/ADR-028-revision-workflow.md) deferred; the practice half still waits on FR-009, so
@@ -535,8 +534,8 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   on the learner's own machine. Text is stored **exactly as written**, rendered as **plain text**, and
   **never deleted**. It adds a table beyond the approved schema, `resource_notes`, for the reason
   [the area review](../database/schema.md#resources-and-rag-metadata-area-second-partial-review-2026-08-19)
-  records. **FR-007's four criteria are unchanged and FR-008 is not met at all.** **Proposed by**
-  [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), which is not yet accepted.
+  records. **FR-007's four criteria are unchanged and FR-008 is not met at all.** Contracted by
+  [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 - [ ] Supported text-based PDF can be extracted and indexed. **Still unbuilt**, and the note item
   above deliberately does not begin it: a note needs no file storage, no extractor, no chunking
   policy, no embedding provider, and no vector store, and none of the five exists.

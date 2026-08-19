@@ -98,7 +98,7 @@ Text the learner typed or pasted themselves, kept against one learning resource:
 
 It belongs to exactly one resource and **inherits the topics that resource covers**, carrying none of its own, so correcting what a resource covers moves its notes with it and the two can never disagree.
 
-This is the **one place the model holds study material rather than a pointer to it**, and the boundary is narrow: the learner types or pastes, and nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, indexes, or searches it. Chunks, embeddings, and vector records remain [non-entities](entities.md#important-non-entities) — derived data belonging in a vector index, rebuildable from the note. A note is corrected in place and put aside rather than deleted. See [entities](entities.md#resource-note) and [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), which is **proposed and not yet accepted**.
+This is the **one place the model holds study material rather than a pointer to it**, and the boundary is narrow: the learner types or pastes, and nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, indexes, or searches it. Chunks, embeddings, and vector records remain [non-entities](entities.md#important-non-entities) — derived data belonging in a vector index, rebuildable from the note. A note is corrected in place and put aside rather than deleted. See [entities](entities.md#resource-note) and [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 
 ### Examination Schedule
 

@@ -2,7 +2,7 @@
 title: "ADR-032: Catalogue Learner-Owned Study Material as Metadata, Linked to Topics"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 related:
   - ../00-project-context.md
   - ADR-008-assessment-and-mistake-evidence-model.md
@@ -75,6 +75,14 @@ It needs **one migration**: `20260816_01`, two `CREATE TABLE`s and two indexes. 
 altered.
 
 ## Implementation status
+
+**2026-08-19 — a learner's own written notes are now stored against a resource.**
+
+[ADR-037](ADR-037-learner-written-resource-notes.md) **narrows this record's "metadata, never the material" rule** on one point: a learner may keep **plain-text notes they wrote or pasted themselves** against a resource — their own notes on it, or a passage they transcribed. The text is **stored locally** and **rendered as plain text only**.
+
+The three things that rule was written to keep out **all stay out**: nothing is uploaded, nothing is fetched or scraped from the web, and no location on the learner's own machine is stored. Nothing extracts, chunks, embeds, indexes, or searches a note either, and `storage_key`, `metadata`, and `resource_ingestions` remain absent.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
 
 **2026-08-18 — a topic's material is now also shown on `/plan` and `/plan/today`.**
 

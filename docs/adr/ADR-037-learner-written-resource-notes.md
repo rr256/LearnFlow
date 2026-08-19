@@ -1,6 +1,6 @@
 ---
 title: "ADR-037: Store the Learner's Own Written Notes Against a Learning Resource"
-status: proposed
+status: accepted
 owner: architecture-and-data
 last_updated: 2026-08-19
 related:
@@ -37,7 +37,7 @@ related:
 
 ## Status
 
-Proposed — 2026-08-19.
+Accepted — 2026-08-19. Proposed 2026-08-19.
 
 This is the **first RAG foundation**: the first thing LearnFlow stores that a mentor could one day
 be grounded in. Learner-written **practice questions** are stored text too
