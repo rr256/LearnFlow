@@ -2,7 +2,7 @@
 title: LearnFlow RAG Ingestion
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-20
+last_updated: 2026-08-19
 related:
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-038-local-topic-note-retrieval.md

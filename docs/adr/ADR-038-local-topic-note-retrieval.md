@@ -39,7 +39,7 @@ related:
 
 ## Status
 
-Accepted — 2026-08-20. Proposed 2026-08-19.
+Accepted — 2026-08-19. Proposed 2026-08-19.
 
 This is **the first retrieval in LearnFlow**. A learner chooses a curriculum topic and sees passages
 from their own notes, each named with the material and topic it came from.

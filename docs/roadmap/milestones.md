@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-20
+last_updated: 2026-08-19
 related:
   - ../00-project-context.md
   - roadmap.md
