@@ -2,10 +2,11 @@
 title: LearnFlow RAG Overview
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
+  - ../adr/ADR-039-source-grounded-study-answers.md
   - ../00-project-context.md
   - ingestion.md
   - retrieval.md
@@ -75,14 +76,16 @@ pasted themselves**, kept against a resource as a *resource note*.
 **A learner's notes are now searchable.** [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md) adds RES-013: a
 learner chooses a topic and sees passages from their own notes, found by **PostgreSQL full-text
 search running locally**. That is retrieval without any of the pipeline below — no file, no
-extraction, no chunking, no embedding, no vector store, and no AI provider — and it is all the
-retrieval there is.
+extraction, no chunking, no embedding, and no vector store — and it is all the retrieval there is.
+An AI provider now reads what it returns, when the learner asks a question
+([ADR-039](../adr/ADR-039-source-grounded-study-answers.md)), and it runs locally.
 
 **This is the only content LearnFlow stores today.** It is the first study material the product holds
 rather than points at — learner-written practice questions are stored too, but a question is
 something the learner *made*, not material they *study from*. Nothing else on this page is built: no file is uploaded or stored, no
-text is extracted, nothing is normalised, chunked, embedded, or indexed, no vector store exists, and
-no mentor answers anything.
+text is extracted, nothing is normalised, chunked, embedded, or indexed, and no vector store exists.
+A mentor now answers a question from these notes — grounded in them alone, and never asked at all
+when they support nothing.
 
 A note is a source with no file, so four of the ingestion steps have nothing to do:
 
@@ -105,8 +108,12 @@ Two consequences worth stating before retrieval is built:
   would change what they wrote. Whether a note is normalised *when it is chunked* is a decision for
   the change that builds chunking.
 
-Whether notes ever become retrieval context is **not decided here**. See
-[ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
+Notes **are** the retrieval context, and the only one. They are searched locally by RES-013, and when
+the learner asks a question the matching passages — and nothing else — are sent to a locally running
+model by MNT-001. Nothing else is retrieved, because nothing else is stored. See
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md),
+[ADR-038](../adr/ADR-038-local-topic-note-retrieval.md), and
+[ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
 
 ## Data Boundaries
 

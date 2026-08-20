@@ -2,13 +2,14 @@
 title: LearnFlow Provider Pattern
 status: approved
 owner: architecture
-last_updated: 2026-07-29
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - overview.md
   - clean-architecture.md
   - ../rag/overview.md
   - ../development/tech-stack.md
+  - ../adr/ADR-039-source-grounded-study-answers.md
 ---
 
 # LearnFlow Provider Pattern
@@ -68,6 +69,24 @@ Structured persistence:  PostgreSQL
 ```
 
 Provider selection must be configuration-driven. Provider names, endpoints, model names, collection names, and credentials must not be hardcoded into domain logic or frontend code.
+
+### As implemented
+
+**One provider exists: `AIProvider`, fulfilled by Ollama.** It is selected by `AI_PROVIDER` in the
+composition root and used by MNT-001 alone. See
+[ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
+
+The remaining ports are **unimplemented**: no embedding provider, no vector search provider, and no
+file storage provider, so `EMBEDDING_PROVIDER`, `CHROMA_URL`, and the storage variables stay planned.
+Structured persistence has always been PostgreSQL through repositories.
+
+**No credential exists anywhere in LearnFlow.** The only provider runs locally and authenticates
+nothing, so there is no API key in configuration, in `.env.example`, or in the environment the
+backend expects. A cloud adapter would be a separate class and an explicit decision, under
+[ADR-004](../adr/ADR-004-ollama-local-ai-provider.md)'s own mitigation.
+
+The Ollama adapter uses the standard library rather than a vendor SDK, so selecting it adds **no
+dependency**.
 
 ## Application Ports
 

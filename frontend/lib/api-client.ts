@@ -33,6 +33,7 @@ import type {
   NewLearningResource,
 } from "@/types/resource";
 import type { TopicNoteSearch, TopicNoteSearchResponse } from "@/types/note-search";
+import type { StudyAnswer, StudyAnswerResponse } from "@/types/study-answer";
 import type {
   NewResourceNote,
   ResourceNote,
@@ -925,6 +926,46 @@ export async function searchTopicNotes(topicId: string): Promise<TopicNoteSearch
     throw new ApiError("malformed_response", "The API returned a malformed search result.", null);
   }
   return (body as TopicNoteSearchResponse).data;
+}
+
+/**
+ * MNT-001 -- ask a question about one topic, answered from the learner's own notes.
+ *
+ * **The model is asked only when retrieval found something.** Where the learner
+ * has linked no material, has no active note, or has nothing mentioning the
+ * topic, the backend returns before any prompt is built and `outcome` says which
+ * — so an empty answer here means LearnFlow declined to invent one, not that
+ * anything failed.
+ *
+ * **A provider that cannot answer is still a `200`.** The retrieved passages come
+ * back with an outcome naming what went wrong, because a model that is switched
+ * off must not cost the learner the reading of their own notes. Only a refused
+ * request throws.
+ *
+ * **Nothing is stored.** No question, no answer, and no history: asking twice
+ * leaves no trace of either.
+ *
+ * A `POST` that writes nothing. The question travels in a body rather than an
+ * address, so a learner's own words stay out of URLs, server logs, and browser
+ * history.
+ *
+ * @throws ApiError with `isNotFound` when the topic is not stored, or
+ *   `isConflict` when setup has not created a learner yet.
+ */
+export async function askStudyQuestion(
+  topicId: string,
+  question: string,
+): Promise<StudyAnswer> {
+  const body = await requestJson("/api/v1/mentor/questions", {
+    method: "POST",
+    body: { topic_id: topicId, question },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data) || !Array.isArray((data as Record<string, unknown>).passages)) {
+    throw new ApiError("malformed_response", "The API returned a malformed answer.", null);
+  }
+  return (body as StudyAnswerResponse).data;
 }
 
 /**

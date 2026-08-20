@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -39,6 +39,7 @@ related:
   - ../adr/ADR-036-topic-material-on-the-plan-screens.md
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
+  - ../adr/ADR-039-source-grounded-study-answers.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -500,8 +501,14 @@ no mentor — and it is **contracted by**
 [ADR-037](../adr/ADR-037-learner-written-resource-notes.md) with migration `20260819_01`. Those
 notes have since become **searchable**: a learner picks a topic and sees passages from them,
 found by PostgreSQL full-text search running locally and only when they ask, which is the third
-item below and still no mentor. Contracted by [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md). Those are the first three items below, and deliberately no more of the milestone — nothing
-is uploaded, extracted, chunked, embedded, or vector-indexed, and no mentor exists. It also supplies the **resource
+item below. Contracted by [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md). **The mentor has
+since arrived, narrowly**: a learner asks a question about one topic and receives an answer built
+**only** from those passages, through a **locally running** AI provider — asked at all only where
+retrieval found something, so LearnFlow never answers from a model's own training. Nothing is
+stored, no credential exists, and suggested next actions are deliberately unbuilt. Contracted by
+[ADR-039](../adr/ADR-039-source-grounded-study-answers.md). Those are the first items below, and
+deliberately no more of the milestone — nothing is uploaded, extracted, chunked, embedded, or
+vector-indexed. It also supplies the **resource
 half** of [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
 [ADR-028](../adr/ADR-028-revision-workflow.md) deferred; the practice half still waits on FR-009, so
 **FR-006 is still not met in full**. Contracted by
@@ -539,7 +546,8 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   on the learner's own machine. Text is stored **exactly as written**, rendered as **plain text**, and
   **never deleted**. It adds a table beyond the approved schema, `resource_notes`, for the reason
   [the area review](../database/schema.md#resources-and-rag-metadata-area-second-partial-review-2026-08-19)
-  records. **FR-007's four criteria are unchanged and FR-008 is not met at all.** Contracted by
+  records. **FR-007's four criteria are unchanged**; FR-008's count has since moved and is carried by
+  [endpoints.md](../api/endpoints.md#fr-008-acceptance-criteria). Contracted by
   [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 - [ ] **A learner can find passages in their own notes for a topic.** **Done**, by RES-013 with
   migration `20260820_01`: the learner chooses a curriculum topic at `/resources/search` and sees
@@ -550,21 +558,38 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   running locally and **only when the learner asks**. It **narrows**
   [ADR-037](../adr/ADR-037-learner-written-resource-notes.md)'s *nothing reads a note* promise on one
   point while leaving its correction argument intact, because nothing derived from a note is stored.
-  The migration creates **one index and no column**. **FR-008 is not met**: one of its six criteria
-  is partly met and there is still no mentor;
-  [endpoints.md](../api/endpoints.md#fr-008-acceptance-criteria) carries the count. Contracted by
+  The migration creates **one index and no column**. Contracted by
   [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
+- [x] A learner asks a question about a topic and receives an answer grounded in their own notes,
+  with the passages it used shown beneath it (MNT-001). The screen is called **Ask your notes**;
+  *mentor* names the service and the route, because only one of the Mentor Service's four
+  responsibilities is built. **The provider is asked only where retrieval
+  found something**; with nothing found, no prompt is composed and no request leaves the process.
+  Only the question, the topic and subject names, and at most eight passages are sent — no
+  identifier, no title, no whole note, and nothing about the learner's plan, progress, revisions, or
+  practice. The provider is **Ollama running locally**, so **no API key, account, or billing
+  exists**. **Nothing is stored**, so there is no migration. **FR-008 is not met in full**: five of
+  its six criteria are met and the third is partly met, because suggested next actions are
+  deliberately unbuilt and retrieval covers the learner's own notes alone;
+  [endpoints.md](../api/endpoints.md#fr-008-acceptance-criteria) carries the count. Contracted by
+  [ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
 - [ ] Supported text-based PDF can be extracted and indexed. **Still unbuilt**, and the note item
   above deliberately does not begin it: a note needs no file storage, no extractor, no chunking
   policy, no embedding provider, and no vector store, and none of the five exists.
 - [ ] Ingestion shows queued/processing/completed/failed status. `resource_ingestions` is not
   created, and `resources.status` therefore permits neither `processing`, `ready`, nor `failed`: a
   resource could enter one and never leave it.
-- [ ] Mentor retrieves authorized relevant excerpts before grounded answers. **The retrieval half
-  exists** (RES-013 above), filtered by learner ownership, topic linkage, and status; there is no
-  mentor and no grounded answer, so this item stays open.
-- [ ] Mentor response shows useful source references when retrieval succeeds.
-- [ ] No-source and provider-unavailable states are honest and understandable.
+- [x] Mentor retrieves authorized relevant excerpts before grounded answers. RES-013 retrieves,
+  filtered by learner ownership, topic linkage, and status, and MNT-001 generates **only** on the
+  branch where it found something. Met over the learner's own notes; **no ingested resource is
+  retrieved**, because none exists.
+- [x] Mentor response shows useful source references when retrieval succeeds. `passages` names the
+  note, material, and topic behind every extract the answer was built from — recorded from what was
+  **sent**, never parsed out of the prose, so an answer cannot cite a note that was not consulted.
+- [x] No-source and provider-unavailable states are honest and understandable. Three no-source
+  outcomes are told apart, each naming a different next step, and **no model is asked on any of
+  them**; three provider failures are told apart and **keep the retrieved passages**, because a
+  provider that is switched off must not cost the learner the reading of their own notes.
 - [ ] Original files, resource metadata, and derived vectors are stored separately. **No file and
   no vector is stored**, which is what this item is really about. Metadata is stored, and so now
   is the text a learner typed themselves — a *resource note* is neither a file nor a derived

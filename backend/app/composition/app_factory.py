@@ -11,7 +11,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.composition.config import Settings, load_settings
+from app.application.ports.ai_provider import AIProvider
+from app.composition.config import AIProviderName, Settings, load_settings
 from app.composition.providers import (
     build_checkpoint_quizzes_provider,
     build_learner_profile_provider,
@@ -21,12 +22,14 @@ from app.composition.providers import (
     build_resource_notes_provider,
     build_resources_provider,
     build_revisions_provider,
+    build_study_answer_provider,
     build_study_goals_provider,
     build_study_plans_provider,
     build_topic_note_retrieval_provider,
     build_topic_progress_provider,
 )
 from app.infrastructure.persistence.engine import create_database_engine, create_session_factory
+from app.infrastructure.providers.ollama_ai_provider import OllamaAIProvider
 from app.presentation.api.dependencies import (
     CHECKPOINT_QUIZZES_PROVIDER,
     LEARNER_PROFILE_PROVIDER,
@@ -36,6 +39,7 @@ from app.presentation.api.dependencies import (
     RESOURCE_NOTES_PROVIDER,
     RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
+    STUDY_ANSWER_PROVIDER,
     STUDY_GOALS_PROVIDER,
     STUDY_PLANS_PROVIDER,
     TOPIC_NOTE_RETRIEVAL_PROVIDER,
@@ -48,6 +52,7 @@ from app.presentation.api.routes import (
     examination_schedules,
     health,
     learner,
+    mentor,
     note_search,
     plan_items,
     practice_questions,
@@ -125,6 +130,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         TOPIC_NOTE_RETRIEVAL_PROVIDER,
         build_topic_note_retrieval_provider(session_factory),
     )
+    setattr(
+        app.state,
+        STUDY_ANSWER_PROVIDER,
+        build_study_answer_provider(session_factory, ai_provider=_select_ai_provider(settings)),
+    )
     setattr(app.state, TOPIC_PROGRESS_PROVIDER, build_topic_progress_provider(session_factory))
     setattr(
         app.state,
@@ -156,9 +166,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # would otherwise capture `/resource-notes/search`: a path parameter matches
     # any segment and is only validated as a UUID afterwards, so the collision
     # would surface as a 422 rather than as a route that never ran.
+    app.include_router(mentor.router)
     app.include_router(note_search.router)
     app.include_router(resource_notes.router)
     app.include_router(practice_questions.router)
     app.include_router(checkpoint_quizzes.router)
     app.include_router(quiz_attempts.router)
     return app
+
+
+def _select_ai_provider(settings: Settings) -> AIProvider:
+    """The adapter that fulfils the `AIProvider` port for this process.
+
+    **The only place an AI provider is chosen.** `AI_PROVIDER` names a capability
+    and this function turns that name into one object; nothing else in the
+    backend imports an adapter, so what a learner's passages are sent to is
+    decided here and read in one place.
+
+    Built once at startup rather than per request: the adapter holds a URL, a
+    model name, and a timeout, so there is nothing request-scoped in it.
+
+    The match is exhaustive over `AIProviderName`, so adding a member without an
+    adapter fails the type check rather than at the first question a learner asks.
+    """
+    match settings.ai_provider:
+        case AIProviderName.ollama:
+            return OllamaAIProvider(
+                base_url=str(settings.ollama_base_url),
+                model=settings.ollama_chat_model,
+                timeout_seconds=settings.ai_request_timeout_seconds,
+            )

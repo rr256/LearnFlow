@@ -1,0 +1,14 @@
+.lead {
+  margin: 0 0 var(--space-5);
+  color: var(--colour-text-muted);
+  max-width: var(--measure);
+}
+
+.actions {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: var(--space-6) 0 0;
+  padding: 0;
+}

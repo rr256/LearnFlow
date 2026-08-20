@@ -2,7 +2,7 @@
 title: LearnFlow Product Agents
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-18
+last_updated: 2026-08-20
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
@@ -17,6 +17,7 @@ related:
   - ../domain/terminology.md
   - ../rag/overview.md
   - engineering-ai.md
+  - ../adr/ADR-039-source-grounded-study-answers.md
 ---
 
 # LearnFlow Product Agents
@@ -147,6 +148,36 @@ Explain concepts, answer doubts, summarize relevant material, and guide the lear
 - Retrieval provider.
 - AI provider.
 - Read-only curriculum/resource/progress access through application services.
+
+### As implemented
+
+**MNT-001 implements this service narrowly, and the narrowing is deliberate.** A learner asks a
+question about one curriculum topic and receives an explanation grounded in passages from their own
+notes. See [ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
+
+**The learner never sees the word *mentor*.** Because only one of this service's four
+responsibilities is built, the screen is called **Ask your notes**
+([terminology](../domain/terminology.md)); *Mentor Service* names the service, and `/mentor` the
+route.
+
+Of the inputs above, **only four things are sent** to the provider: the learner question, the topic
+name, the subject name, and the retrieved passages. The field list is fixed by the MNT-001 contract in
+[endpoints.md](../api/endpoints.md#mnt-001-post-apiv1mentorquestions), which is authoritative for
+it. **Learner progress context is deliberately not sent**, and neither is a
+resource identifier or title: an answer is grounded in the passages alone, so nothing else about the
+learner needs to leave the application layer.
+
+Of the outputs, the grounded explanation and the source references are produced. **The optional
+suggested next action is not**, so nothing here changes a plan or progress — silently or otherwise.
+There is also **no "clearly labeled general response"**: where retrieval finds nothing, **the
+provider is not asked at all** and LearnFlow says it has nothing to answer from, rather than
+answering generally and labelling it.
+
+The AI provider is Ollama, running locally, as
+[ADR-004](../adr/ADR-004-ollama-local-ai-provider.md) decided. The retrieval provider is **not** a
+vector store: it is PostgreSQL full-text search over the learner's own notes (RES-013).
+
+**MNT-002 is unimplemented.** Asking a question already reports whether the provider answered.
 
 ## Progress Coach Service
 

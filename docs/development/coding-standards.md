@@ -2,7 +2,7 @@
 title: LearnFlow Coding Standards
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-05
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - folder-structure.md
@@ -116,6 +116,18 @@ This set covers the checks that need nothing beyond Python, Node.js, and the pin
 CI runs every check in this set on each pull request, with one difference: the workflow runs `python -m pytest` while this local set adds `-W error`, so the local run is the stricter of the two.
 
 CI additionally runs two things this set does not: it validates the Compose topology and builds the backend and frontend images, and it runs the database migration tests against an ephemeral PostgreSQL service. Those migration tests are part of the suite above but skip unless `TEST_DATABASE_URL` names a reachable disposable database, so a plain local run does not exercise them. See [CI/CD strategy](../deployment/ci-cd.md).
+
+Two further groups in `backend/tests/integration/` skip on a plain local run and are worth naming, because they cover things the rest of the suite cannot:
+
+- `test_mentor_api.py` runs MNT-001 against **real PostgreSQL retrieval** with only the AI provider faked, so the branch that decides whether a model is asked is exercised by actual full-text search rather than by an in-memory stand-in. It needs `TEST_DATABASE_URL`.
+- `test_docker_topology.py` has two halves. Its **configuration** assertions — every AI setting on `backend`, none on `frontend`, no credential anywhere — need only Docker and run wherever it is installed, CI included. Its **container** half runs a backend container against a contract-shaped **fake** Ollama on the host to prove the `host.docker.internal` path works; it joins the local Compose network to reach `postgres` by name, so it **skips where that network is absent**, which is the case on CI, whose PostgreSQL is a service container on its own network. Run `docker compose up -d` to exercise it. It also needs `TEST_DATABASE_URL`, and skips unless that value names a disposable database.
+
+**Neither makes a real external call**, and neither may be pointed at the development database:
+
+```bash
+cd backend
+TEST_DATABASE_URL=postgresql+psycopg://learnflow:learnflow@127.0.0.1:5432/learnflow_test   python -m pytest tests/integration
+```
 
 ## TypeScript and Frontend Standards
 

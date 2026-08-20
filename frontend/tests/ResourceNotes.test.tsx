@@ -187,12 +187,22 @@ describe("ResourceNotes", () => {
 
   it("says who reads a note and when, rather than that nothing does", () => {
     // ADR-038 narrowed ADR-037's promise: the topic search reads notes, locally
-    // and only when asked. The form says so.
+    // and only when asked. ADR-039 added the second reader. The form says so.
     const { container } = render(<ResourceNotes notes={[]} resourceId="resource-1" writable />);
 
     expect(container.textContent).toMatch(/never sent anywhere/i);
     expect(container.textContent).toMatch(/only when you ask/i);
-    expect(container.textContent).toMatch(/no AI model/i);
     expect(container.textContent).not.toMatch(/nothing reads it/i);
+  });
+
+  it("names the AI model as a reader rather than promising none ever sees a note", () => {
+    // MNT-001 made the older promise false. The copy states the second reader,
+    // that it runs here, and that it is given passages rather than a whole note.
+    const { container } = render(<ResourceNotes notes={[]} resourceId="resource-1" writable />);
+
+    expect(container.textContent).toMatch(/AI model/i);
+    expect(container.textContent).toMatch(/on this machine/i);
+    expect(container.textContent).toMatch(/never a whole note/i);
+    expect(container.textContent).not.toMatch(/no AI model ever sees/i);
   });
 });
