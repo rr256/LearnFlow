@@ -22,7 +22,10 @@ since it reads the bytes that left the container.
 disposable `TEST_DATABASE_URL` database, and this module refuses to run if that
 value names the development database.
 
-Skipped unless Docker is available and ``TEST_DATABASE_URL`` is set.
+The configuration half needs nothing and runs everywhere Docker is installed.
+The container half additionally needs the local Compose network and a
+disposable ``TEST_DATABASE_URL``, and skips where either is absent — which is
+the case on CI, whose PostgreSQL is a service container on its own network.
 """
 
 import json
@@ -71,6 +74,21 @@ def _docker_is_available() -> bool:
     except OSError, subprocess.SubprocessError:
         return False
     return True
+
+
+def _compose_network_exists() -> bool:
+    """Whether the local Compose network the runtime half attaches to is present.
+
+    The container is joined to the running Compose network so it can reach the
+    `postgres` service by name. That network exists on a developer's machine once
+    `docker compose up` has run, and **does not exist on a CI runner**, where
+    PostgreSQL is a service container on the runner's own network instead.
+    """
+    try:
+        listed = _docker("network", "ls", "--format", "{{.Name}}", timeout=30)
+    except OSError, subprocess.SubprocessError:
+        return False
+    return COMPOSE_NETWORK in listed.stdout.split()
 
 
 def _free_port() -> int:
@@ -287,7 +305,20 @@ def seeded_test_database(container_database_url: str) -> str:
 def running_backend(
     container_database_url: str, seeded_test_database: str, fake_ollama: tuple[int, list[dict]]
 ) -> Iterator[str]:
-    """The backend, in a container, wired exactly as Compose wires it."""
+    """The backend, in a container, wired exactly as Compose wires it.
+
+    **Skipped where the Compose network is absent**, which is the case on CI: the
+    container joins that network to reach the `postgres` service by name, and a
+    runner has PostgreSQL as a service container on a different network instead.
+    The configuration assertions above need no container and run everywhere, so
+    CI still checks the topology — what it cannot check is the host-gateway path,
+    which is a property of a developer's own machine.
+    """
+    if not _compose_network_exists():
+        pytest.skip(
+            f"The {COMPOSE_NETWORK!r} network is not present. Run `docker compose up -d` "
+            "to exercise the container half of this file."
+        )
     ollama_port, _ = fake_ollama
     _docker("build", "-f", "docker/backend.Dockerfile", "-t", IMAGE, ".", timeout=900)
     _docker("rm", "-f", CONTAINER, check=False, timeout=60)

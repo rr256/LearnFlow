@@ -120,7 +120,7 @@ CI additionally runs two things this set does not: it validates the Compose topo
 Two further groups in `backend/tests/integration/` skip on a plain local run and are worth naming, because they cover things the rest of the suite cannot:
 
 - `test_mentor_api.py` runs MNT-001 against **real PostgreSQL retrieval** with only the AI provider faked, so the branch that decides whether a model is asked is exercised by actual full-text search rather than by an in-memory stand-in. It needs `TEST_DATABASE_URL`.
-- `test_docker_topology.py` asserts that Compose puts every AI setting on `backend` and none on `frontend`, then runs a **backend container** against a contract-shaped **fake** Ollama on the host to prove the `host.docker.internal` path works. It needs Docker and `TEST_DATABASE_URL`, and skips unless that value names a disposable database.
+- `test_docker_topology.py` has two halves. Its **configuration** assertions — every AI setting on `backend`, none on `frontend`, no credential anywhere — need only Docker and run wherever it is installed, CI included. Its **container** half runs a backend container against a contract-shaped **fake** Ollama on the host to prove the `host.docker.internal` path works; it joins the local Compose network to reach `postgres` by name, so it **skips where that network is absent**, which is the case on CI, whose PostgreSQL is a service container on its own network. Run `docker compose up -d` to exercise it. It also needs `TEST_DATABASE_URL`, and skips unless that value names a disposable database.
 
 **Neither makes a real external call**, and neither may be pointed at the development database:
 
