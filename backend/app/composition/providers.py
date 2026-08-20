@@ -21,7 +21,9 @@ from contextlib import AbstractContextManager, contextmanager
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.ports.ai_provider import AIProvider
 from app.application.ports.clock import Clock
+from app.application.use_cases.answer_topic_question import AnswerTopicQuestion
 from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
@@ -68,6 +70,7 @@ RevisionsProvider = Callable[[], AbstractContextManager[ManageRevisions]]
 ResourcesProvider = Callable[[], AbstractContextManager[ManageResources]]
 ResourceNotesProvider = Callable[[], AbstractContextManager[ManageResourceNotes]]
 TopicNoteRetrievalProvider = Callable[[], AbstractContextManager[RetrieveTopicNotes]]
+StudyAnswerProvider = Callable[[], AbstractContextManager[AnswerTopicQuestion]]
 TopicProgressProvider = Callable[[], AbstractContextManager[ManageTopicProgress]]
 PracticeQuestionsProvider = Callable[[], AbstractContextManager[ManagePracticeQuestions]]
 CheckpointQuizzesProvider = Callable[[], AbstractContextManager[ManageCheckpointQuizzes]]
@@ -316,6 +319,47 @@ def build_topic_note_retrieval_provider(
                 learners=SqlAlchemyLearnerRepository(session),
                 resources=SqlAlchemyResourceRepository(session),
                 notes=SqlAlchemyNoteSearchRepository(session),
+            )
+
+    return provide
+
+
+def build_study_answer_provider(
+    session_factory: sessionmaker[Session],
+    *,
+    ai_provider: AIProvider,
+) -> StudyAnswerProvider:
+    """Build the provider that hands the grounded study-answer use case to a request.
+
+    **A read, so it never commits**, like retrieval underneath it. Answering a
+    question writes nothing at all: no question, no answer, no history, and no
+    record that either happened.
+
+    **This is where the AI provider is chosen**, and the only place in the backend
+    that could be. The use case receives something satisfying `AIProvider` and
+    never learns which; a test supplies a fake and reaches no network at all.
+
+    The adapter is built **once at startup and shared**, unlike the repositories
+    beside it: it holds a URL, a model name, and a timeout rather than a session,
+    so there is no per-request state to isolate and no connection to release.
+
+    Args:
+        session_factory: The application's shared session factory.
+        ai_provider: The adapter selected by `AI_PROVIDER`. Passed in rather than
+            constructed here so that the choice is made in one place, `app_factory`,
+            beside every other reading of configuration.
+    """
+
+    @contextmanager
+    def provide() -> Iterator[AnswerTopicQuestion]:
+        with session_factory() as session:
+            yield AnswerTopicQuestion(
+                retrieval=RetrieveTopicNotes(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    resources=SqlAlchemyResourceRepository(session),
+                    notes=SqlAlchemyNoteSearchRepository(session),
+                ),
+                provider=ai_provider,
             )
 
     return provide

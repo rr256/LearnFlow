@@ -153,6 +153,9 @@ export default function HomePage() {
             <Link href="/resources">Your study material</Link>
           </li>
           <li>
+            <Link href="/mentor">Ask your notes</Link>
+          </li>
+          <li>
             <Link href="/setup">Edit your setup</Link>
           </li>
           <li>

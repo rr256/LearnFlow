@@ -201,6 +201,9 @@ export default function ResourcesPage() {
             <Link href="/resources/search">Find it in your notes</Link>
           </li>
           <li>
+            <Link href="/mentor">Ask your notes</Link>
+          </li>
+          <li>
             <Link href="/curriculum">Browse the curriculum</Link>
           </li>
           <li>

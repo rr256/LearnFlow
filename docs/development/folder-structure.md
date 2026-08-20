@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-18
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -305,6 +305,12 @@ app/
 │   │                                       # adds over RES-001, and edits or archives
 │   │                                       # over RES-004, via server actions
 │   └── page.module.css
+├── mentor/
+│   ├── page.tsx                            # "Ask your notes": GOAL-002 and CUR-003
+│   │                                       # for the topics; MNT-001 answers from the
+│   │                                       # learner's own notes, via a server action
+│   │                                       # so the question stays out of the address
+│   └── page.module.css
 ├── practice/
 │   ├── page.tsx                            # Checkpoint practice: QZ-009 for the
 │   │                                       # learner's questions, QZ-006 for their
@@ -333,7 +339,7 @@ app/
                                             # GOAL-005, via server actions
 ```
 
-Every home, curriculum, setup, plan, progress, revision, resource, and practice route sets
+Every home, curriculum, setup, plan, progress, revision, resource, mentor, and practice route sets
 `dynamic = "force-dynamic"`, `practice/history` among them, because a learner's attempts are learner
 data and the container build has no API to reach. The curriculum lives in the
 database, so a build-time snapshot would go stale the moment the seed ran again; the profile and the
@@ -379,7 +385,7 @@ quizzes/
 external-tests/
 ```
 
-Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, `resources/`, and `practice/` exist today.
+Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, `resources/`, `practice/`, and `mentor/` exist today.
 
 `practice/` holds **checkpoint practice**: `QuestionForm.tsx` serving both writing and **correcting** — one component, as `ResourceForm` is for a resource, since both ask for the same five fields and differ only in whether they start filled and which endpoint they reach — `QuestionBank.tsx` and `QuestionStatusControl.tsx` for reading them back, correcting one behind a `<details>` disclosure, and setting one aside,
 `StartQuizForm.tsx` for choosing topics, `QuizForm.tsx` for answering a quiz in one form post,

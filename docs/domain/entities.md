@@ -2,9 +2,10 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../adr/ADR-037-learner-written-resource-notes.md
+  - ../adr/ADR-039-source-grounded-study-answers.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-028-revision-workflow.md
   - ../00-project-context.md
@@ -111,8 +112,9 @@ kind: nothing uploads a file, fetches an address, extracts text from a document,
 indexes it into a vector store. It carries **no topic links of its own**, so a learner correcting
 what a resource covers moves its notes with it.
 
-It is read by the *topic note search*, locally and only when the learner asks, and by nothing else;
-no AI model sees it. **Nothing derived from a note is stored** — no chunk, no embedding, no cached
+Two things read it, both on the learner's own machine and both only when they ask: the *topic note
+search*, and — through MNT-001 — a locally running AI model, which is given the passages that search
+selected and **never a whole note**. **Nothing derived from a note is stored** — no chunk, no embedding, no cached
 extract, no search history, and nothing beyond the full-text index PostgreSQL maintains for itself — which is why a note is corrected in place as often as the learner likes:
 there is no record that could be made to disagree with a correction. It is put aside rather than
 deleted, and notes on material that is put aside are read-only and stay readable. See

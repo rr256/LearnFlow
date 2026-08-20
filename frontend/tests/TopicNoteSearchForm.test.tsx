@@ -64,13 +64,22 @@ describe("TopicNoteSearchForm", () => {
   });
 
   it("says who reads the notes and when", () => {
-    // The revised privacy position: not "nothing reads it", but which reader,
-    // where it runs, and that no AI model is involved.
+    // The privacy position: not "nothing reads it", but which reader, where it
+    // runs, and when.
     const { container } = render(<TopicNoteSearchForm topicGroups={topicGroups} />);
 
     expect(container.textContent).toMatch(/searched on this computer/i);
     expect(container.textContent).toMatch(/only when you ask/i);
-    expect(container.textContent).toMatch(/no AI model/i);
+  });
+
+  it("says no AI model is involved in this search, without claiming none ever reads a note", () => {
+    // MNT-001 made the older, broader promise false: a model does read matching
+    // passages when the learner asks a question. The claim is now scoped to this
+    // search, and points at where the other reader is.
+    const { container } = render(<TopicNoteSearchForm topicGroups={topicGroups} />);
+
+    expect(container.textContent).toMatch(/this search involves no AI model/i);
+    expect(container.textContent).not.toMatch(/no AI model reads them/i);
   });
 
   it("says so when the curriculum could not be read", () => {

@@ -2,7 +2,7 @@
 title: "ADR-038: Retrieve Passages From a Learner's Own Notes Locally, When They Ask"
 status: accepted
 owner: architecture-and-ai
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - ADR-002-provider-pattern.md
@@ -32,6 +32,7 @@ related:
   - ../requirements/non-functional.md
   - ../development/coding-standards.md
   - ../roadmap/milestones.md
+  - ADR-039-source-grounded-study-answers.md
   - ../architecture/decisions.md
 ---
 
@@ -263,6 +264,34 @@ term frequency. Rejected as both heavier and less apt.
 **Show the passages automatically on the curriculum and plan screens.** Rejected on the owner's
 decision: it would read note text on nearly every page render, including screens opened for something
 else, which is a materially weaker privacy position than an explicit ask.
+
+## Implementation status
+
+**2026-08-19 — retrieval now feeds an answer, on the same terms.**
+
+[ADR-039](ADR-039-source-grounded-study-answers.md) adds **MNT-001**, which reuses this ADR's use
+case unchanged and asks a **local AI model** to answer from what it returned.
+
+**The privacy wording this ADR wrote is now narrowed in turn.** The note form said *"no AI model ever
+sees them."* A model does see the passages retrieval selects, on this machine, when the learner asks
+a question — and the copy has been rewritten to say so rather than left standing, which is the rule
+this ADR itself set.
+
+**Nothing about retrieval changes.** RES-013 still answers nothing, still generates nothing, and is
+still reached only when a learner asks; its passages are still exact substrings, still ordered by a
+relevance figure that is discarded, and still carry no number. `/resources/search` is unchanged and
+remains a plain `GET` form with no AI model involved — MNT-001 lives on its own route, `/mentor`,
+through its own use case.
+
+**What MNT-001 adds on top** is bounded: at most 8 of the 20 passages are sent, with the question and
+the topic and subject names, and **nothing else** — no identifier, no note or resource title, no
+whole note. **Nothing derived is stored**, so this ADR's argument that retrieval cannot go stale
+holds for the answer too.
+
+**Two verdicts below have moved**, and the Status section and *What this deliberately leaves open*
+are left as written rather than rewritten: *"there is still no mentor"* and *"the Ollama provider
+[remains] unbuilt"* were true when this record was accepted and are not now.
+[endpoints.md](../api/endpoints.md#fr-008-acceptance-criteria) carries FR-008's current count.
 
 ## Implementation notes
 

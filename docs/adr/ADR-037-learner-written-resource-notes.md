@@ -2,7 +2,7 @@
 title: "ADR-037: Store the Learner's Own Written Notes Against a Learning Resource"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -30,6 +30,7 @@ related:
   - ../requirements/non-functional.md
   - ../development/coding-standards.md
   - ../roadmap/milestones.md
+  - ADR-039-source-grounded-study-answers.md
   - ../architecture/decisions.md
 ---
 
@@ -58,6 +59,27 @@ record does not claim otherwise — every one of its criteria needs retrieval an
 which exists. Do not write that either requirement is complete.
 
 ## Implementation status
+
+**2026-08-19 — a local AI model now reads a learner's notes, when they ask.**
+
+[ADR-039](ADR-039-source-grounded-study-answers.md) adds **MNT-001**: a learner asks a question about
+one curriculum topic and receives an answer built from passages in their own notes.
+
+**This narrows the privacy promise once more**, in the same direction
+[ADR-038](ADR-038-local-topic-note-retrieval.md) already narrowed it. ADR-038 named one reader — a
+topic search, local, only when asked — and rewrote the note form to say *"no AI model ever sees
+them."* **That clause is now false and has been rewritten.** A model does see a learner's notes: the
+passages retrieval selected, on this machine, when they ask a question. It is given **passages and
+never a whole note**, and no identifier of any kind.
+
+**The correction argument below is untouched.** Nothing derived from a note is stored — no chunk, no
+embedding, no cached extract, no question, no answer, and no history — so a note may still be
+corrected in place however often the learner likes, and no stored record can disagree with the
+correction.
+
+**Nothing else in this ADR changes.** Notes are still stored as written, still bounded at 20,000
+characters and 200 a resource, still archived rather than deleted, still read-only on archived
+material, and still rendered as plain text.
 
 **2026-08-19 — a learner's notes can now be searched, locally and only when they ask.**
 

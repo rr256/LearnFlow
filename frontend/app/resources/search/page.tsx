@@ -139,6 +139,9 @@ export default async function TopicNoteSearchPage({ searchParams }: SearchPagePr
       <nav aria-label="Learner actions">
         <ul className={styles.actions}>
           <li>
+            <Link href="/mentor">Ask your notes</Link>
+          </li>
+          <li>
             <Link href="/resources">Your study material</Link>
           </li>
           <li>

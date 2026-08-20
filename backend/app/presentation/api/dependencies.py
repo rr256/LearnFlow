@@ -19,6 +19,7 @@ from collections.abc import Iterator
 
 from fastapi import Request
 
+from app.application.use_cases.answer_topic_question import AnswerTopicQuestion
 from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
@@ -43,6 +44,7 @@ REVISIONS_PROVIDER = "revisions_provider"
 RESOURCES_PROVIDER = "resources_provider"
 RESOURCE_NOTES_PROVIDER = "resource_notes_provider"
 TOPIC_NOTE_RETRIEVAL_PROVIDER = "topic_note_retrieval_provider"
+STUDY_ANSWER_PROVIDER = "study_answer_provider"
 TOPIC_PROGRESS_PROVIDER = "topic_progress_provider"
 PRACTICE_QUESTIONS_PROVIDER = "practice_questions_provider"
 CHECKPOINT_QUIZZES_PROVIDER = "checkpoint_quizzes_provider"
@@ -111,6 +113,13 @@ def provide_resource_notes(request: Request) -> Iterator[ManageResourceNotes]:
 def provide_topic_note_retrieval(request: Request) -> Iterator[RetrieveTopicNotes]:
     """Yield the topic-note retrieval use case bound to this request's unit of work."""
     provider = getattr(request.app.state, TOPIC_NOTE_RETRIEVAL_PROVIDER)
+    with provider() as use_case:
+        yield use_case
+
+
+def provide_study_answer(request: Request) -> Iterator[AnswerTopicQuestion]:
+    """Yield the grounded study-answer use case bound to this request's unit of work."""
+    provider = getattr(request.app.state, STUDY_ANSWER_PROVIDER)
     with provider() as use_case:
         yield use_case
 

@@ -2,10 +2,11 @@
 title: LearnFlow RAG Retrieval
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
+  - ../adr/ADR-039-source-grounded-study-answers.md
   - overview.md
   - ingestion.md
   - embeddings.md
@@ -34,13 +35,21 @@ deliberately not others:
 | No raw vector IDs, paths, or debug values exposed | **Done** — none exists to expose. |
 | Embedding the query through an embedding provider | **Not done.** There is no embedding provider and no vector search. |
 | A relevance threshold, reranking, duplicate reduction | **Not done.** Ordering is `ts_rank`; nothing is reranked or deduplicated. |
-| Sending selected context to an AI provider | **Not done, and out of scope.** No answer is generated. |
+| Sending selected context to an AI provider | **Done, by MNT-001.** The retrieved passages, the question, and the topic and subject names — nothing else. The provider runs locally. |
 | Retrieval evaluation against representative questions | **Not done.** Nothing claims this search has been evaluated. |
 
-**The mentor behaviour, grounding, and citation rules below are unimplemented**, because nothing
-generates an answer. The failure modes below assume a vector provider and an ingestion state; the one
-that applies today is *no relevant matches*, which RES-013 reports as its own outcome rather than
-implying the notes are lacking.
+**The mentor behaviour, grounding, and citation rules below are implemented for a learner's own
+notes**, by [MNT-001](../api/endpoints.md#mnt-001-post-apiv1mentorquestions). An answer is generated
+**only** where retrieval succeeded — with no passage, the provider is not asked at all — and the
+citations are the passages that were sent, recorded before the request and never parsed back out of
+the prose. That is the rule *"do not claim an answer is grounded when retrieval did not succeed"*
+enforced by control flow rather than by a prompt. See
+[ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
+
+They are **not** implemented over ingested resources, because none exists. The failure modes below
+assume a vector provider and an ingestion state; the ones that apply today are *no relevant matches*
+and *provider unavailable*, which MNT-001 reports as distinct outcomes rather than implying the
+learner's notes are lacking.
 
 ## Retrieval Contract
 

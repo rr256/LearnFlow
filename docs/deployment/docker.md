@@ -2,7 +2,7 @@
 title: LearnFlow Docker Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-08
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - environments.md
@@ -254,7 +254,9 @@ no container had been started — is discharged by
 
 - Compose services communicate over the internal Compose network using service names, such as `backend` and `postgres`.
 - The frontend communicates with the backend through `API_BASE_URL`, resolved on the Next.js server. No API address is browser-visible, and no browser-visible value may expose database or provider credentials.
-- On Docker Desktop, the backend may reach host Ollama through a configurable host endpoint such as `host.docker.internal`. Do not hardcode it in application logic.
+- **The backend reaches host Ollama through `host.docker.internal`, and `compose.yaml` configures it.** `OLLAMA_BASE_URL` is fixed on the `backend` service to `http://host.docker.internal:11434` rather than interpolated, because a developer's own value names `127.0.0.1`, which inside a container is the container itself. It is **not hardcoded in application logic**: the adapter reads whatever configuration gives it, and `OLLAMA_CONTAINER_BASE_URL` overrides the containerised address for an Ollama elsewhere.
+- **`extra_hosts` maps `host.docker.internal` to `host-gateway` on the `backend` service.** Docker Desktop provides the name natively on macOS and Windows; Docker Engine on Linux does not, so the mapping makes one address work on all three. It is the only route out of the backend container, and it reaches the host that started it and nothing beyond — a learner's passages stay on their own machine exactly as in a host-side run.
+- **No AI setting reaches the `frontend` service**, whose environment feeds a server rendering pages for a browser. `API_BASE_URL` is the only value it carries. `backend/tests/integration/test_docker_topology.py` asserts both halves of this, and runs a backend container against a fake Ollama on the host to prove the path works without making a real external call.
 - Expose only the ports needed for local development; production exposure is a later concern.
 
 ## Persistent Data

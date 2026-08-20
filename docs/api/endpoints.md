@@ -2,7 +2,7 @@
 title: LearnFlow API Endpoint Catalog
 status: approved
 owner: architecture-and-api
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - conventions.md
@@ -34,6 +34,7 @@ related:
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
+  - ../adr/ADR-039-source-grounded-study-answers.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-034-checkpoint-practice-history.md
   - ../adr/ADR-035-practice-question-correction.md
@@ -1356,11 +1357,14 @@ Related entities: [resource note](../domain/entities.md#resource-note) and
 Query parameter `topic_id`, a UUID, and nothing else. Returns `200` with one search result under
 `data`.
 
-**This is retrieval, and there is no mentor.** Nothing here generates an answer, summarises,
+**This endpoint retrieves and does not answer.** Nothing here generates an answer, summarises,
 paraphrases, or explains; what comes back is the learner's own writing with the material and topic it
-came from named beside it. **No AI model, embedding service, vector database, external API, URL
-fetcher, or background job is reached or configured** — the search is PostgreSQL's own full-text
-search, running locally.
+came from named beside it. **This endpoint reaches no AI model**, and no embedding service, vector
+database, external API, URL fetcher, or background job is reached or configured anywhere — the search
+is PostgreSQL's own full-text search, running locally.
+
+The mentor asks a model **on its own route**, reusing this search to decide whether it may:
+see [MNT-001](#mnt-001-post-apiv1mentorquestions).
 
 **It runs only when the learner asks.** Nothing triggers a search from a page render or a save.
 
@@ -1424,17 +1428,18 @@ the count.
   [ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md), which changes no contract here and
   leaves this verdict and the count above unchanged: it adds surfaces rather than capability.
 
-**RES-009 to RES-013 leave all four verdicts and the count above unchanged.** RES-013 searches
+**RES-009 to RES-013 and MNT-001 leave all four verdicts and the count above unchanged.** RES-013 searches
 material FR-007 already covers rather than adding a way to register, link, describe, or find it; what
 it advances is FR-008, below.
 
-Keeping a learner's own written notes against a resource, and searching them, are capabilities
-beside FR-007's four criteria rather than any of them: they register nothing, link no topic, record
-no resource metadata, and add no way of finding a topic's *material*. What they advance is
-[FR-008](../requirements/functional.md#fr-008-grounded-mentor-assistance), which is **not met** —
-see [its own count below](#fr-008-acceptance-criteria). See
-[ADR-037](../adr/ADR-037-learner-written-resource-notes.md) and
-[ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
+Keeping a learner's own written notes against a resource, searching them, and answering a question
+from them are capabilities beside FR-007's four criteria rather than any of them: they register
+nothing, link no topic, record no resource metadata, and add no way of finding a topic's *material*.
+What they advance is [FR-008](../requirements/functional.md#fr-008-grounded-mentor-assistance), which
+is **not met in full** — see [its own count below](#fr-008-acceptance-criteria). See
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md),
+[ADR-038](../adr/ADR-038-local-topic-note-retrieval.md), and
+[ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
 
 ## Mentor Endpoints
 
@@ -1442,35 +1447,115 @@ Supports **FR-008 — Grounded Mentor Assistance**.
 
 | ID | Method and path | Purpose | Primary request/result |
 | --- | --- | --- | --- |
-| MNT-001 | `POST /api/v1/mentor/questions` | Ask a learner question with optional topic/resource context. | Mentor answer, source references, suggested next actions. |
+| MNT-001 | `POST /api/v1/mentor/questions` | Ask a learner question for one curriculum topic. | Mentor answer and the source passages it was grounded in. **Suggested next actions are not implemented** — see below. |
 | MNT-002 | `GET /api/v1/mentor/availability` | Report whether configured mentor/retrieval capability is ready. | Safe capability status. |
 
 The mentor endpoint must not silently modify learner progress, learning stage, plans, or revisions.
 
-**Neither MNT endpoint is implemented, and there is no mentor.** Nothing in LearnFlow generates an
-answer, and no AI provider is configured or reached.
+**MNT-001 is implemented, narrowly. MNT-002 is not.** Asking a question already reports whether the
+provider answered, so a separate availability probe would be a second way to learn the same thing.
+
+**MNT-001 returns the answer and its source references, and deliberately not the suggested next
+actions** this catalogue also lists. Suggesting what a learner should do next is a recommendation,
+which is a separate decision with its own scope; the clause stays here, unimplemented and recorded as
+such, in the shape RES-001's unimplemented upload clause uses. See
+[ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
+
+### MNT-001 — `POST /api/v1/mentor/questions`
+
+The learner-facing capability this serves is called **Ask your notes**, which is the canonical name
+for the screen at `/mentor` ([terminology](../domain/terminology.md)). *Mentor* names the **service,
+the endpoint family, and the route** — not what a learner reads, because terminology reserves the
+word for a broader role that also recommends and plans, which is not built.
+
+Body carries `topic_id`, a UUID, and `question`, 1 to 1000 characters. Nothing else: **no
+`learner_id`**, no conversation identifier, no message history, and **no model, provider, or
+temperature** — what a question is sent to is a deployment decision read from configuration, never a
+caller's. Returns `200` with one answer under `data`.
+
+**Retrieval decides whether a model is asked at all.** RES-013's rules run first, unchanged. Where
+they find no passage the endpoint returns before any prompt is composed and **no request leaves the
+process**; `outcome` says which of the three empty cases applies. LearnFlow does not answer from a
+model's own training, which is [prompts.md](../ai/prompts.md)'s rule that an answer is never claimed
+to be grounded when retrieval did not succeed, enforced by control flow.
+
+**Only the question, the topic name, the subject name, and the retrieved passages are sent to the
+provider.** No identifier of any kind, no note or resource title, no whole note body, and nothing
+about the learner's plan, progress, revisions, or practice. At most 8 passages are sent, fewer than
+the 20 RES-013 returns for reading.
+
+**The provider runs locally** — Ollama, as [ADR-004](../adr/ADR-004-ollama-local-ai-provider.md)
+decided — so a learner's passages reach `localhost` and stop. **No API key exists**, in configuration
+or anywhere else.
+
+A result carries `topic_id`, `topic_name`, `subject_name`, `question` echoed back, an `outcome`, an
+`answer`, and `passages`. Each passage has RES-013's shape exactly.
+
+**`answer` is plain text, or `null`.** Never markup, and never accompanied by a score, a confidence,
+a relevance figure, or a count.
+
+**`passages` is what was consulted, not what the model claimed.** It is recorded before the provider
+is asked and returned unchanged; nothing parses a source name, marker, or number out of the answer
+text, so an answer cannot cite a note that was never sent.
+
+`outcome` is one of seven, in three groups:
+
+| Outcome | Meaning | Was a model asked? |
+| --- | --- | --- |
+| `answered` | Passages were found and the provider replied. | Yes |
+| `no_linked_material` | No material is linked to this topic. | **No** |
+| `no_active_notes` | Material is linked and carries no active note. | **No** |
+| `no_matching_passage` | Active notes exist and none mentions the topic. | **No** |
+| `provider_unavailable` | The provider could not be reached, or lacks the model. | Yes |
+| `provider_timed_out` | The provider did not answer within the timeout. | Yes |
+| `provider_unusable_reply` | The provider answered with nothing usable. | Yes |
+
+**A provider failure is a `200`, not a `502`, and the passages are still returned.** The retrieval
+half succeeded, and a model that is switched off must not cost the learner the reading of their own
+notes.
+
+**One attempt, no retry.** A local model that timed out will usually time out again.
+
+**Nothing is stored** — no question, no answer, no transcript, and no record that either happened.
+There is therefore no endpoint that reads a past question back, no table, no column, and **no
+migration**. Nothing else moves: no learning stage, plan, plan item, revision, or quiz.
+
+`422` when the question is blank or over-long, `404` when the topic names nothing stored, and `409`
+when no learner is set up. **No refusal echoes a learner's note text or question.**
 
 ### FR-008 acceptance criteria
 
-**One of [FR-008](../requirements/functional.md#fr-008-grounded-mentor-assistance)'s six acceptance
-criteria is partly met and five are not met.** This section is authoritative for the count.
+**Five of [FR-008](../requirements/functional.md#fr-008-grounded-mentor-assistance)'s six
+acceptance criteria are met and one is partly met.** This section is authoritative for the count.
 
 - *"LearnFlow retrieves relevant indexed material before generating an answer when relevant material
-  exists"* — **partly met**, by [RES-013](#res-013-get-apiv1resource-notessearch): the learner's own
-  notes are retrieved for a topic they choose, locally and deterministically. The half that
-  *generates an answer* does not exist, and nothing is *indexed* in the vector sense — the search is
-  PostgreSQL full-text over stored text. See
-  [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
-- *"The learner can ask a learning question for a topic"* — **not met.** A learner chooses a topic;
-  they ask no question, and nothing answers one.
+  exists"* — **met**, by [RES-013](#res-013-get-apiv1resource-notessearch) inside
+  [MNT-001](#mnt-001-post-apiv1mentorquestions): the learner's own notes are retrieved first, and the
+  answer is generated only where retrieval found something. Nothing is *indexed* in the vector sense
+   — the search is PostgreSQL full-text over stored text — which is a difference in method rather
+  than in what the criterion asks for.
+- *"The learner can ask a learning question for a topic"* — **met**, by
+  [MNT-001](#mnt-001-post-apiv1mentorquestions).
 - *"The mentor can explain concepts, summarize material, answer doubts, and suggest next study
-  actions"* — **not met.** Nothing is generated.
-- *"The mentor can indicate the resources used for a grounded answer where practical"* — **not met**,
-  because there is no answer. RES-013 does name the note, material, and topic behind every passage,
-  which is the source-reference shape [retrieval.md](../rag/retrieval.md) asks for.
-- *"The initial local AI provider is Ollama"* — **not met.** No AI provider is configured or reached.
-- *"A mentor response does not silently update learner progress"* — **not met**, having no mentor
-  response; RES-013 writes nothing at all.
+  actions"* — **partly met.** It explains and answers from the learner's own notes. **Suggesting next
+  study actions is deliberately not implemented**, and summarising material at large is not offered:
+  an answer is bounded by the passages retrieved for one question.
+- *"The mentor can indicate the resources used for a grounded answer where practical"* — **met**, by
+  MNT-001's `passages`, which names the note, material, and topic behind every passage the answer was
+  built from, recorded from what was sent rather than from what the model claimed.
+- *"The initial local AI provider is Ollama"* — **met.** `AI_PROVIDER` selects the Ollama adapter,
+  which reaches a locally running instance and nothing else. See
+  [ADR-004](../adr/ADR-004-ollama-local-ai-provider.md) and
+  [ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
+- *"A mentor response does not silently update learner progress"* — **met.** MNT-001 writes
+  nothing at all: no learning stage, plan, plan item, revision, or quiz, and not the question or
+  answer either.
+
+**FR-008 is not met in full**, because its third criterion is only partly met: suggested next actions
+are deliberately unimplemented. Its retrieval is also over the learner's **own notes alone** — no
+resource is ingested, extracted, chunked, or embedded, so a criterion met here is met over the
+material LearnFlow actually stores rather than over a corpus that does not exist. Do not write that
+FR-008 is complete.
 
 ## Checkpoint Quiz Endpoints
 
@@ -1735,7 +1820,9 @@ Implement in an order that enables one working learner flow:
    criteria are met**.
 5. Revision reads/updates. **Done** — REV-001 to REV-004, per [ADR-028](../adr/ADR-028-revision-workflow.md).
 6. Resource registration and ingestion status. **Partly done** — RES-009 to RES-012 keep the learner's own written notes against a piece of material, which is storage alone; RES-001 to RES-004 catalogue the learner's own study material and link it to topics, contracted by [ADR-032](../adr/ADR-032-learning-resource-catalogue.md), with migration `20260816_01` creating `resources` and `resource_topic_links`. RES-005 to RES-008 wait on file storage and an extractor, neither of which exists; **RES-005 also waits on a reason to delete**, since archiving through RES-004 is reversible and destroys nothing.
-7. Mentor questions and grounded retrieval.
+7. Mentor questions and grounded retrieval. **Partly done** — MNT-001 implemented narrowly (answer
+   and source references, not suggested next actions); MNT-002 unimplemented. See
+   [ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
 8. Checkpoint quizzes and attempts. **Partly done** — QZ-001, QZ-002, QZ-003, QZ-005, QZ-006, and QZ-007 assemble a quiz from the learner's own questions, run an attempt at it, and read the result back, and QZ-008 to QZ-010 hold the question bank they are built from, contracted by [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md), with migration `20260818_01` creating the whole assessment area. **QZ-004 waits on a client with a reason to save partial work.** Nothing is generated by a model and no question content ships with the repository, so `generated` and `verified_pyq` stay unwritten; and **no response carries a score**, which is the conflict ADR-033 resolves in terminology's favour.
 9. External test result entry and analysis.
 

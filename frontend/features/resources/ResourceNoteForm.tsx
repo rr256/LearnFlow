@@ -32,12 +32,17 @@ interface ResourceNoteFormProps {
  * import — nothing here reads anything from their machine, which is the same
  * reason `ResourceForm` has no file input either.
  *
- * **What is written stays on this machine.** Nothing sends a note anywhere or
- * reads it with an AI model. One thing does read it: the topic search at
- * `/resources/search`, which runs locally and only when the learner asks. The
- * form says exactly that, because NFR-001 asks for the data-sharing position to
- * be clear before it matters rather than after — and a promise that quietly
- * stopped being true would be worse than none. See ADR-038.
+ * **What is written stays on this machine.** Nothing sends a note anywhere. Two
+ * things read it, both locally and both only when the learner asks: the topic
+ * search at `/resources/search`, and the AI model behind `/mentor`, which is
+ * given the matching passages and never a whole note. The form says exactly
+ * that, because NFR-001 asks for the data-sharing position to be clear before it
+ * matters rather than after — and a promise that quietly stopped being true would
+ * be worse than none.
+ *
+ * **The second reader is new**, and the wording changed with it rather than
+ * after it: until MNT-001 this promised that no AI model ever saw a note. See
+ * ADR-038 and ADR-039.
  *
  * A client component only so it can report what the last submission did. It
  * calls no API itself: the submission goes to a server action, so the browser
@@ -69,7 +74,7 @@ export function ResourceNoteForm({ resourceId, note }: ResourceNoteFormProps) {
       <p className={styles.hint}>
         {editing
           ? "Correct the note and save. Your text replaces what is stored."
-          : "Write or paste what you want to keep from this material — your own notes, or a passage you have copied out. It is stored on this computer and never sent anywhere. Nothing reads your notes except the topic search on this machine, which runs only when you ask for it, and no AI model ever sees them."}
+          : "Write or paste what you want to keep from this material — your own notes, or a passage you have copied out. It is stored on this computer and never sent anywhere. Two things read your notes, both on this machine and both only when you ask: the topic search, and the AI model that answers a question you ask about a topic. A model is only ever given the passages that match, never a whole note."}
       </p>
 
       <div className={styles.field}>

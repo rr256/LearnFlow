@@ -59,8 +59,9 @@ export function TopicNoteSearchForm({
         </select>
         <p className={styles.hint}>
           Your notes are searched on this computer, only when you ask, and only where you have
-          linked material to the topic you choose. Nothing is sent anywhere and no AI model reads
-          them.
+          linked material to the topic you choose. Nothing is sent anywhere, and this search
+          involves no AI model — to have one answer a question from these passages, ask on the
+          topic question screen instead.
         </p>
       </div>
 

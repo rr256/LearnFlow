@@ -294,9 +294,23 @@ def test_the_search_is_read_only_over_http(resource_client, cataloguing):
         assert method(SEARCH).status_code == 405
 
 
-def test_no_mentor_endpoint_appeared(resource_client, cataloguing):
-    """This is retrieval. MNT-001 and MNT-002 stay unimplemented."""
-    assert resource_client.post("/api/v1/mentor/questions", json={}).status_code == 404
+def test_retrieval_itself_still_answers_nothing(resource_client, cataloguing):
+    """RES-013 retrieves and does not answer, which MNT-001 has not changed.
+
+    MNT-001 now exists and asks a model — on its own route, through its own use
+    case. This endpoint gained nothing from it: no answer, no generated text, and
+    no field that could carry one. The mentor's own contract is covered by
+    tests/api/test_mentor.py.
+
+    MNT-002 stays unimplemented.
+    """
+    resource = register(resource_client, [cataloguing.topic.id])
+    write_note(resource_client, resource["id"])
+
+    data = search(resource_client, cataloguing.topic.id).json()["data"]
+
+    assert set(data) == {"topic_id", "topic_name", "subject_name", "outcome", "passages"}
+    assert "answer" not in data
     assert resource_client.get("/api/v1/mentor/availability").status_code == 404
 
 

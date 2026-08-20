@@ -29,6 +29,7 @@ from app.application.ports.curriculum_seed_repository import (
     TopicRecord,
     TopicRelationshipRecord,
 )
+from app.application.use_cases.answer_topic_question import AnswerTopicQuestion
 from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
 from app.application.use_cases.manage_resource_notes import ManageResourceNotes
@@ -46,11 +47,13 @@ from app.presentation.api.dependencies import (
     RESOURCE_NOTES_PROVIDER,
     RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
+    STUDY_ANSWER_PROVIDER,
     STUDY_PLANS_PROVIDER,
     TOPIC_NOTE_RETRIEVAL_PROVIDER,
     TOPIC_PROGRESS_PROVIDER,
 )
 from tests.api.onboarding_fixtures import Onboarding, install_onboarding
+from tests.unit.fake_ai_provider import FakeAIProvider
 from tests.unit.fake_curriculum_repository import FakeCurriculumRepository
 from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
 from tests.unit.fake_note_search_repository import FakeNoteSearchRepository
@@ -397,6 +400,48 @@ def resource_client(cataloguing: Cataloguing) -> Iterator[TestClient]:
     setattr(app.state, RESOURCES_PROVIDER, provide)
     setattr(app.state, RESOURCE_NOTES_PROVIDER, provide_notes)
     setattr(app.state, TOPIC_NOTE_RETRIEVAL_PROVIDER, provide_retrieval)
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture
+def study_mentor() -> FakeAIProvider:
+    """The AI provider the mentor endpoint is bound to.
+
+    **A fake, always.** No API test reaches Ollama, or any network: a test that
+    needed one running would fail on a machine that had not installed it, and
+    would make the suite's answer depend on a model's. A test asks this what it
+    was sent, and asserts it was not asked at all where no passage was found.
+    """
+    return FakeAIProvider()
+
+
+@pytest.fixture
+def mentor_client(cataloguing: Cataloguing, study_mentor: FakeAIProvider) -> Iterator[TestClient]:
+    """A client whose mentor endpoint reads the same catalogue the notes live in.
+
+    The resource and note endpoints are installed beside it so one test can
+    register material over RES-001, write a note over RES-009, and then ask a
+    question over MNT-001 — the sequence a learner actually performs.
+    """
+    app = create_app()
+
+    @contextmanager
+    def provide() -> Iterator[ManageResources]:
+        yield cataloguing.cataloguer()
+
+    @contextmanager
+    def provide_notes() -> Iterator[ManageResourceNotes]:
+        yield cataloguing.note_keeper()
+
+    @contextmanager
+    def provide_mentor() -> Iterator[AnswerTopicQuestion]:
+        # Built per request, so a question sees whatever the test wrote before it.
+        yield AnswerTopicQuestion(retrieval=cataloguing.retriever(), provider=study_mentor)
+
+    setattr(app.state, RESOURCES_PROVIDER, provide)
+    setattr(app.state, RESOURCE_NOTES_PROVIDER, provide_notes)
+    setattr(app.state, STUDY_ANSWER_PROVIDER, provide_mentor)
     with TestClient(app) as client:
         yield client
 

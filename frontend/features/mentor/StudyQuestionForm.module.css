@@ -1,0 +1,41 @@
+.form {
+  display: grid;
+  gap: var(--space-4);
+  max-width: var(--measure);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field textarea {
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/*
+ * The data-sharing statement. It sits with the field rather than in a footer
+ * because NFR-001 asks for the position to be clear before it matters rather
+ * than after.
+ */
+.hint {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.error {
+  margin: var(--space-4) 0 0;
+  max-width: var(--measure);
+}
+
+.unavailable {
+  margin: 0;
+  max-width: var(--measure);
+}

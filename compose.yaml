@@ -3,7 +3,13 @@
 # Currently defines the frontend, backend, and postgres services. The approved
 # target topology in docs/deployment/docker.md also includes chromadb; it joins
 # this file in the change that implements the code consuming it, so no service
-# here is unused or unconfigurable. Ollama runs on the host.
+# here is unused or unconfigurable.
+#
+# Ollama runs on the host, not as a service here: it is a developer's own
+# install, often with models already pulled, and containerising it would either
+# duplicate several gigabytes or mount a host directory into a service this file
+# does not own. The backend reaches it through the host gateway; see the
+# `backend` service below.
 #
 #   docker compose up --build        start, building images as needed
 #   docker compose up -d postgres    database only, for host-side Alembic/tests
@@ -79,6 +85,33 @@ services:
       # credentials and database name still come from the POSTGRES_* values, so
       # the two services cannot drift apart.
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-learnflow}:${POSTGRES_PASSWORD:-learnflow}@postgres:5432/${POSTGRES_DB:-learnflow}
+      # The AI provider (MNT-001). Ollama runs on the host, so the address is
+      # fixed to the host gateway rather than interpolated from a developer's
+      # OLLAMA_BASE_URL — that value names 127.0.0.1, which inside this
+      # container is the container itself. Same reasoning as DATABASE_URL and
+      # the frontend's API_BASE_URL above.
+      #
+      # OLLAMA_CONTAINER_BASE_URL overrides it for an Ollama that is not on the
+      # host gateway's default port, or is on another machine entirely. It is a
+      # Compose-only variable: nothing in the backend reads it.
+      #
+      # The model name is not host-dependent, so it interpolates normally and a
+      # developer's .env reaches the container unchanged.
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      AI_REQUEST_TIMEOUT_SECONDS: ${AI_REQUEST_TIMEOUT_SECONDS:-60}
+      OLLAMA_BASE_URL: ${OLLAMA_CONTAINER_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.1:8b}
+    # `host.docker.internal` is provided natively by Docker Desktop on macOS and
+    # Windows. Docker Engine on Linux does not provide it, so it is mapped here
+    # to the special `host-gateway` value and the same address works on all
+    # three. Declaring it on Docker Desktop is harmless: the name already
+    # resolves, and this maps it to the same gateway.
+    #
+    # This is the only route out of the backend container. It reaches the host
+    # that started it and nothing beyond, so a learner's passages stay on their
+    # own machine exactly as they do in a host-side run.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # Published on the loopback interface only, so the API is not exposed to
     # other devices on the local network.
     ports:

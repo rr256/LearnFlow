@@ -2,7 +2,7 @@
 title: LearnFlow Environments and Configuration
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-03
+last_updated: 2026-08-20
 related:
   - ../00-project-context.md
   - docker.md
@@ -12,6 +12,7 @@ related:
   - ../adr/ADR-011-sqlalchemy-persistence-implementation.md
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
+  - ../adr/ADR-039-source-grounded-study-answers.md
 ---
 
 # LearnFlow Environments and Configuration
@@ -171,14 +172,53 @@ the precedence undefined.
 
 ### AI Provider
 
-**Planned.** Added when the AI and embedding adapters are implemented.
+**Implemented, except the embedding model.** `AI_PROVIDER`, `AI_REQUEST_TIMEOUT_SECONDS`,
+`OLLAMA_BASE_URL`, and `OLLAMA_CHAT_MODEL` are read at startup and are in `.env.example`.
+`OLLAMA_EMBEDDING_MODEL` stays **planned**: nothing embeds anything, and it joins the file with the
+adapter that reads it.
 
 ```text
-AI_PROVIDER
-OLLAMA_BASE_URL
-OLLAMA_CHAT_MODEL
-OLLAMA_EMBEDDING_MODEL
+AI_PROVIDER                  ollama          (the only implemented adapter)
+AI_REQUEST_TIMEOUT_SECONDS   60              (capability-level; > 0 and <= 600)
+OLLAMA_BASE_URL              http://127.0.0.1:11434
+OLLAMA_CHAT_MODEL            llama3.1:8b
+OLLAMA_EMBEDDING_MODEL                       (planned)
 ```
+
+`AI_PROVIDER` is validated against the adapters that exist, so an unknown value fails at startup with
+a named field rather than at the first question a learner asks. `OLLAMA_BASE_URL` accepts `http` and
+`https` only — a security boundary rather than tidiness, since it is what stops a `file://` value
+from turning an outbound request into a local file read.
+
+`AI_REQUEST_TIMEOUT_SECONDS` is capability-level under ADR-009: it bounds any AI provider and
+survives a change of one. There is deliberately **no retry setting**, because there is no retry.
+
+**Compose passes all four to the `backend` service, and to no other.** `AI_PROVIDER`,
+`AI_REQUEST_TIMEOUT_SECONDS`, and `OLLAMA_CHAT_MODEL` interpolate from the shell or `.env` as usual.
+`OLLAMA_BASE_URL` does **not**: it is fixed to `http://host.docker.internal:11434`, because the value
+above names `127.0.0.1`, which inside a container is the container itself rather than the host
+running Ollama. That is the same reasoning `DATABASE_URL` and the frontend's `API_BASE_URL` already
+follow.
+
+`host.docker.internal` is provided natively by Docker Desktop on macOS and Windows. Docker Engine on
+Linux does not provide it, so `compose.yaml` maps it through `extra_hosts` to the special
+`host-gateway` value and the one address works on all three.
+
+**`OLLAMA_CONTAINER_BASE_URL` overrides the containerised address** — for an Ollama on another port
+or another machine. It is a **Compose-only variable**: nothing in the backend reads it, so it is
+absent from the catalogue groups above and from `.env.example`.
+
+**No AI setting reaches the `frontend` service.** Its environment feeds a server that renders pages
+for a browser, and nothing about the provider belongs there — not the address, not the model, and not
+the fact that one is configured. A test asserts it; see
+[the Docker topology test](../development/coding-standards.md#local-quality-checks).
+
+See [Docker strategy](docker.md).
+
+**No credential is defined here and none is read.** The selected provider runs locally and
+authenticates nothing, so LearnFlow has no API key in configuration, in `.env.example`, or in the
+environment it expects. See [ADR-004](../adr/ADR-004-ollama-local-ai-provider.md) and
+[ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
 
 ### Future Cloud Providers
 
@@ -203,7 +243,7 @@ The committed `.env.example` must:
 - Not contain developer-specific local paths.
 - Be updated in the same change that introduces or removes a configuration variable.
 
-The committed file therefore currently contains exactly the ten implemented variables:
+The committed file therefore currently contains exactly the fourteen implemented variables:
 
 ```text
 APP_ENV=local
@@ -216,6 +256,10 @@ DATABASE_URL=postgresql+psycopg://learnflow:learnflow@127.0.0.1:5432/learnflow
 POSTGRES_DB=learnflow
 POSTGRES_USER=learnflow
 POSTGRES_PASSWORD=learnflow
+AI_PROVIDER=ollama
+AI_REQUEST_TIMEOUT_SECONDS=60
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_CHAT_MODEL=llama3.1:8b
 ```
 
 That block is a transcript of the committed file, so the two change together or not at all.
@@ -224,8 +268,8 @@ It also carries `TEST_DATABASE_URL` as a commented-out example. That variable is
 suite rather than by the application, and leaving it set would point the integration tests at a real
 database, so it is documented but not active by default.
 
-Planned entries such as `AI_PROVIDER` and `OLLAMA_BASE_URL` are catalogued in the groups above and
-join `.env.example` in the change that implements their consumer.
+Planned entries such as `CHROMA_URL` and `OLLAMA_EMBEDDING_MODEL` are catalogued in the groups above
+and join `.env.example` in the change that implements their consumer.
 
 ## Local Environment
 
