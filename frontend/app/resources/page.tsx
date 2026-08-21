@@ -8,12 +8,14 @@ import { ResourceCatalogue } from "@/features/resources/ResourceCatalogue";
 import { topicOptions, type SubjectTopicOptions } from "@/features/resources/topic-options";
 import {
   ApiError,
+  listResourceFiles,
   listResourceNotes,
   listResources,
   listStudyGoals,
   readCurriculumTree,
 } from "@/lib/api-client";
 import type { LearningResource } from "@/types/resource";
+import type { ResourceFile } from "@/types/resource-file";
 import type { ResourceNote } from "@/types/resource-note";
 
 /**
@@ -29,6 +31,8 @@ interface CatalogueData {
   topicGroups: SubjectTopicOptions[];
   /** Each resource's notes, keyed by resource, empty where unreadable. */
   notesByResource: Record<string, ResourceNote[]>;
+  /** Each resource's stored PDFs, keyed by resource, empty where unreadable. */
+  filesByResource: Record<string, ResourceFile[]>;
 }
 
 /**
@@ -94,6 +98,33 @@ async function notesFor(resources: LearningResource[]): Promise<Record<string, R
 }
 
 /**
+ * RES-015 — the PDFs stored against each piece of material.
+ *
+ * One read per resource, for the reason `notesFor` above records: RES-015 is
+ * scoped to a resource, and a learner-scoped file endpoint is a compatible
+ * addition deliberately not built before a screen needs it.
+ *
+ * A failure is **not fatal**, and it costs one resource's file list rather than
+ * the page: a learner who cannot read the files on one piece of material can
+ * still see everything else.
+ */
+async function filesFor(resources: LearningResource[]): Promise<Record<string, ResourceFile[]>> {
+  const read = await Promise.all(
+    resources.map(async (resource) => {
+      try {
+        return [resource.id, await listResourceFiles(resource.id)] as const;
+      } catch (error) {
+        if (!(error instanceof ApiError)) {
+          throw error;
+        }
+        return [resource.id, []] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(read);
+}
+
+/**
  * RES-002, GOAL-002, CUR-003, and RES-010 — the learner's material, the topics
  * they can link it to, and their notes on each piece.
  *
@@ -107,7 +138,11 @@ async function notesFor(resources: LearningResource[]): Promise<Record<string, R
  */
 async function readCatalogue(): Promise<CatalogueData> {
   const [resources, topicGroups] = await Promise.all([listResources(), pickableTopics()]);
-  return { resources, topicGroups, notesByResource: await notesFor(resources) };
+  const [notesByResource, filesByResource] = await Promise.all([
+    notesFor(resources),
+    filesFor(resources),
+  ]);
+  return { resources, topicGroups, notesByResource, filesByResource };
 }
 
 /**
@@ -152,6 +187,7 @@ async function CatalogueSection() {
     <>
       <ResourceForm topicGroups={data.topicGroups} />
       <ResourceCatalogue
+        filesByResource={data.filesByResource}
         notesByResource={data.notesByResource}
         resources={data.resources}
         topicGroups={data.topicGroups}

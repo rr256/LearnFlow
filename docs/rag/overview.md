@@ -12,6 +12,7 @@ related:
   - retrieval.md
   - embeddings.md
   - ../architecture/provider-pattern.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow RAG Overview
@@ -80,10 +81,12 @@ extraction, no chunking, no embedding, and no vector store — and it is all the
 An AI provider now reads what it returns, when the learner asks a question
 ([ADR-039](../adr/ADR-039-source-grounded-study-answers.md)), and it runs locally.
 
-**This is the only content LearnFlow stores today.** It is the first study material the product holds
+**This was the only content LearnFlow stored until uploaded PDFs arrived** ([ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md)), and it is still the only content anything *reads*. It is the first study material the product holds
 rather than points at — learner-written practice questions are stored too, but a question is
-something the learner *made*, not material they *study from*. Nothing else on this page is built: no file is uploaded or stored, no
-text is extracted, nothing is normalised, chunked, embedded, or indexed, and no vector store exists.
+something the learner *made*, not material they *study from*. Files **are** now uploaded and stored, as bytes in a local volume with their
+metadata in PostgreSQL. Nothing else on this page is built: **no text is extracted**, nothing is
+normalised, chunked, embedded, or indexed, and no vector store exists — a stored PDF is kept and
+handed back, and nothing reads inside it.
 A mentor now answers a question from these notes — grounded in them alone, and never asked at all
 when they support nothing.
 

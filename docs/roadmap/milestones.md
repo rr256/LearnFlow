@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-20
+last_updated: 2026-08-21
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -40,6 +40,7 @@ related:
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-039-source-grounded-study-answers.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -506,9 +507,11 @@ since arrived, narrowly**: a learner asks a question about one topic and receive
 **only** from those passages, through a **locally running** AI provider — asked at all only where
 retrieval found something, so LearnFlow never answers from a model's own training. Nothing is
 stored, no credential exists, and suggested next actions are deliberately unbuilt. Contracted by
-[ADR-039](../adr/ADR-039-source-grounded-study-answers.md). Those are the first items below, and
-deliberately no more of the milestone — nothing is uploaded, extracted, chunked, embedded, or
-vector-indexed. It also supplies the **resource
+[ADR-039](../adr/ADR-039-source-grounded-study-answers.md). **Uploaded PDFs have since arrived too**: a learner adds one or more PDF files against a piece of
+catalogued material, and LearnFlow stores the bytes in a local Docker volume with the metadata in
+PostgreSQL, contracted by [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md). Those are the
+first items below, and deliberately no more of the milestone — nothing is **extracted**, chunked,
+embedded, or vector-indexed, and nothing is fetched from the web. It also supplies the **resource
 half** of [FR-006](../requirements/functional.md#fr-006-revision-guidance)'s second criterion, which
 [ADR-028](../adr/ADR-028-revision-workflow.md) deferred; the practice half still waits on FR-009, so
 **FR-006 is still not met in full**. Contracted by
@@ -529,9 +532,9 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   **The item stays open on the word *local***: `external_reference` accepts an `http` or `https`
   address alone, because [endpoints.md](../api/endpoints.md#resource-and-ingestion-endpoints)
   forbids a resource endpoint returning an absolute local filesystem path, and material that is not
-  on the web is described in the learner's own words instead. A **path** to a local file arrives with
-  the storage change below, which gives a file somewhere to live and an opaque `storage_key` to name
-  it. **FR-007 is not met in full**;
+  on the web is described in the learner's own words instead. A **path** to a local file is still never
+  stored, and deliberately not: the storage change below took the **file itself** instead, so a
+  browser hands over bytes and a display name rather than a location. **FR-007 is not met in full**;
   [endpoints.md](../api/endpoints.md#fr-007-acceptance-criteria) carries the count.
 - [ ] **A learner can keep their own written notes against a piece of material.** **Done**, by
   RES-009 to RES-012 with migration `20260819_01`: a learner writes or pastes their own notes and
@@ -573,9 +576,17 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   deliberately unbuilt and retrieval covers the learner's own notes alone;
   [endpoints.md](../api/endpoints.md#fr-008-acceptance-criteria) carries the count. Contracted by
   [ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
-- [ ] Supported text-based PDF can be extracted and indexed. **Still unbuilt**, and the note item
-  above deliberately does not begin it: a note needs no file storage, no extractor, no chunking
-  policy, no embedding provider, and no vector store, and none of the five exists.
+- [x] A learner can upload PDFs against a piece of catalogued material, and LearnFlow **stores the
+  bytes**. **Done**: RES-014 to RES-017. Bytes live in a Docker named volume mounted into the backend alone;
+  metadata lives in `resource_files`. Only PDFs, validated by extension, signature, parse, and not
+  being encrypted; 25 MB, 1500 pages, 20 files per resource. **Nothing is deleted** — a file is set
+  aside reversibly — and **nothing is read inside it**. Migration `20260821_01`. **FR-007's first
+  criterion is now met for PDFs**; video references remain words, so FR-007 is still not met in full.
+  Contracted by [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md).
+- [ ] Supported text-based PDF can be extracted and indexed. **Still unbuilt.** Storing a file is not
+  extracting one: there is no extractor, no chunking policy, no embedding provider, and no vector
+  store, and none of the four exists. What ADR-040 added is the file storage such a step would read
+  from.
 - [ ] Ingestion shows queued/processing/completed/failed status. `resource_ingestions` is not
   created, and `resources.status` therefore permits neither `processing`, `ready`, nor `failed`: a
   resource could enter one and never leave it.
@@ -590,11 +601,12 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   outcomes are told apart, each naming a different next step, and **no model is asked on any of
   them**; three provider failures are told apart and **keep the retrieved passages**, because a
   provider that is switched off must not cost the learner the reading of their own notes.
-- [ ] Original files, resource metadata, and derived vectors are stored separately. **No file and
-  no vector is stored**, which is what this item is really about. Metadata is stored, and so now
-  is the text a learner typed themselves — a *resource note* is neither a file nor a derived
-  representation of one, so it separates from nothing: `storage_key` and `metadata` are not created, and nothing
-  holds a file or a vector, so the separation is not yet tested by anything.
+- [x] Original files, resource metadata, and derived vectors are stored separately. **Files and
+  metadata now are**: the bytes live in a Docker named volume mounted into the backend alone, and the
+  rows describing them live in `resource_files` in PostgreSQL — a `bytea` column was rejected exactly
+  so the two stay separable, which is what this item is really about. **No vector is stored**, so the
+  third of the three is untested; `resources.storage_key` and `resources.metadata` remain uncreated,
+  because they model one file per resource.
 - [ ] Retrieval is tested with representative GATE CSE resources/queries.
 - [ ] Catalogue behaviour has API/domain/persistence/frontend tests. **Done for the catalogue**:
   use-case tests against fakes, API contract tests over the real application factory, PostgreSQL

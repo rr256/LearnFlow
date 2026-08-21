@@ -16,6 +16,7 @@ related:
   - ../database/migrations.md
   - ../database/schema.md
   - ../api/endpoints.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow Docker Strategy
@@ -245,8 +246,9 @@ no container had been started — is discharged by
 | Service | Responsibility | Persistent data |
 | --- | --- | --- |
 | `frontend` | Learner-facing Next.js application. | None in normal runtime. |
-| `backend` | FastAPI routes, application use cases, provider wiring, ingestion coordination. | May use configured local resource-storage mount in development. |
+| `backend` | FastAPI routes, application use cases, provider wiring, ingestion coordination. | Named volume `resource_files`, mounted at `/var/lib/learnflow/resources` — learner-uploaded PDF bytes (RES-014 to RES-017). |
 | `postgres` | Curriculum, learners, goals, plans, progress, assessments, resource metadata. | Named PostgreSQL volume. |
+| `backend` (files) | Learner-uploaded PDF bytes (RES-014 to RES-017). | Named volume `resource_files`, mounted into `backend` alone. |
 | `chromadb` | Derived chunks/vectors and retrieval metadata. | Named ChromaDB volume. |
 | Host `ollama` | Local generation and embedding models. | Managed by host Ollama installation. |
 
@@ -265,9 +267,48 @@ Use named volumes or configured local mounts for durable runtime data:
 
 ```text
 postgres_data    PostgreSQL database files, mounted at /var/lib/postgresql
-chroma_data      ChromaDB/vector index files
-resource_storage Learner-owned PDFs and attachments, if stored through a container mount
+resource_files   Learner-uploaded PDF bytes, mounted at /var/lib/learnflow/resources
+chroma_data      ChromaDB/vector index files                      (planned)
 ```
+
+### What survives, and what does not
+
+`resource_files` exists today and holds a learner's uploaded PDFs
+([ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md)). It is mounted into the **`backend`
+service alone** — the frontend never reads a file, and keeping it out of `postgres` is what lets the
+database and the files be backed up and restored independently.
+
+**It survives normal operation:**
+
+- `docker compose down` — the volume is **not** removed.
+- `docker compose up --build`, and any image rebuild.
+- `docker compose up -d --force-recreate backend`, and container recreation generally.
+
+**One command destroys it:**
+
+- **`docker compose down -v` deletes `resource_files` and `postgres_data` together.** That is why it
+  is not a routine stop command. A learner's uploaded PDFs are gone with it, and LearnFlow has no
+  copy anywhere else.
+
+### Backup is now two things
+
+**A database backup alone does not back up uploaded files.** Since ADR-040 a learner's material lives
+in two places:
+
+- the **rows** describing each file — `resource_files` — in PostgreSQL, captured by `pg_dump`;
+- the **bytes** themselves in the `resource_files` volume, which `pg_dump` does not touch at all.
+
+Backing up one without the other leaves an inconsistent restore. Restoring a **database** older than
+the volume leaves files nothing names; restoring a **volume** older than the database leaves rows
+whose bytes are missing — LearnFlow reports that honestly, with a `404` on download and the row still
+listed, rather than deleting the record.
+
+A complete backup therefore copies the volume as well, for example with a throwaway container that
+mounts it read-only and writes a tar to the host. Verify a restore before relying on it.
+
+**The backend image creates the storage directory and owns it.** A named volume is initialised from
+the image's directory at the mount point, ownership included; without that step a fresh volume is
+root-owned and the unprivileged application user cannot write a single file into it.
 
 Rules:
 
@@ -329,7 +370,7 @@ docker compose logs -f frontend
 docker compose down
 ```
 
-Use `docker compose down -v` only with explicit care: it removes named volumes and can delete local PostgreSQL/ChromaDB data. It must never be presented as a routine stop command.
+Use `docker compose down -v` only with explicit care: it removes named volumes and deletes local PostgreSQL data **and every PDF a learner has uploaded** (`postgres_data` and `resource_files`). It must never be presented as a routine stop command.
 
 ## Startup and Health Checks
 
@@ -343,7 +384,7 @@ Use `docker compose down -v` only with explicit care: it removes named volumes a
 
 - Store learner resources only in a configured application storage location, not arbitrary host paths.
 - Use an opaque storage key in PostgreSQL; do not return raw mounted-container or host paths to the frontend.
-- If a host bind mount is used during development, document the configured root and ensure it stays outside committed source folders.
+- A host bind mount was **considered and rejected** for learner files ([ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md)): it risks committing a learner's PDFs and drags in NTFS permission and path-length problems. If one is nevertheless used during development, document the configured root and ensure it stays outside committed source folders.
 - The storage-provider interface keeps a later Azure Blob Storage adapter possible.
 
 ## Images and Builds

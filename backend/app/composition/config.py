@@ -54,6 +54,20 @@ class LogLevel(StrEnum):
     critical = "CRITICAL"
 
 
+class ResourceStorageProviderName(StrEnum):
+    """Which adapter keeps the bytes of a learner's uploaded files.
+
+    One member today. It is an enum rather than a bare string so that selecting a
+    store is validated at startup: an unknown value fails immediately with a
+    named field instead of surfacing later as an unhandled branch.
+
+    Adding a member is the visible decision that would move a learner's files off
+    their own machine, so it is deliberately not a free-text setting.
+    """
+
+    local = "local"
+
+
 class AIProviderName(StrEnum):
     """Which adapter fulfils the `AIProvider` port.
 
@@ -129,6 +143,20 @@ class Settings(BaseSettings):
     # only, which is a security boundary rather than tidiness: it is what stops a
     # `file://` value from turning the adapter's request into a local file read.
     ollama_base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:11434")
+
+    # Capability selection under ADR-009: which adapter keeps a learner's
+    # uploaded PDF bytes. Only `local` is implemented, and it writes to a Docker
+    # named volume mounted into this service alone.
+    resource_storage_provider: ResourceStorageProviderName = ResourceStorageProviderName.local
+
+    # Capability-level: where the local adapter writes. Inside the container this
+    # is the named volume's mount point; on a host-side run it is an ordinary
+    # directory, created on first use.
+    #
+    # It is a path, and the one place in configuration that is. Nothing derived
+    # from it reaches a response: `storage_key` stays inside the storage adapter,
+    # and no resource endpoint returns a filesystem location.
+    resource_storage_path: Path = Path("/var/lib/learnflow/resources")
 
     # No default model is invented beyond a common small one. A learner who has
     # pulled something else sets this once; a model that is not installed is

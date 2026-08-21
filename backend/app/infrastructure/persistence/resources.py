@@ -31,7 +31,16 @@ belonging to nobody would be invisible to every learner-scoped read.
 
 import uuid
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.persistence.base import (
@@ -239,4 +248,73 @@ class ResourceNote(UuidPrimaryKeyMixin, TimestampMixin, Base):
             text(f"to_tsvector('{SEARCH_CONFIGURATION}', title || ' ' || body)"),
             postgresql_using="gin",
         ),
+    )
+
+
+RESOURCE_FILE_STATUSES = ("active", "archived")
+"""The statuses ``resource_files.status`` accepts.
+
+The same two ``resource_notes`` uses, and for the same reason: ``archived`` is a
+learner setting a file aside, it is **reversible**, and **nothing is removed** --
+the bytes stay in the volume either way.
+
+The ingestion states ``processing``, ``ready``, and ``failed`` are deliberately
+absent. Nothing extracts anything, so a file could enter one of them and never
+leave; each arrives with the code that would move it.
+"""
+
+
+class ResourceFile(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    """One PDF a learner keeps against a piece of their study material.
+
+    **The first file LearnFlow stores.** The bytes are *not* here: they live in a
+    local volume behind ``ResourceFileStorage``, and ``storage_key`` is the opaque
+    reference that finds them. A ``bytea`` was rejected deliberately — binaries
+    bloat every dump and every backup, and a database is a poor filesystem.
+
+    This table is **added beyond the schema document's approved tables**, the way
+    ``resource_notes`` was: the approved shape puts ``storage_key`` and
+    ``metadata`` on ``resources`` itself, which allows one file per resource, and
+    a learner may keep several. ``resources.storage_key`` and ``resources.metadata``
+    therefore stay uncreated rather than being half-built into something they
+    cannot support. See
+    docs/adr/ADR-040-learner-uploaded-resource-files.md.
+
+    ``original_filename`` is what the learner called the file, kept so a download
+    can be offered under a name they recognise. It is **metadata, never a path**:
+    what is on disk is named from a server-generated identifier, so nothing a
+    browser sends can steer where a file lands.
+
+    A file belongs to exactly one resource and carries **no topic links and no
+    owner column of its own**: ownership is the resource's, checked there, so the
+    two can never disagree.
+
+    Nothing derived is stored. No extracted text, no chunk, no embedding, no
+    thumbnail — ``resource_ingestions`` remains absent, and this table is not it.
+    """
+
+    __tablename__ = "resource_files"
+
+    resource_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("resources.id"), nullable=False, index=False
+    )
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    original_filename: Mapped[str] = mapped_column(Text, nullable=False)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(in_clause("status", RESOURCE_FILE_STATUSES), name="status_is_known"),
+        CheckConstraint("byte_size > 0", name="has_bytes"),
+        CheckConstraint("page_count >= 0", name="page_count_is_not_negative"),
+        # A storage key of whitespace would name no file. `btrim` is not used:
+        # PostgreSQL's one-argument form strips spaces alone, so a key of tabs
+        # would pass a check meant to refuse it.
+        CheckConstraint("storage_key ~ '[^[:space:]]'", name="storage_key_is_not_empty"),
+        # The read path is always "this resource's files", so the index matches
+        # it rather than indexing the foreign key alone.
+        Index("ix_resource_files_resource_status", "resource_id", "status"),
     )

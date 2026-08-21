@@ -23,10 +23,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ports.ai_provider import AIProvider
 from app.application.ports.clock import Clock
+from app.application.ports.resource_file_storage import DocumentInspector, ResourceFileStorage
 from app.application.use_cases.answer_topic_question import AnswerTopicQuestion
 from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
+from app.application.use_cases.manage_resource_files import ManageResourceFiles
 from app.application.use_cases.manage_resource_notes import ManageResourceNotes
 from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
@@ -47,6 +49,9 @@ from app.infrastructure.persistence.examination_schedule_repository import (
 from app.infrastructure.persistence.learner_repository import SqlAlchemyLearnerRepository
 from app.infrastructure.persistence.note_search_repository import (
     SqlAlchemyNoteSearchRepository,
+)
+from app.infrastructure.persistence.resource_file_repository import (
+    SqlAlchemyResourceFileRepository,
 )
 from app.infrastructure.persistence.resource_note_repository import (
     SqlAlchemyResourceNoteRepository,
@@ -69,6 +74,7 @@ StudyPlansProvider = Callable[[], AbstractContextManager[ManageStudyPlans]]
 RevisionsProvider = Callable[[], AbstractContextManager[ManageRevisions]]
 ResourcesProvider = Callable[[], AbstractContextManager[ManageResources]]
 ResourceNotesProvider = Callable[[], AbstractContextManager[ManageResourceNotes]]
+ResourceFilesProvider = Callable[[], AbstractContextManager[ManageResourceFiles]]
 TopicNoteRetrievalProvider = Callable[[], AbstractContextManager[RetrieveTopicNotes]]
 StudyAnswerProvider = Callable[[], AbstractContextManager[AnswerTopicQuestion]]
 TopicProgressProvider = Callable[[], AbstractContextManager[ManageTopicProgress]]
@@ -286,6 +292,53 @@ def build_resource_notes_provider(
                     learners=SqlAlchemyLearnerRepository(session),
                     resources=SqlAlchemyResourceRepository(session),
                     notes=SqlAlchemyResourceNoteRepository(session),
+                )
+            except BaseException:
+                session.rollback()
+                raise
+            session.commit()
+
+    return provide
+
+
+def build_resource_files_provider(
+    session_factory: sessionmaker[Session],
+    *,
+    storage: ResourceFileStorage,
+    inspector: DocumentInspector,
+) -> ResourceFilesProvider:
+    """Build the provider that hands the stored-file use case to one request.
+
+    It writes, so it owns the transaction like the other learner-owned providers.
+
+    **The bytes and the row are written by two different things**, and only the
+    row is transactional. A commit that failed after the storage adapter wrote
+    would leave a file in the volume that no row names — bytes nothing can reach,
+    rather than a row pointing at nothing. That is the safer of the two failures:
+    LearnFlow never loses a learner's file, and an orphan is reclaimable by the
+    permanent-deletion feature (RES-005) when it arrives. The reverse ordering
+    would risk a row whose file was never written.
+
+    The storage adapter and the inspector are built **once at startup and
+    shared**, unlike the repositories beside them: each holds a directory or
+    nothing at all, so there is no per-request state to isolate.
+
+    Args:
+        session_factory: The application's shared session factory.
+        storage: Where file bytes are kept, selected by the composition root.
+        inspector: Reads a PDF's structure. Never its content.
+    """
+
+    @contextmanager
+    def provide() -> Iterator[ManageResourceFiles]:
+        with session_factory() as session:
+            try:
+                yield ManageResourceFiles(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    resources=SqlAlchemyResourceRepository(session),
+                    files=SqlAlchemyResourceFileRepository(session),
+                    storage=storage,
+                    inspector=inspector,
                 )
             except BaseException:
                 session.rollback()

@@ -2,7 +2,7 @@
 title: "ADR-037: Store the Learner's Own Written Notes Against a Learning Resource"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-20
+last_updated: 2026-08-21
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -31,6 +31,7 @@ related:
   - ../development/coding-standards.md
   - ../roadmap/milestones.md
   - ADR-039-source-grounded-study-answers.md
+  - ADR-040-learner-uploaded-resource-files.md
   - ../architecture/decisions.md
 ---
 
@@ -59,6 +60,16 @@ record does not claim otherwise — every one of its criteria needs retrieval an
 which exists. Do not write that either requirement is complete.
 
 ## Implementation status
+
+**2026-08-21 — uploaded PDFs are now stored too, so notes are no longer the only kind.**
+
+[ADR-040](ADR-040-learner-uploaded-resource-files.md) adds **stored files**: a learner uploads PDFs against a piece of catalogued material and LearnFlow keeps the bytes locally.
+
+**This record's "first study material LearnFlow stores rather than points at" stands** — a note was first, and remains the only material anything *reads*. What has moved is "deliberately the only kind": an uploaded PDF is the second.
+
+**Everything this record decided about a note is untouched.** A note is still text the learner typed or pasted themselves, still stored as written, still rendered as plain text, still bounded at 20,000 characters and 200 a resource, still corrected in place, and still archived rather than deleted. **Nothing about a stored file changes any of that**, and no note is derived from a file: nothing extracts text from a PDF, so a stored file produces no note and never will under this change.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
 
 **2026-08-19 — a local AI model now reads a learner's notes, when they ask.**
 

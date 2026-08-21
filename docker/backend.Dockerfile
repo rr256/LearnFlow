@@ -29,6 +29,16 @@ COPY backend/app ./app
 # The process serves HTTP and needs no write access to its own source, so it runs
 # as a dedicated unprivileged user.
 RUN useradd --create-home --shell /usr/sbin/nologin learnflow
+
+# Where learner-uploaded PDFs are kept (RES-014 to RES-017). Created here, owned
+# by the unprivileged user, **before** the volume is mounted over it.
+#
+# That ordering is load-bearing. Docker initialises an empty named volume from
+# the image's directory at the mount point, ownership included; if this path did
+# not exist in the image, the volume would be created root-owned and the process
+# below -- which is not root -- could not write a single file into it.
+RUN mkdir -p /var/lib/learnflow/resources     && chown -R learnflow:learnflow /var/lib/learnflow
+
 USER learnflow
 
 # Documents the port the application listens on. Publishing is decided by
