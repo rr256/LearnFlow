@@ -27,6 +27,7 @@ related:
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-035-practice-question-correction.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow Domain Model
@@ -100,7 +101,7 @@ Text the learner typed or pasted themselves, kept against one learning resource:
 
 It belongs to exactly one resource and **inherits the topics that resource covers**, carrying none of its own, so correcting what a resource covers moves its notes with it and the two can never disagree.
 
-This is the **one place the model holds study material rather than a pointer to it**, and the boundary is narrow: the learner types or pastes, and nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, or indexes it into a vector store. Two things read it, both locally and both only when the learner asks: the *topic note search*, a PostgreSQL full-text search, and a locally running AI model, which MNT-001 gives the passages that search selected and never a whole note. Neither stores anything derived from a note. Chunks, embeddings, and vector records remain [non-entities](entities.md#important-non-entities) — derived data belonging in a vector index, rebuildable from the note. A note is corrected in place and put aside rather than deleted. See [entities](entities.md#resource-note), [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md), and [ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
+This was the **first place the model holds study material rather than a pointer to it** — an uploaded PDF, kept as a *stored file* since [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md), is the second. For a note the boundary is narrow: the learner types or pastes, and nothing uploads it, fetches an address, extracts text from a document, chunks, embeds, or indexes it into a vector store. Two things read it, both locally and both only when the learner asks: the *topic note search*, a PostgreSQL full-text search, and a locally running AI model, which MNT-001 gives the passages that search selected and never a whole note. Neither stores anything derived from a note. Chunks, embeddings, and vector records remain [non-entities](entities.md#important-non-entities) — derived data belonging in a vector index, rebuildable from the note. A note is corrected in place and put aside rather than deleted. See [entities](entities.md#resource-note), [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md), and [ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
 
 ### Examination Schedule
 

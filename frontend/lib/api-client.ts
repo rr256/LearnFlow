@@ -33,6 +33,11 @@ import type {
   NewLearningResource,
 } from "@/types/resource";
 import type { TopicNoteSearch, TopicNoteSearchResponse } from "@/types/note-search";
+import type {
+  ResourceFile,
+  ResourceFileCollectionResponse,
+  ResourceFileResponse,
+} from "@/types/resource-file";
 import type { StudyAnswer, StudyAnswerResponse } from "@/types/study-answer";
 import type {
   NewResourceNote,
@@ -926,6 +931,147 @@ export async function searchTopicNotes(topicId: string): Promise<TopicNoteSearch
     throw new ApiError("malformed_response", "The API returned a malformed search result.", null);
   }
   return (body as TopicNoteSearchResponse).data;
+}
+
+/**
+ * RES-014 -- store one PDF against a resource the learner owns.
+ *
+ * **The only multipart request LearnFlow makes.** `requestJson` above sends
+ * JSON; a file cannot travel that way without base64, which would inflate it by
+ * a third for no benefit. The body is a `FormData` the caller built from the
+ * browser's own `File`, forwarded from the Next.js server — so the browser still
+ * never reaches the API (ADR-015).
+ *
+ * **No `Content-Type` header is set here, deliberately.** `fetch` writes it
+ * itself for a `FormData` body, including the multipart boundary; setting one by
+ * hand omits the boundary and the backend cannot parse the request.
+ *
+ * The backend decides what is acceptable: PDFs only, at most 25 MB and 1500
+ * pages, and at most 20 files per resource. A refusal arrives as an `ApiError`
+ * carrying the backend's own message, which never repeats the filename.
+ *
+ * @throws ApiError with `isNotFound` when the resource is not the learner's,
+ *   `isConflict` when it is archived or full, and a validation error when the
+ *   file is not a usable PDF.
+ */
+export async function uploadResourceFile(
+  resourceId: string,
+  file: File,
+): Promise<ResourceFile> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+
+  const url = `${resolveApiBaseUrl()}/api/v1/resources/${encodeURIComponent(resourceId)}/files`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      body: form,
+    });
+  } catch {
+    throw new ApiError(
+      "api_unreachable",
+      "The LearnFlow API could not be reached. Check that the backend is running.",
+      null,
+    );
+  }
+
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+  if (!response.ok) {
+    throw toApiError(response.status, body);
+  }
+
+  const data = unwrapData(body);
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed stored file.", null);
+  }
+  return (body as ResourceFileResponse).data;
+}
+
+/**
+ * RES-015 -- the PDFs stored against one resource, newest first.
+ *
+ * Returns every status by default. Archived material still lists its files:
+ * putting something aside makes it read-only, not unreadable.
+ */
+export async function listResourceFiles(
+  resourceId: string,
+  { statuses }: { statuses?: readonly string[] } = {},
+): Promise<ResourceFile[]> {
+  const query = new URLSearchParams();
+  for (const status of statuses ?? []) {
+    query.append("status", status);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const body = await requestJson(
+    `/api/v1/resources/${encodeURIComponent(resourceId)}/files${suffix}`,
+  );
+  const data = unwrapData(body);
+
+  if (!Array.isArray(data)) {
+    throw new ApiError(
+      "malformed_response",
+      "The API returned stored files without a `data` array.",
+      null,
+    );
+  }
+  return (body as ResourceFileCollectionResponse).data;
+}
+
+/**
+ * RES-017 -- set a stored PDF aside, or bring it back.
+ *
+ * Reversible in both directions, and **nothing is removed** either way: the
+ * bytes stay in the volume whichever status the row holds. LearnFlow has no
+ * endpoint that deletes a stored file.
+ *
+ * @throws ApiError with `isConflict` when the file's resource is archived.
+ */
+export async function updateResourceFile(
+  fileId: string,
+  status: string,
+): Promise<ResourceFile> {
+  const body = await requestJson(`/api/v1/resource-files/${encodeURIComponent(fileId)}`, {
+    method: "PATCH",
+    body: { status },
+  });
+  const data = unwrapData(body);
+
+  if (!isRecord(data)) {
+    throw new ApiError("malformed_response", "The API returned a malformed stored file.", null);
+  }
+  return (body as ResourceFileResponse).data;
+}
+
+/**
+ * RES-016 -- one stored PDF's bytes, for the learner who owns them.
+ *
+ * Returns the raw `Response` rather than a parsed body, so the route handler
+ * calling it can stream the bytes onward without holding a second copy. The
+ * backend has already checked that the file belongs to the effective learner.
+ *
+ * **Reached from the Next.js server only.** The browser asks LearnFlow's own
+ * route, which asks the API; no API address is ever browser-visible.
+ */
+export async function fetchResourceFileContent(fileId: string): Promise<Response> {
+  const url = `${resolveApiBaseUrl()}/api/v1/resource-files/${encodeURIComponent(fileId)}/content`;
+  try {
+    return await fetch(url, { cache: "no-store" });
+  } catch {
+    throw new ApiError(
+      "api_unreachable",
+      "The LearnFlow API could not be reached. Check that the backend is running.",
+      null,
+    );
+  }
 }
 
 /**

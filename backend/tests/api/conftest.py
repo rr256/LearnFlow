@@ -32,6 +32,7 @@ from app.application.ports.curriculum_seed_repository import (
 from app.application.use_cases.answer_topic_question import AnswerTopicQuestion
 from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
+from app.application.use_cases.manage_resource_files import ManageResourceFiles
 from app.application.use_cases.manage_resource_notes import ManageResourceNotes
 from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
@@ -44,6 +45,7 @@ from app.presentation.api.dependencies import (
     CHECKPOINT_QUIZZES_PROVIDER,
     PRACTICE_QUESTIONS_PROVIDER,
     READ_CURRICULUM_PROVIDER,
+    RESOURCE_FILES_PROVIDER,
     RESOURCE_NOTES_PROVIDER,
     RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
@@ -57,6 +59,11 @@ from tests.unit.fake_ai_provider import FakeAIProvider
 from tests.unit.fake_curriculum_repository import FakeCurriculumRepository
 from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
 from tests.unit.fake_note_search_repository import FakeNoteSearchRepository
+from tests.unit.fake_resource_file_storage import (
+    FakeDocumentInspector,
+    FakeResourceFileRepository,
+    FakeResourceFileStorage,
+)
 from tests.unit.fake_resource_note_repository import FakeResourceNoteRepository
 from tests.unit.fake_resource_repository import FakeResourceRepository
 from tests.unit.fake_revision_repository import FakeRevisionRepository
@@ -400,6 +407,56 @@ def resource_client(cataloguing: Cataloguing) -> Iterator[TestClient]:
     setattr(app.state, RESOURCES_PROVIDER, provide)
     setattr(app.state, RESOURCE_NOTES_PROVIDER, provide_notes)
     setattr(app.state, TOPIC_NOTE_RETRIEVAL_PROVIDER, provide_retrieval)
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture
+def file_storage() -> FakeResourceFileStorage:
+    """Where uploaded bytes go under test. **Never a real filesystem.**"""
+    return FakeResourceFileStorage()
+
+
+@pytest.fixture
+def document_inspector() -> FakeDocumentInspector:
+    """Reports a readable three-page PDF unless a test says otherwise."""
+    return FakeDocumentInspector()
+
+
+@pytest.fixture
+def resource_files_client(
+    cataloguing: Cataloguing,
+    file_storage: FakeResourceFileStorage,
+    document_inspector: FakeDocumentInspector,
+) -> Iterator[TestClient]:
+    """A client whose file endpoints share the catalogue the resources live in.
+
+    The resource endpoints are installed beside them so one test can register
+    material over RES-001, store a PDF over RES-014, and archive the resource
+    over RES-004 — the sequence a learner actually performs.
+
+    Bytes are held in memory: no test here writes to the configured volume, or to
+    any filesystem at all.
+    """
+    app = create_app()
+    files = FakeResourceFileRepository()
+
+    @contextmanager
+    def provide() -> Iterator[ManageResources]:
+        yield cataloguing.cataloguer()
+
+    @contextmanager
+    def provide_files() -> Iterator[ManageResourceFiles]:
+        yield ManageResourceFiles(
+            learners=cataloguing.learners,
+            resources=cataloguing.resources,
+            files=files,
+            storage=file_storage,
+            inspector=document_inspector,
+        )
+
+    setattr(app.state, RESOURCES_PROVIDER, provide)
+    setattr(app.state, RESOURCE_FILES_PROVIDER, provide_files)
     with TestClient(app) as client:
         yield client
 

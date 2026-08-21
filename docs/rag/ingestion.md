@@ -2,7 +2,7 @@
 title: LearnFlow RAG Ingestion
 status: approved
 owner: architecture-and-ai
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 related:
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
@@ -11,6 +11,7 @@ related:
   - embeddings.md
   - ../architecture/provider-pattern.md
   - ../database/schema.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow RAG Ingestion
@@ -25,9 +26,12 @@ The MVP supports text extraction and indexing for eligible text-based study reso
 
 Video transcription, unrestricted website ingestion, and fully automated OCR for scanned PDFs are not MVP requirements.
 
-**Nothing in this document is implemented.** No file is stored, no text is extracted, nothing is
-normalised, chunked, embedded, or indexed, and `resource_ingestions` does not exist. The lifecycle
-below is the approved target for **file-based** sources.
+**One step of this document is implemented, and no more.** A learner's uploaded PDFs **are stored** —
+bytes in a local volume, metadata in `resource_files` — which is *Step 1*, register and validate
+([ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md)). **No text is extracted**, nothing is
+normalised, chunked, embedded, or indexed, `resource_ingestions` does not exist, and **no ingestion
+record is created**: a stored file enters no lifecycle. The lifecycle below is the approved target
+for **file-based** sources.
 
 ### Learner-written text enters no lifecycle
 

@@ -88,7 +88,12 @@ LEARNER_PLANNING_TABLES = (
 
 PROGRESS_TABLES = ("learner_topic_progress", "revision_records")
 
-RESOURCE_TABLES = ("resources", "resource_topic_links", "resource_notes")
+RESOURCE_TABLES = (
+    "resources",
+    "resource_topic_links",
+    "resource_notes",
+    "resource_files",
+)
 
 ASSESSMENT_TABLES = (
     "checkpoint_quizzes",
@@ -130,6 +135,16 @@ def test_only_the_migrated_tables_are_mapped():
     does not list it: it holds text the learner typed themselves, which is
     neither a file nor a derived representation of one, so no approved table
     could hold it. See ADR-037.
+
+    `resource_files` is mapped for the same kind of reason. The approved area
+    anticipated **one** file per resource — `resources.storage_key` and
+    `resources.metadata` are columns on `resources` itself — and a learner may
+    keep several PDFs against one piece of material, which no 1:1 column pair
+    can hold. Those two columns therefore stay uncreated rather than being
+    half-built into a shape they cannot support. See ADR-040.
+
+    `resource_ingestions` is still absent: nothing extracts, chunks, embeds, or
+    indexes anything, and `resource_files` is not an ingestion record.
     """
     assert set(Base.metadata.tables) == set(MAPPED_TABLES)
 

@@ -2,11 +2,13 @@ import Link from "next/link";
 
 import styles from "@/features/resources/ResourceCatalogue.module.css";
 import { ResourceForm } from "@/features/resources/ResourceForm";
+import { ResourceFiles } from "@/features/resources/ResourceFiles";
 import { ResourceNotes } from "@/features/resources/ResourceNotes";
 import { ResourceStatusControl } from "@/features/resources/ResourceStatusControl";
 import { isInCatalogue } from "@/features/resources/by-topic";
 import type { SubjectTopicOptions } from "@/features/resources/topic-options";
 import { resourceTypeLabel, type LearningResource } from "@/types/resource";
+import type { ResourceFile } from "@/types/resource-file";
 import type { ResourceNote } from "@/types/resource-note";
 
 interface ResourceCatalogueProps {
@@ -22,6 +24,8 @@ interface ResourceCatalogueProps {
    * from having to supply a map of nothing.
    */
   notesByResource?: Record<string, ResourceNote[]>;
+  /** The PDFs stored against each resource, keyed by resource id. */
+  filesByResource?: Record<string, ResourceFile[]>;
 }
 
 /**
@@ -46,6 +50,7 @@ export function ResourceCatalogue({
   resources,
   topicGroups,
   notesByResource = {},
+  filesByResource = {},
 }: ResourceCatalogueProps) {
   const inCatalogue = resources.filter(isInCatalogue);
   const putAside = resources.filter((resource) => !isInCatalogue(resource));
@@ -65,6 +70,7 @@ export function ResourceCatalogue({
             <ul className={styles.items}>
               {inCatalogue.map((resource) => (
                 <ResourceLine
+                  files={filesByResource[resource.id] ?? []}
                   key={resource.id}
                   notes={notesByResource[resource.id] ?? []}
                   resource={resource}
@@ -87,6 +93,7 @@ export function ResourceCatalogue({
           <ul className={styles.items}>
             {putAside.map((resource) => (
               <ResourceLine
+                files={filesByResource[resource.id] ?? []}
                 key={resource.id}
                 notes={notesByResource[resource.id] ?? []}
                 resource={resource}
@@ -105,10 +112,12 @@ function ResourceLine({
   resource,
   topicGroups,
   notes,
+  files,
 }: {
   resource: LearningResource;
   topicGroups: SubjectTopicOptions[];
   notes: ResourceNote[];
+  files: ResourceFile[];
 }) {
   return (
     <li className={styles.item}>
@@ -166,6 +175,24 @@ function ResourceLine({
         resourceId={resource.id}
         writable={isInCatalogue(resource)}
       />
+
+      {/*
+        The PDFs stored against this material. Shown here and on no other
+        screen, for the reason the notes above are: the screens that show a
+        topic's material exist to help a learner *find* it.
+
+        Files on material that is put aside are read-only, as its notes are --
+        still listed and still downloadable, because hiding a learner's own file
+        from a list is not a reason to withhold it from them.
+      */}
+      <details className={styles.disclosure}>
+        <summary>PDFs — {resource.title}</summary>
+        <ResourceFiles
+          files={files}
+          resourceId={resource.id}
+          writable={isInCatalogue(resource)}
+        />
+      </details>
 
       <ResourceStatusControl
         resourceId={resource.id}

@@ -12,13 +12,20 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.application.ports.ai_provider import AIProvider
-from app.composition.config import AIProviderName, Settings, load_settings
+from app.application.ports.resource_file_storage import ResourceFileStorage
+from app.composition.config import (
+    AIProviderName,
+    ResourceStorageProviderName,
+    Settings,
+    load_settings,
+)
 from app.composition.providers import (
     build_checkpoint_quizzes_provider,
     build_learner_profile_provider,
     build_practice_questions_provider,
     build_read_curriculum_provider,
     build_read_examination_schedules_provider,
+    build_resource_files_provider,
     build_resource_notes_provider,
     build_resources_provider,
     build_revisions_provider,
@@ -30,12 +37,17 @@ from app.composition.providers import (
 )
 from app.infrastructure.persistence.engine import create_database_engine, create_session_factory
 from app.infrastructure.providers.ollama_ai_provider import OllamaAIProvider
+from app.infrastructure.storage.local_file_storage import (
+    LocalResourceFileStorage,
+    PyPdfDocumentInspector,
+)
 from app.presentation.api.dependencies import (
     CHECKPOINT_QUIZZES_PROVIDER,
     LEARNER_PROFILE_PROVIDER,
     PRACTICE_QUESTIONS_PROVIDER,
     READ_CURRICULUM_PROVIDER,
     READ_EXAMINATION_SCHEDULES_PROVIDER,
+    RESOURCE_FILES_PROVIDER,
     RESOURCE_NOTES_PROVIDER,
     RESOURCES_PROVIDER,
     REVISIONS_PROVIDER,
@@ -58,6 +70,7 @@ from app.presentation.api.routes import (
     practice_questions,
     progress,
     quiz_attempts,
+    resource_files,
     resource_notes,
     resources,
     revisions,
@@ -132,6 +145,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     setattr(
         app.state,
+        RESOURCE_FILES_PROVIDER,
+        build_resource_files_provider(
+            session_factory,
+            storage=_select_file_storage(settings),
+            inspector=PyPdfDocumentInspector(),
+        ),
+    )
+    setattr(
+        app.state,
         STUDY_ANSWER_PROVIDER,
         build_study_answer_provider(session_factory, ai_provider=_select_ai_provider(settings)),
     )
@@ -167,6 +189,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # any segment and is only validated as a UUID afterwards, so the collision
     # would surface as a 422 rather than as a route that never ran.
     app.include_router(mentor.router)
+    app.include_router(resource_files.router)
     app.include_router(note_search.router)
     app.include_router(resource_notes.router)
     app.include_router(practice_questions.router)
@@ -196,3 +219,20 @@ def _select_ai_provider(settings: Settings) -> AIProvider:
                 model=settings.ollama_chat_model,
                 timeout_seconds=settings.ai_request_timeout_seconds,
             )
+
+
+def _select_file_storage(settings: Settings) -> ResourceFileStorage:
+    """Where a learner's uploaded file bytes are kept, for this process.
+
+    **The only place a storage adapter is chosen**, and the only place the
+    storage path is read. `RESOURCE_STORAGE_PROVIDER` names a capability and this
+    turns it into one object; nothing else in the backend imports an adapter, so
+    where a learner's files land is decided here and read in one place.
+
+    The match is exhaustive over `ResourceStorageProviderName`, so adding a
+    member without an adapter fails the type check rather than at the first
+    upload a learner attempts.
+    """
+    match settings.resource_storage_provider:
+        case ResourceStorageProviderName.local:
+            return LocalResourceFileStorage(root=settings.resource_storage_path)

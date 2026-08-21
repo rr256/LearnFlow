@@ -13,6 +13,7 @@ related:
   - ../adr/ADR-013-examination-schedule-and-study-goal.md
   - ../adr/ADR-015-frontend-foundation-and-server-rendered-api-access.md
   - ../adr/ADR-039-source-grounded-study-answers.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow Environments and Configuration
@@ -157,14 +158,27 @@ database — while `POSTGRES_*` are vendor settings that do not. Compose builds 
 
 ### RAG and Storage
 
-**Planned.** Added when the storage and retrieval adapters are implemented.
+**Partly implemented.** `RESOURCE_STORAGE_PROVIDER` and `RESOURCE_STORAGE_PATH` are read at startup
+since [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md); `CHROMA_URL` and
+`EMBEDDING_PROVIDER` stay **planned**, because nothing embeds or vector-indexes anything.
 
 ```text
-RESOURCE_STORAGE_PROVIDER
-RESOURCE_STORAGE_PATH
-CHROMA_URL
-EMBEDDING_PROVIDER
+RESOURCE_STORAGE_PROVIDER    local     (the only implemented adapter)
+RESOURCE_STORAGE_PATH        /var/lib/learnflow/resources
+CHROMA_URL                             (planned)
+EMBEDDING_PROVIDER                     (planned)
 ```
+
+`RESOURCE_STORAGE_PROVIDER` is validated against the adapters that exist, so an unknown value fails
+at startup with a named field rather than at the first upload a learner attempts.
+
+`RESOURCE_STORAGE_PATH` is the **only path in configuration**. Nothing derived from it reaches a
+response: `storage_key` stays inside the storage adapter, and no resource endpoint returns a
+filesystem location. In Compose it is fixed to the named volume's mount point rather than
+interpolated, because a developer's own value would name a directory the container cannot see.
+
+**Neither reaches the `frontend` service.** It never reads a file — downloads are proxied through a
+Next.js route that calls the API server-side.
 
 The embedding model is configured by the vendor-specific `OLLAMA_EMBEDDING_MODEL` below. There is
 no generic `EMBEDDING_MODEL` variable; ADR-009 removed it because two variables for one setting left
@@ -243,7 +257,7 @@ The committed `.env.example` must:
 - Not contain developer-specific local paths.
 - Be updated in the same change that introduces or removes a configuration variable.
 
-The committed file therefore currently contains exactly the fourteen implemented variables:
+The committed file therefore currently contains exactly the sixteen implemented variables:
 
 ```text
 APP_ENV=local
@@ -256,6 +270,8 @@ DATABASE_URL=postgresql+psycopg://learnflow:learnflow@127.0.0.1:5432/learnflow
 POSTGRES_DB=learnflow
 POSTGRES_USER=learnflow
 POSTGRES_PASSWORD=learnflow
+RESOURCE_STORAGE_PROVIDER=local
+RESOURCE_STORAGE_PATH=/var/lib/learnflow/resources
 AI_PROVIDER=ollama
 AI_REQUEST_TIMEOUT_SECONDS=60
 OLLAMA_BASE_URL=http://127.0.0.1:11434

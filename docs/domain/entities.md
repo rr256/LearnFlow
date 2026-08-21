@@ -24,6 +24,7 @@ related:
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-035-practice-question-correction.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow Domain Entities
@@ -90,8 +91,11 @@ Represents a learner-owned or curated study reference, such as a PDF, notes, PYQ
 
 **Key relationships:** may link to multiple topics and subtopics; may later be ingested into the knowledge base.
 
-It records **where the material is, never the material**: nothing is uploaded, fetched, extracted,
-or indexed today. The one thing stored *about* it rather than *pointing at* it is a
+It records **where the material is**, and since
+[ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md) it may also hold the material itself:
+a learner's uploaded PDFs are kept as *stored files*, bytes in a local volume and metadata in
+`resource_files`. Nothing is fetched from the web, no location on the learner's own machine is
+stored, and nothing is extracted or indexed. The one thing stored *about* it rather than *pointing at* it is a
 [resource note](#resource-note), which the learner typed themselves. A source location is a web link, a *source label* in the learner's own words, or both, and a
 resource carries at least one of the two — **no location on the learner's own machine is stored**.
 A resource is put aside rather than deleted, and a topic's resources are the ones the learner linked
@@ -107,8 +111,9 @@ Represents text the learner typed or pasted themselves, kept against one learnin
 
 **Key relationships:** belongs to exactly one learning resource, and inherits the topics that resource covers.
 
-It is the **first study material LearnFlow stores rather than points at**, and deliberately the only
-kind: nothing uploads a file, fetches an address, extracts text from a document, chunks, embeds, or
+It is the **first study material LearnFlow stores rather than points at**, and was for a time the
+only kind; an uploaded PDF is the second. Of a *note* specifically: nothing uploads it, fetches an
+address, extracts text from a document, chunks, embeds, or
 indexes it into a vector store. It carries **no topic links of its own**, so a learner correcting
 what a resource covers moves its notes with it.
 

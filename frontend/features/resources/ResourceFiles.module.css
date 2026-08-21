@@ -1,0 +1,89 @@
+.files {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.item {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.name {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * A learner's own filename, rendered as text. React escapes it, and this only
+ * decides that a long unbroken name wraps rather than widening the page.
+ */
+.download {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * What the document is: a size and a page count. Both describe the file, never
+ * the learner, and neither is totalled across files.
+ */
+.about {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.aside {
+  font-style: italic;
+}
+
+.statusForm {
+  margin: var(--space-3) 0 0;
+}
+
+.form {
+  display: grid;
+  gap: var(--space-3);
+  max-width: var(--measure);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+/*
+ * The data-sharing statement. It sits with the field rather than in a footer
+ * because NFR-001 asks for the position to be clear before it matters.
+ */
+.hint {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.empty,
+.readOnly,
+.full {
+  margin: 0;
+  color: var(--colour-text-muted);
+  max-width: var(--measure);
+}
+
+.error,
+.stored {
+  margin: 0;
+  max-width: var(--measure);
+}

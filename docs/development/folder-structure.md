@@ -36,6 +36,7 @@ related:
   - ../adr/ADR-036-topic-material-on-the-plan-screens.md
   - ../adr/ADR-036-topic-material-on-the-plan-screens.md
   - ../domain/terminology.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow Repository and Folder Structure
@@ -311,6 +312,11 @@ app/
 │   │                                       # learner's own notes, via a server action
 │   │                                       # so the question stays out of the address
 │   └── page.module.css
+├── resources/files/[fileId]/
+│   └── route.ts                            # RES-016 — download one stored PDF,
+│                                           # proxied server-side and served as an
+│                                           # attachment. The browser never calls
+│                                           # the backend.
 ├── practice/
 │   ├── page.tsx                            # Checkpoint practice: QZ-009 for the
 │   │                                       # learner's questions, QZ-006 for their
@@ -385,7 +391,7 @@ quizzes/
 external-tests/
 ```
 
-Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, `resources/`, `practice/`, and `mentor/` exist today.
+Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, `resources/`, `practice/`, and `mentor/` exist today. `resources/` also holds the **stored-file** controls (RES-014 to RES-017) and their server actions.
 
 `practice/` holds **checkpoint practice**: `QuestionForm.tsx` serving both writing and **correcting** — one component, as `ResourceForm` is for a resource, since both ask for the same five fields and differ only in whether they start filled and which endpoint they reach — `QuestionBank.tsx` and `QuestionStatusControl.tsx` for reading them back, correcting one behind a `<details>` disclosure, and setting one aside,
 `StartQuizForm.tsx` for choosing topics, `QuizForm.tsx` for answering a quiz in one form post,

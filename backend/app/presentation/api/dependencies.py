@@ -23,6 +23,7 @@ from app.application.use_cases.answer_topic_question import AnswerTopicQuestion
 from app.application.use_cases.manage_checkpoint_quizzes import ManageCheckpointQuizzes
 from app.application.use_cases.manage_learner_profile import ManageLearnerProfile
 from app.application.use_cases.manage_practice_questions import ManagePracticeQuestions
+from app.application.use_cases.manage_resource_files import ManageResourceFiles
 from app.application.use_cases.manage_resource_notes import ManageResourceNotes
 from app.application.use_cases.manage_resources import ManageResources
 from app.application.use_cases.manage_revisions import ManageRevisions
@@ -43,6 +44,7 @@ STUDY_PLANS_PROVIDER = "study_plans_provider"
 REVISIONS_PROVIDER = "revisions_provider"
 RESOURCES_PROVIDER = "resources_provider"
 RESOURCE_NOTES_PROVIDER = "resource_notes_provider"
+RESOURCE_FILES_PROVIDER = "resource_files_provider"
 TOPIC_NOTE_RETRIEVAL_PROVIDER = "topic_note_retrieval_provider"
 STUDY_ANSWER_PROVIDER = "study_answer_provider"
 TOPIC_PROGRESS_PROVIDER = "topic_progress_provider"
@@ -106,6 +108,13 @@ def provide_resources(request: Request) -> Iterator[ManageResources]:
 def provide_resource_notes(request: Request) -> Iterator[ManageResourceNotes]:
     """Yield the resource-note use case bound to this request's unit of work."""
     provider = getattr(request.app.state, RESOURCE_NOTES_PROVIDER)
+    with provider() as use_case:
+        yield use_case
+
+
+def provide_resource_files(request: Request) -> Iterator[ManageResourceFiles]:
+    """Yield the stored-file use case bound to this request's unit of work."""
+    provider = getattr(request.app.state, RESOURCE_FILES_PROVIDER)
     with provider() as use_case:
         yield use_case
 

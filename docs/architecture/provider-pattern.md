@@ -10,6 +10,7 @@ related:
   - ../rag/overview.md
   - ../development/tech-stack.md
   - ../adr/ADR-039-source-grounded-study-answers.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow Provider Pattern
@@ -72,12 +73,14 @@ Provider selection must be configuration-driven. Provider names, endpoints, mode
 
 ### As implemented
 
-**One provider exists: `AIProvider`, fulfilled by Ollama.** It is selected by `AI_PROVIDER` in the
-composition root and used by MNT-001 alone. See
-[ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
+**Two providers exist.** `AIProvider` is fulfilled by Ollama, selected by `AI_PROVIDER` and used by
+MNT-001 alone ([ADR-039](../adr/ADR-039-source-grounded-study-answers.md)). `ResourceFileStorage` is
+fulfilled by a local-volume adapter, selected by `RESOURCE_STORAGE_PROVIDER` and used by RES-014 to
+RES-017 ([ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md)); it is the only code in the
+backend that touches a filesystem, and it speaks in opaque keys so no path crosses the port.
 
-The remaining ports are **unimplemented**: no embedding provider, no vector search provider, and no
-file storage provider, so `EMBEDDING_PROVIDER`, `CHROMA_URL`, and the storage variables stay planned.
+The remaining ports are **unimplemented**: no embedding provider and no vector search provider, so
+`EMBEDDING_PROVIDER` and `CHROMA_URL` stay planned.
 Structured persistence has always been PostgreSQL through repositories.
 
 **No credential exists anywhere in LearnFlow.** The only provider runs locally and authenticates

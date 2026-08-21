@@ -101,6 +101,26 @@ services:
       AI_REQUEST_TIMEOUT_SECONDS: ${AI_REQUEST_TIMEOUT_SECONDS:-60}
       OLLAMA_BASE_URL: ${OLLAMA_CONTAINER_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.1:8b}
+      # Where a learner's uploaded PDFs are kept (RES-014 to RES-017). Fixed to
+      # the volume's mount point rather than interpolated: a developer's own
+      # value would name a directory on their machine, which this container
+      # cannot see. Same reasoning as DATABASE_URL and OLLAMA_BASE_URL above.
+      RESOURCE_STORAGE_PROVIDER: ${RESOURCE_STORAGE_PROVIDER:-local}
+      RESOURCE_STORAGE_PATH: /var/lib/learnflow/resources
+    volumes:
+      # Learner-uploaded files. A **named volume, mounted into this service
+      # alone** -- not the frontend, which never reads a file, and not postgres,
+      # whose data this must stay separate from so each can be backed up and
+      # restored on its own.
+      #
+      # It survives `docker compose down`, an image rebuild, and container
+      # recreation. Only `docker compose down -v` destroys it, exactly as for
+      # postgres_data -- which is why that command is not a routine stop.
+      #
+      # **Backup is now two things.** `pg_dump` alone is no longer a complete
+      # backup of a learner's material: the rows describing their files are in
+      # PostgreSQL and the bytes are here. See docs/deployment/docker.md.
+      - resource_files:/var/lib/learnflow/resources
     # `host.docker.internal` is provided natively by Docker Desktop on macOS and
     # Windows. Docker Engine on Linux does not provide it, so it is mapped here
     # to the special `host-gateway` value and the same address works on all
@@ -179,3 +199,8 @@ volumes:
   # Learner data lives here. `docker compose down -v` deletes it; `docker
   # compose down` does not.
   postgres_data:
+  # Learner-uploaded PDF files, kept apart from the database on purpose: the two
+  # have different backup and restore stories, and a single volume holding both
+  # would tie them together. Also deleted by `docker compose down -v`, and by
+  # nothing else -- LearnFlow itself never removes a stored file.
+  resource_files:

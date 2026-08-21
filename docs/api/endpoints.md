@@ -39,6 +39,7 @@ related:
   - ../adr/ADR-034-checkpoint-practice-history.md
   - ../adr/ADR-035-practice-question-correction.md
   - ../adr/ADR-036-topic-material-on-the-plan-screens.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -1066,6 +1067,10 @@ complete, and supplies the **resource half** of
 | RES-006 | `POST /api/v1/resources/{resource_id}/ingestions` | Start/retry text extraction and indexing. | `202` + ingestion reference. | Not implemented |
 | RES-007 | `GET /api/v1/resources/{resource_id}/ingestions` | List ingestion attempts/statuses. | Ingestion collection. | Not implemented |
 | RES-008 | `GET /api/v1/resource-ingestions/{ingestion_id}` | Read a single ingestion status/failure message. | Ingestion details. | Not implemented |
+| RES-014 | `POST /api/v1/resources/{resource_id}/files` | Store one PDF against a resource. `multipart/form-data`, one `file` part. | `201` + the stored file's metadata. | Implemented |
+| RES-015 | `GET /api/v1/resources/{resource_id}/files` | List the PDFs stored against a resource, newest first. | Stored-file collection. | Implemented |
+| RES-016 | `GET /api/v1/resource-files/{file_id}/content` | Download one stored PDF. | The bytes, as an attachment. | Implemented |
+| RES-017 | `PATCH /api/v1/resource-files/{file_id}` | Set a stored PDF aside, or bring it back. | The updated stored file. | Implemented |
 | RES-009 | `POST /api/v1/resources/{resource_id}/notes` | Keep one of the learner's own written notes against a piece of material. | Resource note. | Implemented |
 | RES-010 | `GET /api/v1/resources/{resource_id}/notes` | List the notes kept against one piece of material, filterable by status. | Resource note collection. | Implemented |
 | RES-011 | `GET /api/v1/resource-notes/{note_id}` | Read one note. | Resource note details. | Implemented |
@@ -1082,11 +1087,13 @@ or provider credentials.** That rule is kept by **refusing the input**: `externa
 an `http` or `https` address and nothing else, so no local path is stored, and none can therefore be
 returned. Material that is not on the web is described by `source_label`, in the learner's own words.
 
-**A resource is metadata, never the material.** Nothing here uploads, downloads, extracts, embeds, or
-indexes anything: `storage_key`, `metadata`, and `resource_ingestions` are all absent, and each
-arrives with the code that maintains it, per
-[ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md). RES-006 to RES-008 wait on that
-same table and an extractor.
+**A resource was metadata, never the material. RES-014 to RES-017 narrow that on the file clause.**
+A learner may now upload **PDFs**, whose bytes LearnFlow stores in a local volume and whose metadata
+lives in `resource_files`. The other two exclusions stand: **nothing is fetched from the web**, and
+**no location on the learner's own machine is stored** — a browser hands over bytes and a display
+name, never a path. Nothing is extracted, embedded, or indexed: `resources.storage_key`,
+`resources.metadata`, and `resource_ingestions` are all still absent, and RES-006 to RES-008 still
+wait on an extractor. See [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md).
 
 **RES-009 to RES-012 narrow that sentence on one point and leave the rest standing.** A learner may
 keep their **own written notes and copied-out passages** against a piece of material, which is the
@@ -1096,9 +1103,10 @@ still nothing extracted, chunked, embedded, or indexed into a vector store. Sear
 [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 
 **Nothing is deleted.** RES-005 is not implemented: a learner puts material aside with
-`status: archived` through RES-004, which is reversible and destroys nothing — the position
-[ADR-022](../adr/ADR-022-plan-adaptation.md) took for a superseded plan. RES-005 arrives with the
-files and vectors its stated purpose exists to clean up.
+`status: archived` through RES-004, or a single file aside through RES-017, both reversible and
+both destroying nothing — the position [ADR-022](../adr/ADR-022-plan-adaptation.md) took for a
+superseded plan. **Stored files make this the most-needed next change in this area**: a file is the
+first learner data that can outlive its row, so RES-005 must coordinate bytes and rows together.
 
 **Nothing is recommended, ranked, or counted.** A topic's material is the material the learner linked
 to it, in the order this API returns it. No resource is suggested for a topic, promoted above
@@ -1352,6 +1360,75 @@ Related entities: [resource note](../domain/entities.md#resource-note) and
 [learning resource](../domain/entities.md#learning-resource). Related table:
 [`resource_notes`](../database/schema.md#resource_notes).
 
+### RES-014 — `POST /api/v1/resources/{resource_id}/files`
+
+`multipart/form-data` with exactly one part, `file`. Returns `201` with the stored file under `data`.
+
+**Only PDFs are stored**, and four gates decide it, all applied **before anything is written**: the
+name ends `.pdf`, the bytes begin `%PDF-`, the document parses, and it is **not encrypted**. An
+encrypted PDF is refused rather than stored — keeping one LearnFlow can never open would be a promise
+it cannot meet.
+
+**Limits:** at most 25 MB, 1500 pages, and 20 files per resource. The size is checked **while the
+upload streams**, between chunks, so an oversized request is refused without ever being held whole.
+Archived files still count towards the ceiling, because they still occupy storage.
+
+**A refused upload writes nothing** — no row and no bytes — so a rejection cannot half-succeed. **No
+refusal echoes the filename** or any byte of the file.
+
+**The filename is metadata, never a path.** What lands on disk is named from a server-generated
+identifier, so nothing a browser sends decides where a file is written, and no request accepts a
+location on the learner's machine.
+
+`413` when a size or page limit is exceeded, `422` when the file is not a usable PDF, `404` when the
+resource is not the learner's, and `409` when it is archived, the ceiling is reached, or no learner is
+set up.
+
+### RES-015 — `GET /api/v1/resources/{resource_id}/files`
+
+Optional repeated `status` query parameter. Returns the resource's files, **newest first**, under
+`data`.
+
+**There is no pagination block.** A resource holds at most 20 files, so the collection is bounded by a
+rule rather than by a page and every file is always reachable in one read.
+
+Archived material still lists its files: putting something aside makes it **read-only, not
+unreadable**.
+
+`422` for an unknown status, `404` when the resource is not the learner's, `409` when no learner is set
+up.
+
+### RES-016 — `GET /api/v1/resource-files/{file_id}/content`
+
+Returns the stored bytes, not JSON.
+
+**Served as an attachment, never inline**: `Content-Disposition: attachment` with
+`X-Content-Type-Options: nosniff` and `Cache-Control: private, no-store`, so a browser saves the PDF
+rather than rendering it inside the application's origin. A PDF is an active-content format, and not
+rendering it in-origin is the mitigation this build offers — **no virus scanning is performed**.
+
+**An archived file is still downloadable.** Hiding a learner's own file from a list is not a reason to
+withhold it from them.
+
+A file whose bytes are missing from storage — what a volume restored from a backup older than the
+database looks like — is reported as `404` rather than as a server fault, and **the storage location is
+never named**. `409` when no learner is set up.
+
+### RES-017 — `PATCH /api/v1/resource-files/{file_id}`
+
+Body carries `status` and **nothing else**; an unknown field is rejected. The name, size, page count,
+and checksum all describe bytes that have not changed, so accepting a new value for any of them would
+let the row disagree with what is on disk.
+
+`active` and `archived`, in either direction. **Nothing is removed either way**: the bytes stay in the
+volume whichever status the row holds, and LearnFlow has no endpoint that deletes a stored file.
+
+`409` when the file's resource is archived, because archived material is read-only. `422` for an
+unknown status, `404` when the file is not the learner's.
+
+**No response in this family carries `storage_key`**, so no resource endpoint returns a storage
+location or a filesystem path.
+
 ### RES-013 — `GET /api/v1/resource-notes/search`
 
 Query parameter `topic_id`, a UUID, and nothing else. Returns `200` with one search result under
@@ -1413,10 +1490,14 @@ acceptance criteria are met in full and two are partly met.** This section is au
 the count.
 
 - *"The learner can register PDFs, notes, PYQs, and references/paths to local video resources"* —
-  **partly met.** Each of those kinds can be registered and described. A **path** to a local file
-  cannot: `external_reference` accepts a web address alone, because this catalogue must not return an
-  absolute local filesystem path. Material that is not on the web is carried by `source_label`. The
-  local-file half arrives with the storage and ingestion change that gives a file somewhere to live.
+  **partly met, and it moved with [RES-014](#res-014-post-apiv1resourcesresource_idfiles).** A PDF is
+  now registered as a **file**: the learner uploads it, and LearnFlow stores the bytes. Every other
+  kind can still be registered and described.
+  What is still not met is the **path** half, and deliberately so: `external_reference` accepts a web
+  address alone, no location on the learner's machine is stored, and **no path is accepted even on
+  upload** — a browser hands over bytes and a display name. A reference to a local **video** is
+  therefore still carried by `source_label`, in the learner's own words. See
+  [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md).
 - *"A resource can be linked to one or more subjects, topics, or subtopics"* — **met for topics and
   subtopics**, which are the same table. Subject-level linking is not storable:
   [schema.md](../database/schema.md#resource_topic_links) has no subject equivalent.
@@ -1428,7 +1509,9 @@ the count.
   [ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md), which changes no contract here and
   leaves this verdict and the count above unchanged: it adds surfaces rather than capability.
 
-**RES-009 to RES-013 and MNT-001 leave all four verdicts and the count above unchanged.** RES-013 searches
+**RES-009 to RES-013 and MNT-001 leave all four verdicts and the count above unchanged. RES-014 to
+RES-017 change the reasoning behind the first verdict without changing the verdict or the count**: a
+PDF is now a stored file rather than a description of one, and the path half stays unmet. RES-013 searches
 material FR-007 already covers rather than adding a way to register, link, describe, or find it; what
 it advances is FR-008, below.
 

@@ -2,7 +2,7 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-19
+last_updated: 2026-08-21
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
@@ -29,6 +29,7 @@ related:
   - ../adr/ADR-025-learner-postponement.md
   - ../roadmap/milestones.md
   - ../api/endpoints.md
+  - ../adr/ADR-040-learner-uploaded-resource-files.md
 ---
 
 # LearnFlow Database Schema
@@ -39,7 +40,7 @@ Define the initial logical PostgreSQL schema for LearnFlow. This is the baseline
 
 ## Implementation Status
 
-Every table below is approved, with **one exception**: `resource_notes` was added beyond this document by [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), for the reason [its area review](#resources-and-rag-metadata-area-second-partial-review-2026-08-19) records. Tables are created one schema area per migration, in the milestone
+Every table below is approved, with **two exceptions**, both in the resource area: `resource_notes` was added by [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), and `resource_files` by [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md) — the latter because the approved `storage_key`/`metadata` pair models one file per resource and a learner keeps several. Each has had its own implementation review below. Tables are created one schema area per migration, in the milestone
 that introduces the code reading them, per [ADR-011](../adr/ADR-011-sqlalchemy-persistence-implementation.md).
 
 The areas are those in [Schema Areas](#schema-areas) below; the milestones are defined in
@@ -52,7 +53,7 @@ tables arrive in more than one migration.
 | Examination schedule | Implemented — migration `20260801_01_create_examination_schedule_and_learner_goal_tables`, populated by the idempotent seed described in [migrations](migrations.md#the-examination-schedule-seed). |
 | Learner planning | Implemented — `learners` and `study_goals` arrive in migration `20260801_01`, `availability_slots` in `20260806_01`, whose `day_of_week` is stored as a day *name* rather than the `smallint` documented [below](#availability_slots), `study_goals`' planning preferences in `20260806_02`, as two typed columns rather than the `planning_preferences jsonb` documented [below](#study_goals), and `study_plans` and `plan_items` in `20260806_03`, whose controlled columns are `varchar(32)` guarded by a `CHECK` rather than the `text` documented [below](#study_plans). |
 | Progress and revision | Partly implemented — `learner_topic_progress` arrives in migration `20260805_01`, with three of its documented columns deliberately not created; see [below](#learner_topic_progress). `revision_records` arrives in `20260813_01` with the revision code that reads it, per [ADR-028](../adr/ADR-028-revision-workflow.md). `study_activities` still arrives with the code that records study work. |
-| Resources and RAG metadata | Partly implemented — `resources` and `resource_topic_links` arrive in migration `20260816_01` with the catalogue code that reads them (RES-001 to RES-004), per [ADR-032](../adr/ADR-032-learning-resource-catalogue.md); two columns of `resources` are deliberately not created, and `resource_ingestions` arrives with the extractor and vector index it tracks. `resource_notes` arrives in `20260819_01` with the code that reads it (RES-009 to RES-012), and its full-text search index in `20260820_01` with RES-013 and is **added beyond the tables this document approves**, per [ADR-037](../adr/ADR-037-learner-written-resource-notes.md). See [below](#resources). |
+| Resources and RAG metadata | Partly implemented — `resources` and `resource_topic_links` arrive in migration `20260816_01` with the catalogue code that reads them (RES-001 to RES-004), per [ADR-032](../adr/ADR-032-learning-resource-catalogue.md); two columns of `resources` are deliberately not created, and `resource_ingestions` arrives with the extractor and vector index it tracks. `resource_notes` arrives in `20260819_01` with the code that reads it (RES-009 to RES-012), and its full-text search index in `20260820_01` with RES-013; `resource_files` arrives in `20260821_01` with RES-014 to RES-017. Both are **added beyond the tables this document approves**, per [ADR-037](../adr/ADR-037-learner-written-resource-notes.md) and [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md). See [below](#resources). |
 | Assessment | Implemented — all seven tables arrive in migration `20260818_01` with the checkpoint-practice code that reads them (QZ-001 to QZ-010), per [ADR-033](../adr/ADR-033-checkpoint-practice-workflow.md). Seven columns are deliberately not created and one is added beyond this document; see [the area review](#assessment-area-review-2026-08-18). |
 | External evidence | Not implemented — arrives with FR-010, in the second half of Milestone 5. `mistake_evidence` waits with it: two of its four discovery sources reference tables in this area. |
 
@@ -105,6 +106,7 @@ Progress and revision
 Resources and RAG metadata
   resources ↔ resource_topic_links → resource_ingestions
   resources → resource_notes
+  resources → resource_files
 
 Assessment
   checkpoint_quizzes ↔ checkpoint_quiz_topics → topics
@@ -632,11 +634,13 @@ the code that reads the rest, per [ADR-011](../adr/ADR-011-sqlalchemy-persistenc
 [ADR-032](../adr/ADR-032-learning-resource-catalogue.md). Four points where the created table differs
 from the rows above:
 
-- **`storage_key` and `metadata` are not created.** Both describe a stored file, and nothing uploads
-  one: this catalogue records **where material is**, not the material. Creating either now would fix
-  a storage provider before one exists, which is the trap ADR-011 avoids and the reason
-  [`learner_topic_progress`](#learner_topic_progress) was created without three of its columns. Each
-  arrives with the ingestion change.
+- **`storage_key` and `metadata` are still not created**, and now for a second reason. Files *are*
+  stored since [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md), but these two columns
+  describe **one** file per resource, and a learner keeps several against one piece of material. A
+  1:1 column pair cannot hold that, so [`resource_files`](#resource_files) holds it instead and these
+  stay uncreated rather than being half-built into a shape they cannot support. `metadata` as
+  free-form `jsonb` would also validate nothing, where the new table's columns are typed and
+  constrained.
 - **The approved "at least one of `storage_key` or `external_reference`" constraint is expressed over
   `source_label` or `external_reference`.** The invariant is the same — a resource must say where its
   material is — read for a catalogue that stores no files.
@@ -720,6 +724,7 @@ non-whitespace character, enforced by `ck_resource_notes_body_is_not_empty` as
 `body ~ '[^[:space:]]'`. A regex rather than `length(btrim(body)) > 0`, because PostgreSQL's
 one-argument `btrim` strips spaces alone and a body of newlines and tabs would pass a check meant to
 refuse it. **Index:** `resource_notes(resource_id, status)`, mirroring
+refuse it. **Index:** `resource_files(resource_id, status)`, mirroring
 `resources(owner_learner_id, status)` one level down.
 
 **`body` is unbounded `text`**, as the *Conventions* above require of learner-facing prose. How much
@@ -752,6 +757,48 @@ column exists**, and the index stores no text that is not already in the table, 
 nothing. `english` is a built-in configuration, so **no extension is installed**. The same expression
 must be used to build the index and to run the search, or the index is silently unused; an integration
 test compares the two. See [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
+
+### `resource_files`
+
+Stores one row per PDF a learner has uploaded against a resource. **Added beyond the tables this
+document approves**, per [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md) — see
+[its area review](#resources-and-rag-metadata-area-third-partial-review-2026-08-21) and the note
+under [`resources`](#resources) for why the approved `storage_key`/`metadata` pair could not hold it.
+
+**The file bytes are not here.** They live in a Docker named volume mounted into the backend alone;
+`storage_key` is the opaque reference that finds them. A `bytea` column was rejected: binaries bloat
+every dump and every backup, and the two halves are better backed up by their own means.
+
+| Column | Type | Notes | State |
+| --- | --- | --- | --- |
+| `id` | uuid PK | Stored-file identifier. | Implemented |
+| `resource_id` | uuid FK | References `resources.id`. Not a cascade — nothing deletes a resource. | Implemented |
+| `storage_key` | text | Opaque reference the storage adapter issued. **Never returned by any endpoint.** | Implemented |
+| `original_filename` | text | What the learner called the file. **Metadata, never a path.** | Implemented |
+| `byte_size` | bigint | How large the file is. `bigint` so a size column can never overflow. | Implemented |
+| `page_count` | integer | How many pages the PDF has. | Implemented |
+| `content_type` | varchar(128) | Always `application/pdf` today, decided from what was validated. | Implemented |
+| `checksum` | varchar(64) | SHA-256 of the bytes, so corruption is detectable. | Implemented |
+| `status` | varchar(32) | `active` or `archived`. Both reversible; **neither deletes anything**. | Implemented |
+| `created_at`, `updated_at` | timestamptz | Audit timestamps. | Implemented |
+
+**Constraints:** `status` is constrained to the two values above; `byte_size > 0`; `page_count >= 0`;
+`storage_key` must contain a non-whitespace character, expressed as `storage_key ~ '[^[:space:]]'`
+rather than with `btrim`, because PostgreSQL's one-argument `btrim` strips spaces alone and a key of
+tabs would pass a check meant to refuse it. **Index:** `resource_files(resource_id, status)`, matching
+the only read path — this resource's files.
+
+**There is no owner column and no topic link table.** A file hangs off a resource, the resource
+carries the owner and the topics, and duplicating either here would create a second place for them to
+disagree.
+
+**Nothing derived is stored.** No extracted text, no chunk, no embedding, and no thumbnail: this
+table records a file, and `resource_ingestions` below remains absent.
+
+Migration `20260821_01` creates it, additively — one table and one index, altering nothing. Its
+downgrade drops both and **leaves the bytes in the volume**, which is the honest asymmetry: a
+downgrade that deleted a learner's files to undo a schema change would be worse than leaving orphans
+that can be reclaimed.
 
 ### `resource_ingestions`
 
@@ -1593,6 +1640,71 @@ has gone beyond this document, after `questions.author_learner_id` in
 
 The area is therefore reviewed for `resources`, `resource_topic_links`, and `resource_notes`, and
 unreviewed for `resource_ingestions`.
+
+### Resources and RAG metadata area — third partial review 2026-08-21
+
+This review covers `resource_files` alone, the one table migration `20260821_01` creates. The
+[2026-08-16 review](#resources-and-rag-metadata-area-partial-review-2026-08-16) stands unchanged for
+`resources` and `resource_topic_links`, and the
+[2026-08-19 review](#resources-and-rag-metadata-area-second-partial-review-2026-08-19) for
+`resource_notes`; `resource_ingestions` remains unreviewed and unimplemented. The decision this rests
+on is [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md).
+
+**This table is not in the approved area either**, and the reason differs from `resource_notes`. The
+area *did* anticipate stored files — but as `resources.storage_key` and `resources.metadata`, two
+columns on `resources` itself, which model **one** file per resource. A learner keeps a textbook
+chapter, a problem set, and several past papers against one piece of material, which no 1:1 column
+pair can hold. So a table was added and those two columns stay uncreated, rather than being
+half-built into a shape they cannot support. This is the **third addition beyond this document**,
+after `questions.author_learner_id` in
+[the assessment area review](#assessment-area-review-2026-08-18) and `resource_notes` above — and the
+second whole table.
+
+**The bytes are not in the database.** They live in a Docker named volume mounted into the backend
+alone; `storage_key` is the opaque reference that finds them. A `bytea` column was rejected: binaries
+bloat every dump and every restore, and the two halves have different backup and recovery stories
+that are better kept separable. The cost is stated rather than hidden — **a `pg_dump` alone is no
+longer a complete backup of a learner's material**, which [Docker strategy](../deployment/docker.md)
+records.
+
+- `status` is `snake_case` text guarded by a `CHECK`, in `varchar(32)`, following this document's own
+  *Conventions* and the departure every other status column here made. **Both its values are
+  written.** The ingestion states `processing`, `ready`, and `failed` are deliberately absent: nothing
+  extracts anything, so a file could enter one and never leave.
+- `active` and `archived` rather than `registered`. `archived` is reused deliberately — it is the
+  resources word for putting something aside, per [terminology](../domain/terminology.md) — and both
+  directions are reversible, because **nothing in LearnFlow deletes a stored file**.
+- `byte_size` is `bigint`, not `integer`. The application caps a file far below either limit, but a
+  size column that could overflow is a poor place to be exact, and widening one later rewrites every
+  row.
+- `checksum` is `varchar(64)`, exactly a hexadecimal SHA-256. It exists so corruption is detectable
+  without reading a file back in full, and so a restore can be checked against the rows.
+- `original_filename` is `text` and **is not a path**. It is what the learner called the file, kept so
+  a download can be offered under a name they recognise; what lands on disk is named from a
+  server-generated identifier, so nothing a browser sends can steer where a file is written.
+- **No owner column and no topic link table.** A file hangs off a resource, the resource carries the
+  owner and the topics, and duplicating either here would create a second place for them to disagree.
+- The foreign key is **not** a cascade, for the reason `resource_topic_links` and `resource_notes`
+  each record: nothing deletes a resource, so a cascade would describe a path that does not exist.
+- The index is `(resource_id, status)`, matching the only read path — this resource's files — rather
+  than indexing the foreign key alone.
+
+**Nothing derived is stored.** No extracted text, no chunk, no embedding, no thumbnail, and no
+preview: this table records a file, and it is **not** an ingestion record.
+`resources.storage_key`, `resources.metadata`, and `resource_ingestions` all remain absent, and
+RES-006 to RES-008 remain unimplemented.
+
+Reviewed against the inputs that exist: the resource catalogue's ownership and status rules, the
+storage adapter's key format, the four validation gates and their limits, and the constraint support
+of PostgreSQL 18 with Alembic. **One input stays pending**: whatever an extractor would need to
+record, which belongs to `resource_ingestions` and cannot be reviewed until something extracts.
+
+**One consequence is worth recording for the area as a whole.** A stored file is the first learner
+data that can **outlive its row**: the migration's downgrade drops this table and leaves the bytes in
+the volume, deliberately, because deleting a learner's files to undo a schema change would be worse
+than leaving orphans that can be reclaimed. That makes **RES-005 — safe permanent deletion — the
+most-needed next change in this area**, and it must coordinate rows and bytes together.
+
 
 ### Assessment area — review 2026-08-18
 

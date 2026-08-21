@@ -2,7 +2,7 @@
 title: "ADR-032: Catalogue Learner-Owned Study Material as Metadata, Linked to Topics"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-19
+last_updated: 2026-08-21
 related:
   - ../00-project-context.md
   - ADR-008-assessment-and-mistake-evidence-model.md
@@ -31,6 +31,7 @@ related:
   - ../development/coding-standards.md
   - ../development/folder-structure.md
   - ../roadmap/milestones.md
+  - ADR-040-learner-uploaded-resource-files.md
   - ../architecture/decisions.md
 ---
 
@@ -75,6 +76,20 @@ It needs **one migration**: `20260816_01`, two `CREATE TABLE`s and two indexes. 
 altered.
 
 ## Implementation status
+
+**2026-08-21 — a learner's own PDF files are now stored locally.**
+
+[ADR-040](ADR-040-learner-uploaded-resource-files.md) **narrows this record's "metadata, never the material" rule on its remaining clause**: a learner may upload one or more **PDFs** against a piece of catalogued material, and LearnFlow keeps the bytes — in a Docker named volume mounted into the backend alone, with the metadata in a new `resource_files` table.
+
+**Two of the three things that rule was written to keep out still stay out.** Nothing is fetched, scraped, or downloaded from the web, and **no location on the learner's own machine is stored**: a browser hands over bytes and a display name, never a path, and no request accepts one. Only the *uploaded file* clause has moved.
+
+**Nothing is extracted, OCR'd, chunked, embedded, indexed, or sent to a model**, and `resource_ingestions` remains absent — a stored PDF is kept and handed back, and nothing reads inside it beyond counting its pages.
+
+**Nothing is deleted.** A file is set aside with `archived`, reversibly, and archiving the resource makes its files read-only while leaving them listed and downloadable. **RES-005 stays unimplemented** and is now the most-needed change in this area, because a stored file is the first learner data that can outlive its row.
+
+`resources.storage_key` and `resources.metadata` **remain uncreated**, which this record predicted for a different reason: they model **one** file per resource, and a learner keeps several.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
 
 **2026-08-19 — a learner's notes can now be searched, locally.**
 

@@ -18,3 +18,14 @@ uvicorn==0.51.0
 SQLAlchemy==2.0.51
 alembic==1.18.5
 psycopg[binary]==3.3.4
+
+# Learner-uploaded PDF files (RES-014 to RES-017), per
+# docs/adr/ADR-040-learner-uploaded-resource-files.md.
+#
+# python-multipart is what lets FastAPI parse an uploaded file at all; without
+# it a multipart request cannot be read. pypdf is pure Python -- no system
+# libraries and no C toolchain -- and is used to count pages and detect an
+# encrypted document. It is never asked to extract text: this feature stores
+# files and reads them back, and extraction is a separate, unbuilt capability.
+python-multipart==0.0.20
+pypdf==6.1.3
