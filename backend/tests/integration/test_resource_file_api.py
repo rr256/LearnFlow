@@ -174,18 +174,50 @@ def test_a_real_malformed_pdf_is_refused_by_the_real_parser(
     assert list(storage_root.rglob("*.pdf")) == []
 
 
-def test_a_real_encrypted_pdf_is_refused(client: TestClient, resource: dict, storage_root: Path):
+def an_encrypted_pdf(user_password: str, *, pages: int = 2) -> bytes:
+    """A real AES-256 encrypted PDF, as publisher and scanned files are."""
     writer = PdfWriter()
-    writer.add_blank_page(width=200, height=200)
-    writer.encrypt("a-password")
+    for _ in range(pages):
+        writer.add_blank_page(width=200, height=200)
+    writer.encrypt(user_password, algorithm="AES-256")
     buffer = BytesIO()
     writer.write(buffer)
+    return buffer.getvalue()
 
-    response = upload(client, resource["id"], content=buffer.getvalue())
+
+def test_a_password_locked_pdf_is_refused(client: TestClient, resource: dict, storage_root: Path):
+    response = upload(client, resource["id"], content=an_encrypted_pdf("a-password"))
 
     assert response.status_code == 422, response.text
     assert "password" in response.json()["error"]["message"].lower()
     assert list(storage_root.rglob("*.pdf")) == []
+
+
+def test_a_restricted_pdf_with_no_password_is_stored(
+    client: TestClient, resource: dict, storage_root: Path
+):
+    """The real-world case: encrypted, but openable, so LearnFlow keeps it.
+
+    Before `cryptography` was added, an AES document raised from inside the
+    parser and the learner met an unexplained error rather than either outcome.
+    """
+    content = an_encrypted_pdf("", pages=7)
+
+    response = upload(client, resource["id"], content=content)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["data"]["page_count"] == 7
+    assert len(list(storage_root.rglob("*.pdf"))) == 1
+    # Stored byte for byte: LearnFlow never rewrites or decrypts the file itself.
+    assert list(storage_root.rglob("*.pdf"))[0].read_bytes() == content
+
+
+def test_an_aes_pdf_never_produces_an_unhandled_error(client: TestClient, resource: dict):
+    """The regression that showed a learner "An unexpected error occurred"."""
+    for password in ("", "a-password"):
+        response = upload(client, resource["id"], content=an_encrypted_pdf(password))
+        assert response.status_code in {201, 422}, response.text
+        assert response.status_code != 500
 
 
 def test_several_files_are_stored_separately(

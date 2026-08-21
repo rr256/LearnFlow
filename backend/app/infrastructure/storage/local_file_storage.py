@@ -34,8 +34,7 @@ import uuid
 from io import BytesIO
 from pathlib import Path
 
-from pypdf import PdfReader
-from pypdf.errors import PyPdfError
+from pypdf import PasswordType, PdfReader
 
 from app.application.dto.resource_file import PdfFacts
 
@@ -127,15 +126,49 @@ class PyPdfDocumentInspector:
         """
         try:
             reader = PdfReader(BytesIO(content), strict=False)
-            if reader.is_encrypted:
-                # The page count of an encrypted document is not readable
-                # without the password, so it is reported as zero and the caller
-                # refuses on encryption before any count matters.
+            if reader.is_encrypted and not _opens_without_a_password(reader):
+                # Genuinely locked: LearnFlow cannot read it, so the page count
+                # is unknowable and the caller refuses on encryption.
                 return PdfFacts(page_count=0, is_encrypted=True)
             return PdfFacts(page_count=len(reader.pages), is_encrypted=False)
-        except PyPdfError, ValueError, OSError, RecursionError, KeyError, TypeError:
-            # pypdf raises a wide and version-dependent range on damaged input.
-            # Everything here means the same thing to a learner -- the file could
-            # not be read -- so they are caught together rather than distinguished
-            # into messages nobody can act on differently.
+        except Exception:
+            # **Deliberately broad, and this is the right boundary for it.**
+            #
+            # This method's whole contract is "the facts, or None when the
+            # document cannot be read", and it is parsing a file LearnFlow did
+            # not produce. pypdf's raise surface is wide, version-dependent, and
+            # not rooted in one base class: `DependencyError` extends `Exception`
+            # directly rather than `PyPdfError`, so an earlier, tidier tuple of
+            # named exceptions let it through and an unreadable PDF became a 500
+            # rather than a refusal the learner could act on.
+            #
+            # Every failure here means the same thing to a learner -- this file
+            # could not be read -- so they are answered the same way. The caller
+            # refuses the upload, and nothing is stored, so a swallowed exception
+            # cannot leave anything half-written.
             return None
+
+
+def _opens_without_a_password(reader: PdfReader) -> bool:
+    """Whether an encrypted document opens with an **empty** user password.
+
+    **Most encrypted study material is not locked.** A publisher or scanned PDF
+    is commonly encrypted with an empty user password and carries only permission
+    restrictions -- no printing, no copying. It opens in any reader, and LearnFlow
+    can read and store it exactly like any other file.
+
+    `is_encrypted` alone cannot tell that apart from a document that genuinely
+    needs a password, which is why this attempt exists. It reads ADR-040's rule
+    as **refuse what LearnFlow cannot open**, which is the reason that rule gives.
+
+    **Nothing is decrypted on disk.** The attempt unlocks the in-memory reader so
+    the page count can be read; the bytes LearnFlow stores are the learner's
+    original file, unchanged.
+
+    Returns `False` on any failure, including a missing crypto backend, so an
+    undecidable document is treated as locked rather than assumed readable.
+    """
+    try:
+        return reader.decrypt("") != PasswordType.NOT_DECRYPTED
+    except Exception:
+        return False

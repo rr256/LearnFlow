@@ -87,3 +87,13 @@
   margin: 0;
   max-width: var(--measure);
 }
+
+/*
+ * The in-progress line for an upload. Muted rather than alarming: it reports
+ * that work is happening, which is NFR-003's requirement, and is not a warning.
+ */
+.working {
+  margin: 0;
+  color: var(--colour-text-muted);
+  max-width: var(--measure);
+}

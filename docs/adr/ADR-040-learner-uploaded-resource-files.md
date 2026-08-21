@@ -227,6 +227,98 @@ fetched from the web, and no path on their machine is stored.
 **`resource_ingestions` stays absent**, RES-006 to RES-008 stay unimplemented, and
 no retrieval, note, or mentor behaviour changes.
 
+## Implementation status
+
+**2026-08-21 — the upload now reports that it is working.**
+
+[NFR-003](../requirements/non-functional.md) requires that a large upload show an
+understandable in-progress, completed, or failed state. It did not. A 25 MB file
+is sent to the Next.js server, forwarded to the API, checked against four rules
+and parsed for its page count before anything comes back — and the screen said
+nothing for all of it, which reads as a broken page rather than as work in
+progress.
+
+The upload control now reports **Adding…**, disables itself while the request is
+in flight, and shows a line in an `aria-live` region so the state is announced
+rather than only shown. The archive and restore control does the same. A stored
+file's confirmation now says where to find it.
+
+**This changes no rule and no contract.** It is presentation only: no limit, no
+validation gate, no status, and no endpoint moves. **With JavaScript switched off
+none of it runs** — the form posts natively and the page reloads with the result,
+exactly as before.
+
+**2026-08-21 — "refuse encrypted PDFs" is narrowed to "refuse what cannot be
+opened", and `cryptography` is added.**
+
+This record decided that an encrypted PDF is refused, *because keeping a document
+LearnFlow can never open would be a promise it cannot meet*. That reason is kept,
+and the rule now follows it exactly.
+
+**Most encrypted study material is not locked.** A publisher or scanned PDF is
+commonly encrypted with an **empty** user password and carries only permission
+restrictions — no printing, no copying. It opens in any reader, and LearnFlow can
+read and store it like any other file. Only a document that genuinely needs a
+password cannot be opened, and only that is refused.
+
+The adapter now attempts an **empty password** on an encrypted document. Success
+means readable; failure — including a missing crypto backend — means locked, so an
+undecidable file is treated as locked rather than assumed readable. **Nothing is
+decrypted on disk**: the attempt unlocks the in-memory reader to read a page
+count, and the bytes stored are the learner's original file, unchanged.
+
+**`cryptography` is added** as a runtime dependency, approved at Stop Gate 1. It is
+optional to `pypdf`, and without it an AES document raises `DependencyError`
+*from inside the parser* rather than reporting whether it is readable.
+
+**That raise was also a defect, and is fixed.** `DependencyError` extends
+`Exception` rather than `PyPdfError`, so a tidy tuple of named pypdf exceptions
+let it escape: an AES-encrypted PDF became an unhandled error and the learner met
+*"An unexpected error occurred"*. The inspector now answers **any** parser
+failure with the same refusal, which is the correct boundary for code reading a
+file LearnFlow did not produce.
+
+**Everything else this record decided stands**: the limits, the other three
+validation gates, the storage design, the lifecycle, and the refusal message for a
+genuinely password-protected file.
+
+**2026-08-21 — the framework's own body limit had to be raised.**
+
+Next.js caps a **server-action request body at 1 MB** by default. The upload goes
+through a server action, so every PDF above that was rejected by the framework
+before reaching any LearnFlow code: the learner saw an unstyled *"This page
+couldn't load"* page, and the backend never saw the request at all. The 25 MB
+limit this record decided was therefore unreachable in practice.
+
+`next.config.ts` now sets `experimental.serverActions.bodySizeLimit` to **26 MB**,
+deliberately **above** `MAX_FILE_BYTES` rather than equal to it: the backend must
+be the thing that refuses an oversized file, because it is the only place that can
+say so in words a learner can act on. The headroom covers multipart framing.
+
+**Nothing this record decided changes.** The limits, the validation gates, the
+storage design, and the lifecycle are all as written; what was wrong was a
+framework default sitting in front of them.
+
+**Why no test caught it.** Every fixture and every driver used a PDF of a few
+kilobytes — the one size at which the default never bites. A test now asserts the
+configured limit clears `MAX_FILE_BYTES`, and the JavaScript-disabled run was
+repeated with a real 3 MB file.
+
+**A second defect surfaced immediately behind it, and is fixed too.** Raising the
+framework limit moved the cliff without removing it: a file over the limit was
+still refused by the framework *before* any action code ran, so the size check in
+the submission reader never executed and the learner met an unexplained error
+rather than a message naming the rule. The size is now checked **in the browser,
+on the chosen file, before anything is sent**, which is the only place that can
+name it; an over-large file disables the submit control and says how large it is
+against the limit.
+
+That check is a **courtesy, not the rule** — the backend still refuses whatever a
+browser allowed. **With JavaScript switched off it does not run**, so a file above
+`bodySizeLimit` still meets the framework's own error there. That degradation is
+accepted and recorded rather than hidden: the no-JavaScript path keeps working for
+every file the feature actually supports.
+
 ## Implementation notes
 
 - **Migration `20260821_01`** — one CREATE TABLE and one index; additive, altering

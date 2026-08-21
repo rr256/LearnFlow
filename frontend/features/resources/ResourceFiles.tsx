@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useId } from "react";
+import { useActionState, useId, useState } from "react";
 
 import styles from "@/features/resources/ResourceFiles.module.css";
 import {
@@ -56,13 +56,28 @@ interface ResourceFilesProps {
  * forms post natively without JavaScript.
  */
 export function ResourceFiles({ resourceId, files, writable }: ResourceFilesProps) {
-  const [state, uploadAction] = useActionState<ResourceFileFormState, FormData>(
+  const [state, uploadAction, uploading] = useActionState<ResourceFileFormState, FormData>(
     uploadResourceFileAction,
     INITIAL_RESOURCE_FILE_FORM_STATE,
   );
   const fileField = useId();
   const active = files.filter((file) => file.status === "active");
   const full = files.length >= MAX_FILES_PER_RESOURCE;
+
+  /*
+   * Why the size is checked here, in the browser, and not only on the server.
+   *
+   * The submission reader checks it too, but that runs **inside the server
+   * action** — and the framework refuses an over-large request body before any
+   * action code runs, so the learner met a bare error page instead of a message
+   * naming the rule. Checking the chosen file before it is ever sent is the only
+   * place that can say "this one is too big" in words.
+   *
+   * It is still a courtesy, not the rule: the backend refuses an over-large file
+   * whatever a browser allowed, and with JavaScript switched off this check does
+   * not run at all. What it removes is the *unexplained* failure.
+   */
+  const [tooLarge, setTooLarge] = useState<string | null>(null);
 
   return (
     <div className={styles.files}>
@@ -87,14 +102,55 @@ export function ResourceFiles({ resourceId, files, writable }: ResourceFilesProp
             <input name="resource_id" type="hidden" value={resourceId} />
             <div className={styles.field}>
               <label htmlFor={fileField}>Add a PDF</label>
-              <input accept="application/pdf,.pdf" id={fileField} name="file" type="file" />
+              <input
+                accept="application/pdf,.pdf"
+                id={fileField}
+                name="file"
+                onChange={(event) => {
+                  const chosen = event.target.files?.[0];
+                  setTooLarge(
+                    chosen && chosen.size > MAX_FILE_BYTES
+                      ? `That file is ${readableSize(chosen.size)}. The limit is ` +
+                          `${readableSize(MAX_FILE_BYTES)}, so it cannot be stored. ` +
+                          `Choose a smaller PDF, or split it.`
+                      : null,
+                  );
+                }}
+                type="file"
+              />
               <p className={styles.hint}>
                 PDFs only, up to {readableSize(MAX_FILE_BYTES)} and {MAX_PAGE_COUNT} pages. The
                 file is stored on this computer and is never sent anywhere; nothing reads inside
                 it, and no AI model sees it. A password-protected PDF cannot be stored.
               </p>
             </div>
-            <button type="submit">Add this PDF</button>
+            {tooLarge === null ? null : (
+              <p className={styles.error} role="alert">
+                {tooLarge}
+              </p>
+            )}
+            <button disabled={tooLarge !== null || uploading} type="submit">
+              {uploading ? "Adding…" : "Add this PDF"}
+            </button>
+
+            {/*
+              NFR-003 asks that a large upload show an understandable in-progress
+              state. A 25 MB file is sent to this server, forwarded to the API,
+              checked against four rules and parsed for its page count before
+              anything comes back — long enough that silence reads as a broken
+              screen. `aria-live` announces it rather than leaving it to sighted
+              readers alone.
+
+              With JavaScript switched off `uploading` is never true, so the form
+              posts natively and the page simply reloads with the result. Nothing
+              here is required for the upload to work.
+            */}
+            {uploading ? (
+              <p aria-live="polite" className={styles.working} role="status">
+                Checking your PDF and storing it. A large file can take a few
+                seconds — this page will update when it is done.
+              </p>
+            ) : null}
           </form>
         )
       ) : (
@@ -104,15 +160,16 @@ export function ResourceFiles({ resourceId, files, writable }: ResourceFilesProp
         </p>
       )}
 
-      {state.error !== null ? (
+      {state.error !== null && !uploading ? (
         <p className={styles.error} role="alert">
           {state.error}
         </p>
       ) : null}
 
-      {state.stored !== null ? (
-        <p className={styles.stored} role="status">
-          Stored {state.stored.original_filename}.
+      {state.stored !== null && !uploading ? (
+        <p aria-live="polite" className={styles.stored} role="status">
+          Stored {state.stored.original_filename}. It is listed above and ready to
+          download.
         </p>
       ) : null}
 
@@ -133,7 +190,7 @@ export function ResourceFiles({ resourceId, files, writable }: ResourceFilesProp
  * it in the page.
  */
 function StoredFile({ file, writable }: { file: ResourceFile; writable: boolean }) {
-  const [state, statusAction] = useActionState<ResourceFileStatusState, FormData>(
+  const [state, statusAction, working] = useActionState<ResourceFileStatusState, FormData>(
     setResourceFileStatusAction,
     INITIAL_RESOURCE_FILE_STATUS_STATE,
   );
@@ -159,7 +216,13 @@ function StoredFile({ file, writable }: { file: ResourceFile; writable: boolean 
         <form action={statusAction} className={styles.statusForm}>
           <input name="file_id" type="hidden" value={file.id} />
           <input name="status" type="hidden" value={archived ? "active" : "archived"} />
-          <button type="submit">{archived ? "Bring this PDF back" : "Set this PDF aside"}</button>
+          <button disabled={working} type="submit">
+            {working
+              ? "Saving…"
+              : archived
+                ? "Bring this PDF back"
+                : "Set this PDF aside"}
+          </button>
         </form>
       ) : null}
 

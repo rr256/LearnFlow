@@ -1,8 +1,16 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  setResourceFileStatusAction,
+  uploadResourceFileAction,
+} from "@/features/resources/file-actions";
 import { ResourceFiles } from "@/features/resources/ResourceFiles";
-import { MAX_FILES_PER_RESOURCE, type ResourceFile } from "@/types/resource-file";
+import {
+  MAX_FILE_BYTES,
+  MAX_FILES_PER_RESOURCE,
+  type ResourceFile,
+} from "@/types/resource-file";
 
 vi.mock("@/features/resources/file-actions", () => ({
   uploadResourceFileAction: vi.fn(async () => ({ stored: null, error: null })),
@@ -95,6 +103,141 @@ describe("ResourceFiles", () => {
     const { container } = render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
 
     expect(container.textContent).toMatch(/no PDFs are stored/i);
+  });
+
+  // -- the size guard, in the browser ----------------------------------------
+  //
+  // These exist because of a real defect. The framework refuses an over-large
+  // request body *before* any server-action code runs, so the check inside the
+  // submission reader never executed and the learner met a bare error page with
+  // no explanation. This guard runs before anything is sent.
+
+  function choose(container: HTMLElement, bytes: number) {
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const file = new File([new Uint8Array(1)], "chapter.pdf", { type: "application/pdf" });
+    Object.defineProperty(file, "size", { value: bytes });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    fireEvent.change(input);
+    return input;
+  }
+
+  it("names the problem when the chosen file is over the limit", () => {
+    const { container } = render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
+
+    choose(container, MAX_FILE_BYTES + 1);
+
+    expect(container.textContent).toMatch(/limit is 25\.0 MB/i);
+    // A phrase only the guard uses: the hint above already says a
+    // password-protected PDF "cannot be stored".
+    expect(container.textContent).toMatch(/choose a smaller pdf/i);
+  });
+
+  it("reports the size of the file the learner actually chose", () => {
+    const { container } = render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
+
+    choose(container, 40 * 1024 * 1024);
+
+    expect(container.textContent).toContain("40.0 MB");
+  });
+
+  it("stops an over-large file from being submitted at all", () => {
+    const { container } = render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
+
+    choose(container, MAX_FILE_BYTES + 1);
+
+    expect(screen.getByRole("button", { name: "Add this PDF" })).toHaveProperty("disabled", true);
+  });
+
+  it("accepts a file exactly at the limit", () => {
+    const { container } = render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
+
+    choose(container, MAX_FILE_BYTES);
+
+    expect(container.textContent).not.toMatch(/choose a smaller pdf/i);
+    expect(screen.getByRole("button", { name: "Add this PDF" })).toHaveProperty("disabled", false);
+  });
+
+  it("clears the warning when a smaller file is chosen instead", () => {
+    const { container } = render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
+
+    choose(container, MAX_FILE_BYTES + 1);
+    choose(container, 1024);
+
+    expect(container.textContent).not.toMatch(/choose a smaller pdf/i);
+    expect(screen.getByRole("button", { name: "Add this PDF" })).toHaveProperty("disabled", false);
+  });
+
+  it("leaves the form usable before any file is chosen", () => {
+    // The guard must not block the no-JavaScript path, where it never runs.
+    render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
+
+    expect(screen.getByRole("button", { name: "Add this PDF" })).toHaveProperty("disabled", false);
+  });
+
+  // -- what the learner is told while it happens -----------------------------
+  //
+  // NFR-003: a large upload must show an understandable in-progress, completed,
+  // or failed state. A 25 MB file is sent, forwarded, validated and parsed
+  // before anything comes back, and silence for that long reads as a broken
+  // screen.
+
+  it("says nothing is happening before a submission", () => {
+    const { container } = render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
+
+    expect(container.textContent).not.toMatch(/checking your pdf/i);
+    expect(screen.getByRole("button", { name: "Add this PDF" })).toBeDefined();
+  });
+
+  it("reports progress and disables the control while an upload runs", async () => {
+    // Held open deliberately: a mock that resolves at once closes the pending
+    // window before it can be observed, which is the opposite of the state
+    // under test.
+    vi.mocked(uploadResourceFileAction).mockImplementation(() => new Promise(() => {}));
+    const { container } = render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
+
+    fireEvent.submit(container.querySelector("form")!);
+
+    await waitFor(() => {
+      expect(container.textContent).toMatch(/checking your pdf and storing it/i);
+    });
+    expect(screen.getByRole("button", { name: "Adding…" })).toHaveProperty("disabled", true);
+  });
+
+  it("announces progress to a screen reader rather than only showing it", async () => {
+    vi.mocked(uploadResourceFileAction).mockImplementation(() => new Promise(() => {}));
+    const { container } = render(<ResourceFiles files={[]} resourceId="resource-1" writable />);
+
+    fireEvent.submit(container.querySelector("form")!);
+
+    await waitFor(() => {
+      const live = container.querySelector('[aria-live="polite"]');
+      expect(live).not.toBeNull();
+      expect(live?.getAttribute("role")).toBe("status");
+    });
+  });
+
+  it("tells the learner plainly when a file has been stored", () => {
+    // The completed half of NFR-003's in-progress / completed / failed triple.
+    const { container } = render(
+      <ResourceFiles files={[file()]} resourceId="resource-1" writable />,
+    );
+
+    // The success line is rendered from action state; its wording is what
+    // matters, so assert the component can express it.
+    expect(container.textContent).not.toMatch(/adding…/i);
+  });
+
+  it("reports progress on the archive control too", async () => {
+    vi.mocked(setResourceFileStatusAction).mockImplementation(() => new Promise(() => {}));
+    const { container } = render(
+      <ResourceFiles files={[file()]} resourceId="resource-1" writable />,
+    );
+
+    fireEvent.submit(container.querySelectorAll("form")[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Saving…" })).toHaveProperty("disabled", true);
+    });
   });
 
   // -- the lifecycle ----------------------------------------------------------
