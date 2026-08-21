@@ -52,14 +52,21 @@ class LocalResourceFileStorage:
     """Keeps file bytes under one directory, addressed by an opaque key.
 
     Args:
-        root: The storage root, from `RESOURCE_STORAGE_PATH`. Created if absent,
-            so a fresh volume needs no setup step.
+        root: The storage root, from `RESOURCE_STORAGE_PATH`. Created on first
+            write, so a fresh volume needs no setup step.
     """
 
     def __init__(self, *, root: Path) -> None:
-        """Bind the adapter to one storage root."""
+        """Bind the adapter to one storage root.
+
+        **Constructing this touches no filesystem.** The root is created on the
+        first write instead, because the composition root builds this adapter at
+        startup: creating a directory here would make the whole application fail
+        to start wherever that path is not writable — on a CI runner, in a
+        read-only container, or on any machine that has never uploaded a file.
+        Startup must not depend on a capability nothing has asked for yet.
+        """
         self._root = root
-        self._root.mkdir(parents=True, exist_ok=True)
 
     def store(self, *, content: bytes) -> str:
         """Write these bytes under a newly invented key.
@@ -72,6 +79,8 @@ class LocalResourceFileStorage:
         identifier = uuid.uuid4().hex
         key = f"{identifier[:2]}/{identifier[2:4]}/{uuid.UUID(identifier)}.pdf"
         destination = self._root / key
+        # `parents=True` creates the storage root as well as the two shard
+        # directories, which is what makes construction side-effect free.
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(content)
         return key

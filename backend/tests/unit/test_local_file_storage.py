@@ -46,13 +46,39 @@ def test_bytes_survive_a_round_trip(storage: LocalResourceFileStorage):
     assert storage.read(key) == content
 
 
-def test_the_root_is_created_when_it_does_not_exist(tmp_path: Path):
-    """A fresh volume needs no setup step."""
+def test_constructing_the_adapter_touches_no_filesystem(tmp_path: Path):
+    """Startup must not depend on a capability nothing has asked for yet.
+
+    The composition root builds this adapter when the application starts, so
+    creating a directory in the constructor would make the whole process fail to
+    start wherever the storage path is not writable — a CI runner, a read-only
+    container, or a machine that has never uploaded a file.
+    """
     root = tmp_path / "not" / "yet" / "there"
 
     LocalResourceFileStorage(root=root)
 
+    assert not root.exists()
+
+
+def test_the_root_is_created_on_the_first_write(tmp_path: Path):
+    """A fresh volume still needs no setup step."""
+    root = tmp_path / "not" / "yet" / "there"
+    storage = LocalResourceFileStorage(root=root)
+
+    key = storage.store(content=a_pdf())
+
     assert root.is_dir()
+    assert storage.read(key) is not None
+
+
+def test_reading_from_a_root_that_does_not_exist_reports_nothing(tmp_path: Path):
+    """And does not create it, or raise."""
+    root = tmp_path / "never" / "created"
+    storage = LocalResourceFileStorage(root=root)
+
+    assert storage.read("ab/cd/00000000-0000-4000-8000-000000000000.pdf") is None
+    assert not root.exists()
 
 
 def test_keys_are_sharded_two_levels_deep(storage: LocalResourceFileStorage):
