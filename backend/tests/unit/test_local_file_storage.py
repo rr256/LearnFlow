@@ -163,19 +163,55 @@ def test_a_real_pdf_reports_its_page_count():
     assert facts.is_encrypted is False
 
 
-def test_an_encrypted_pdf_is_reported_as_encrypted():
+def an_encrypted_pdf(user_password: str, *, pages: int = 2, algorithm: str = "AES-256") -> bytes:
+    """A real encrypted PDF, written with the algorithm real-world files use."""
     from io import BytesIO
 
     writer = PdfWriter()
-    writer.add_blank_page(width=200, height=200)
-    writer.encrypt("a-password")
+    for _ in range(pages):
+        writer.add_blank_page(width=200, height=200)
+    writer.encrypt(user_password, algorithm=algorithm)
     buffer = BytesIO()
     writer.write(buffer)
+    return buffer.getvalue()
 
-    facts = PyPdfDocumentInspector().inspect_pdf(buffer.getvalue())
+
+def test_a_password_locked_pdf_is_reported_as_encrypted():
+    """LearnFlow cannot open it, so the caller refuses it."""
+    facts = PyPdfDocumentInspector().inspect_pdf(an_encrypted_pdf("a-password"))
 
     assert facts is not None
     assert facts.is_encrypted is True
+    assert facts.page_count == 0
+
+
+def test_a_restricted_pdf_with_no_password_is_readable():
+    """The case that made a learner's real file fail.
+
+    A publisher or scanned PDF is commonly encrypted with an **empty** user
+    password and carries only permission restrictions. It opens in any reader, so
+    LearnFlow reads it and stores it like any other file.
+    """
+    facts = PyPdfDocumentInspector().inspect_pdf(an_encrypted_pdf("", pages=9))
+
+    assert facts is not None
+    assert facts.is_encrypted is False
+    assert facts.page_count == 9
+
+
+@pytest.mark.parametrize("algorithm", ["RC4-128", "AES-128", "AES-256"])
+def test_every_common_encryption_algorithm_is_handled(algorithm: str):
+    """AES is what raised `DependencyError` before `cryptography` was added."""
+    locked = PyPdfDocumentInspector().inspect_pdf(
+        an_encrypted_pdf("a-password", algorithm=algorithm)
+    )
+    restricted = PyPdfDocumentInspector().inspect_pdf(
+        an_encrypted_pdf("", pages=3, algorithm=algorithm)
+    )
+
+    assert locked is not None and locked.is_encrypted is True
+    assert restricted is not None and restricted.is_encrypted is False
+    assert restricted.page_count == 3
 
 
 @pytest.mark.parametrize(
@@ -196,6 +232,50 @@ def test_a_truncated_real_pdf_reports_nothing():
     whole = a_pdf(pages=3)
 
     assert PyPdfDocumentInspector().inspect_pdf(whole[: len(whole) // 3]) is None
+
+
+def test_a_dependency_failure_is_a_refusal_not_a_crash(monkeypatch):
+    """The regression that produced a 500 for a learner.
+
+    `pypdf.errors.DependencyError` extends `Exception` directly rather than
+    `PyPdfError`, so a tuple of named pypdf exceptions let it through. An
+    AES-encrypted PDF -- which pypdf cannot even inspect without the optional
+    `cryptography` package -- therefore escaped as an unhandled error, and the
+    learner met "An unexpected error occurred" instead of a message naming the
+    rule.
+    """
+    from pypdf.errors import DependencyError
+
+    def refuses(*args, **kwargs):
+        raise DependencyError("cryptography>=3.1 is required for AES algorithm")
+
+    monkeypatch.setattr("app.infrastructure.storage.local_file_storage.PdfReader", refuses)
+
+    assert PyPdfDocumentInspector().inspect_pdf(a_pdf()) is None
+
+
+@pytest.mark.parametrize(
+    "raised",
+    [
+        RuntimeError("something pypdf did not document"),
+        MemoryError("a malicious page tree"),
+        AttributeError("an internal pypdf change"),
+        UnicodeDecodeError("utf-8", b"", 0, 1, "bad metadata"),
+    ],
+)
+def test_no_parser_failure_reaches_the_caller_as_an_exception(monkeypatch, raised):
+    """Whatever an untrusted file provokes, the answer is the same refusal.
+
+    The caller treats `None` as "refuse and store nothing", so swallowing these
+    cannot leave anything half-written.
+    """
+
+    def refuses(*args, **kwargs):
+        raise raised
+
+    monkeypatch.setattr("app.infrastructure.storage.local_file_storage.PdfReader", refuses)
+
+    assert PyPdfDocumentInspector().inspect_pdf(a_pdf()) is None
 
 
 def test_the_inspector_never_extracts_text():

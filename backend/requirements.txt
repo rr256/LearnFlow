@@ -29,3 +29,16 @@ psycopg[binary]==3.3.4
 # files and reads them back, and extraction is a separate, unbuilt capability.
 python-multipart==0.0.20
 pypdf==6.1.3
+
+# What lets pypdf read an AES-encrypted PDF at all. It is optional to pypdf, and
+# without it an AES document raises `DependencyError` from inside the parser
+# rather than reporting whether it is readable.
+#
+# It matters because most encrypted study material is not password-locked: a
+# publisher or scanned PDF is commonly encrypted with an **empty** user password
+# and carries only permission restrictions. Those open in any reader, and
+# LearnFlow can read and store them; a document that genuinely needs a password
+# still cannot be opened and is refused. Distinguishing the two needs this.
+#
+# Ships prebuilt wheels, so no local C toolchain is required.
+cryptography==46.0.4
