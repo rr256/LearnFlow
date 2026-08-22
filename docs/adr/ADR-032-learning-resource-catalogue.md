@@ -2,7 +2,7 @@
 title: "ADR-032: Catalogue Learner-Owned Study Material as Metadata, Linked to Topics"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 related:
   - ../00-project-context.md
   - ADR-008-assessment-and-mistake-evidence-model.md
@@ -33,6 +33,7 @@ related:
   - ../roadmap/milestones.md
   - ADR-040-learner-uploaded-resource-files.md
   - ADR-041-removing-a-stored-file-or-note.md
+  - ADR-042-removing-a-whole-resource.md
   - ../architecture/decisions.md
 ---
 
@@ -77,6 +78,32 @@ It needs **one migration**: `20260816_01`, two `CREATE TABLE`s and two indexes. 
 altered.
 
 ## Implementation status
+
+**2026-08-22 — RES-005 is implemented under accepted [ADR-042](ADR-042-removing-a-whole-resource.md), and this record's rejected alternative is reopened.**
+
+[ADR-042](ADR-042-removing-a-whole-resource.md) implements **RES-005**: a learner removes a whole
+resource and everything it owns — topic links, notes, stored-file records, and the bytes those
+records named.
+
+**This reopens *Alternatives considered* → "Implement RES-005 and delete", which this record
+rejected**, and it is a reopening rather than a reversal. That rejection rested on two conditions,
+and **both have since changed**:
+
+- *"it would be the first endpoint in LearnFlow that destroys learner data, and archiving meets the
+  same need reversibly"* — settled by [ADR-041](ADR-041-removing-a-stored-file-or-note.md), which
+  found archiving to be shelving rather than an undo.
+- *"RES-005's own stated purpose … is about artifacts that do not exist yet"* — no longer true: a
+  resource owns notes since [ADR-037](ADR-037-learner-written-resource-notes.md) and stored files
+  since [ADR-040](ADR-040-learner-uploaded-resource-files.md). **Derived artifacts still do not
+  exist**, and will join the cascade when they do.
+
+**This record's decision — *Nothing is deleted; material is put aside* — is narrowed, not
+overturned.** Putting material aside stays reversible, stays what the screen offers first, and stays
+the right answer for material a learner is merely finished with. What changed is that it is no
+longer the *only* answer. The `### Nothing is deleted; material is put aside` section's "There is no
+`DELETE`" is now false for a resource.
+
+**Every other decision in this record stands**, and its decision body is not rewritten.
 
 **2026-08-21 — LearnFlow now has a destructive endpoint, and two claims in this record are narrowed.**
 

@@ -4,6 +4,8 @@ import styles from "@/features/resources/ResourceCatalogue.module.css";
 import { ResourceForm } from "@/features/resources/ResourceForm";
 import { ResourceFiles } from "@/features/resources/ResourceFiles";
 import { ResourceNotes } from "@/features/resources/ResourceNotes";
+import { removeResourceAction } from "@/features/resources/actions";
+import { RemoveControl } from "@/features/resources/RemoveControl";
 import { ResourceStatusControl } from "@/features/resources/ResourceStatusControl";
 import { isInCatalogue } from "@/features/resources/by-topic";
 import type { SubjectTopicOptions } from "@/features/resources/topic-options";
@@ -199,6 +201,27 @@ function ResourceLine({
         status={resource.status}
         title={resource.title}
       />
+
+      {/*
+        RES-005. Last on the line and behind a disclosure, after the two answers
+        that keep the material: correcting it, and putting it aside. It removes
+        more than it names -- every note, every stored PDF, and their bytes --
+        so the copy says what goes rather than leaving the learner to infer it.
+
+        Offered whatever the material's status: an archived resource is as
+        removable as a registered one, because requiring an archive first would
+        turn the shelf into a deletion queue.
+      */}
+      <RemoveControl
+        action={removeResourceAction}
+        confirmLabel="Yes, remove this material and everything in it"
+        consequence={describeLoss(notes.length, files.length)}
+        fieldName="resource_id"
+        fieldValue={resource.id}
+        instead="To keep it but stop using it, put it aside instead — that is reversible."
+        kind="material"
+        label={resource.title}
+      />
     </li>
   );
 }
@@ -227,4 +250,27 @@ function NothingYet({ hasAny }: { hasAny: boolean }) {
       <Link href="/curriculum">browse the curriculum</Link> and beside a review of them.
     </p>
   );
+}
+
+/**
+ * What removing this material takes with it, in words.
+ *
+ * **These figures describe what a destructive action will destroy, not the
+ * learner.** Terminology's no-counting rule guards against measuring effort and
+ * progress; hiding the scale of an irreversible action would be the wrong
+ * instinct, and the learner needs it to decide. Nothing here is stored,
+ * totalled across resources, or shown anywhere but inside this warning.
+ */
+export function describeLoss(noteCount: number, fileCount: number): string {
+  const parts: string[] = [];
+  if (fileCount > 0) {
+    parts.push(fileCount === 1 ? "1 stored PDF" : `${fileCount} stored PDFs`);
+  }
+  if (noteCount > 0) {
+    parts.push(noteCount === 1 ? "1 note" : `${noteCount} notes`);
+  }
+  if (parts.length === 0) {
+    return "The material and the topics it covers are removed from your catalogue.";
+  }
+  return `This also deletes ${parts.join(" and ")} kept against it.`;
 }

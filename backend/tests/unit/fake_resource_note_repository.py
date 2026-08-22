@@ -59,6 +59,12 @@ class FakeResourceNoteRepository:
     def delete_note(self, note_id: uuid.UUID) -> None:
         self.notes = [note for note in self.notes if note.id != note_id]
 
+    def delete_notes_for_resource(self, resource_id: uuid.UUID) -> int:
+        # RES-005's cascade: one resource's notes, never several resources'.
+        before = len(self.notes)
+        self.notes = [n for n in self.notes if n.resource_id != resource_id]
+        return before - len(self.notes)
+
     def update_note(self, record: ResourceNoteRecord) -> None:
         self._require_storable(record)
         for index, stored in enumerate(self.notes):

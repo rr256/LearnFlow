@@ -7,6 +7,7 @@ related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
   - ../adr/ADR-041-removing-a-stored-file-or-note.md
+  - ../adr/ADR-042-removing-a-whole-resource.md
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
@@ -660,10 +661,8 @@ from the rows above:
 **Nothing writes an ownerless row today**: the application requires an owner on every write, because
 a resource belonging to nobody would be invisible to every learner-scoped read.
 
-**Nothing deletes a resource.** A learner puts material aside by moving `status` to `archived`, which
-is reversible, so the coordinated cleanup of file storage and vector records that
-[the lifecycle notes](#referential-integrity-and-lifecycle-notes) require has nothing to coordinate
-yet. See [ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
+**A resource can be deleted, and it takes everything it owns with it.** RES-005 removes the row, its topic links, its notes, its stored-file records, and the bytes those records named — contracted by [ADR-042](../adr/ADR-042-removing-a-whole-resource.md), and irreversible. **No migration was needed**, and the foreign keys stay non-cascading; see the note below. Putting material aside by moving `status` to `archived` stays the reversible option, and
+is reversible and destroys nothing. The coordinated cleanup of file storage that [the lifecycle notes](#referential-integrity-and-lifecycle-notes) require is what RES-005 performs; **derived vector records still do not exist**, so there is none to coordinate yet. See [ADR-032](../adr/ADR-032-learning-resource-catalogue.md) and [ADR-042](../adr/ADR-042-removing-a-whole-resource.md).
 
 ### `resource_topic_links`
 
@@ -734,7 +733,7 @@ resource — so raising either is a use-case change rather than a migration, the
 [ADR-020](../adr/ADR-020-initial-study-plan-generation.md) made for `plan_items.status`. What the
 table enforces is only that a note is not empty.
 
-**A row here can be deleted, and it is the second of the only two in the database that can.** RES-019
+**A row here can be deleted.** RES-019
 removes one note permanently, contracted by
 [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md). It is irreversible: no soft-delete
 column, no `deleted_at`, and no copy kept. **No migration was needed.**
@@ -789,14 +788,14 @@ every dump and every backup, and the two halves are better backed up by their ow
 | Column | Type | Notes | State |
 | --- | --- | --- | --- |
 | `id` | uuid PK | Stored-file identifier. | Implemented |
-| `resource_id` | uuid FK | References `resources.id`. Not a cascade — RES-005 stays unimplemented, so nothing deletes a resource. RES-018 deletes a **file** row directly and never through this key. | Implemented |
+| `resource_id` | uuid FK | References `resources.id`. Not a cascade — RES-005 deletes a resource, but its use case clears these rows itself so a missed child fails loudly. RES-018 deletes a **file** row directly and never through this key. | Implemented |
 | `storage_key` | text | Opaque reference the storage adapter issued. **Never returned by any endpoint.** | Implemented |
 | `original_filename` | text | What the learner called the file. **Metadata, never a path.** | Implemented |
 | `byte_size` | bigint | How large the file is. `bigint` so a size column can never overflow. | Implemented |
 | `page_count` | integer | How many pages the PDF has. | Implemented |
 | `content_type` | varchar(128) | Always `application/pdf` today, decided from what was validated. | Implemented |
 | `checksum` | varchar(64) | SHA-256 of the bytes, so corruption is detectable. | Implemented |
-| `status` | varchar(32) | `active` or `archived`. Both reversible, and **neither status deletes anything**; the row is deleted only by RES-018, which is a separate request. | Implemented |
+| `status` | varchar(32) | `active` or `archived`. Both reversible, and **neither status deletes anything**; the row is deleted only by RES-018, or with its resource by RES-005 — each a separate request. | Implemented |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. | Implemented |
 
 **Constraints:** `status` is constrained to the two values above; `byte_size > 0`; `page_count >= 0`;
@@ -812,7 +811,7 @@ disagree.
 **Nothing derived is stored.** No extracted text, no chunk, no embedding, and no thumbnail: this
 table records a file, and `resource_ingestions` below remains absent.
 
-**A row here can be deleted, and it is one of only two in the database that can.** RES-018 removes one
+**A row here can be deleted.** RES-018 removes one
 file permanently — this row and the bytes the `storage_key` names — contracted by
 [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md). It is irreversible: no soft-delete
 column, no `deleted_at`, no grace period, and no copy kept. **No migration was needed**, because
@@ -1604,9 +1603,7 @@ Covered by this review:
 - `resource_topic_links` is keyed on `(resource_id, topic_id, relationship_type)` as approved, which
   is what lets one resource cover many topics and one topic be covered by many resources. It carries
   `created_at` alone, as `topic_relationships` does.
-- Neither foreign key cascades. Curriculum rows are reference data this document forbids deleting
-  casually, and nothing deletes a resource at all, so a cascade would describe a deletion path that
-  does not exist.
+- Neither foreign key cascades. Curriculum rows are reference data this document forbids deleting casually. **A resource is deleted by RES-005**, but the cascade is performed by the use case in dependency order rather than by the constraint: an explicit cascade is reviewable where a database one is invisible, and leaving the constraint as `NO ACTION` makes it the safety net that fails loudly if a child is ever missed. See [ADR-042](../adr/ADR-042-removing-a-whole-resource.md).
 - Both required indexes were created with their tables. `resources(owner_learner_id, status)` serves
   the catalogue's own reads, and `resource_topic_links(topic_id, resource_id)` serves RES-002's
   `topic_id` filter. The screens that show a topic's material do not use it: the curriculum,
@@ -1654,8 +1651,7 @@ has gone beyond this document, after `questions.author_learner_id` in
 - `body` is unbounded `text` and carries only a non-empty check, so the length a learner may write
   stays an application rule. `ck_resource_notes_body_is_not_empty` uses a regex rather than `btrim`
   for the reason given above; the migration test asserts the case that distinguishes them.
-- The foreign key to `resources` is **not a cascade**, for the reason `resource_topic_links` gives:
-  nothing deletes a resource, so a cascade would describe a path that does not exist.
+- The foreign key to `resources` is **not a cascade**, for the reason `resource_topic_links` gives: RES-005 deletes a resource, but its use case clears the owned rows itself, so the constraint stays a safety net rather than a deletion path.
 - One index, `ix_resource_notes_resource_id_status`, serves the access pattern this migration
   created — one resource's notes, and whether they are put aside. Its name is 36 characters,
   comfortably inside PostgreSQL's 63-byte identifier limit. A second index,
@@ -1717,8 +1713,7 @@ records.
   server-generated identifier, so nothing a browser sends can steer where a file is written.
 - **No owner column and no topic link table.** A file hangs off a resource, the resource carries the
   owner and the topics, and duplicating either here would create a second place for them to disagree.
-- The foreign key is **not** a cascade, for the reason `resource_topic_links` and `resource_notes`
-  each record: nothing deletes a resource, so a cascade would describe a path that does not exist.
+- The foreign key is **not** a cascade, for the reason `resource_topic_links` and `resource_notes` each record: RES-005 deletes a resource, but its use case clears the owned rows itself, and the bytes are unlinked separately because a filesystem does not join the transaction.
 - The index is `(resource_id, status)`, matching the only read path — this resource's files — rather
   than indexing the foreign key alone.
 
@@ -1735,8 +1730,7 @@ record, which belongs to `resource_ingestions` and cannot be reviewed until some
 **One consequence is worth recording for the area as a whole.** A stored file is the first learner
 data that can **outlive its row**: the migration's downgrade drops this table and leaves the bytes in
 the volume, deliberately, because deleting a learner's files to undo a schema change would be worse
-than leaving orphans that can be reclaimed. That makes **RES-005 — safe permanent deletion — the
-most-needed next change in this area**, and it must coordinate rows and bytes together.
+than leaving orphans that can be reclaimed. **RES-005 — safe permanent deletion — has since been implemented**, and performs exactly that coordination, and it must coordinate rows and bytes together.
 
 
 ### Assessment area — review 2026-08-18

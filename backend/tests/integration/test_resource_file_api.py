@@ -28,6 +28,7 @@ from sqlalchemy import Engine, func, select, text
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.manage_resource_files import ManageResourceFiles
+from app.application.use_cases.manage_resources import ManageResources
 from app.composition.app_factory import create_app
 from app.composition.config import Settings
 from app.infrastructure.persistence.engine import create_database_engine, create_session_factory
@@ -35,13 +36,21 @@ from app.infrastructure.persistence.learner_repository import SqlAlchemyLearnerR
 from app.infrastructure.persistence.resource_file_repository import (
     SqlAlchemyResourceFileRepository,
 )
+from app.infrastructure.persistence.resource_note_repository import (
+    SqlAlchemyResourceNoteRepository,
+)
 from app.infrastructure.persistence.resource_repository import SqlAlchemyResourceRepository
-from app.infrastructure.persistence.resources import Resource, ResourceFile, ResourceNote
+from app.infrastructure.persistence.resources import (
+    Resource,
+    ResourceFile,
+    ResourceNote,
+    ResourceTopicLink,
+)
 from app.infrastructure.storage.local_file_storage import (
     LocalResourceFileStorage,
     PyPdfDocumentInspector,
 )
-from app.presentation.api.dependencies import RESOURCE_FILES_PROVIDER
+from app.presentation.api.dependencies import RESOURCE_FILES_PROVIDER, RESOURCES_PROVIDER
 
 LEARNER = "/api/v1/learner"
 RESOURCES = "/api/v1/resources"
@@ -89,7 +98,28 @@ def client(
                 raise
             session.commit()
 
+    @contextmanager
+    def provide_resources() -> Iterator[ManageResources]:
+        # RES-005 unlinks bytes when it removes a resource, so the catalogue must
+        # hold the SAME storage root the file endpoints write to. Left on the
+        # app's configured adapter, a removal would unlink from the deployment
+        # path and this test's directory would keep its files.
+        with session_factory() as session:
+            try:
+                yield ManageResources(
+                    learners=SqlAlchemyLearnerRepository(session),
+                    resources=SqlAlchemyResourceRepository(session),
+                    notes=SqlAlchemyResourceNoteRepository(session),
+                    files=SqlAlchemyResourceFileRepository(session),
+                    storage=storage,
+                )
+            except BaseException:
+                session.rollback()
+                raise
+            session.commit()
+
     setattr(app.state, RESOURCE_FILES_PROVIDER, provide)
+    setattr(app.state, RESOURCES_PROVIDER, provide_resources)
     with TestClient(app) as test_client:
         yield test_client
 
@@ -393,6 +423,117 @@ def test_a_failed_unlink_deletes_nothing_at_all(
     session.rollback()
     assert session.scalar(select(func.count()).select_from(ResourceFile)) == 1
     assert len(list(storage_root.rglob("*.pdf"))) == 1
+
+
+# -- removing the whole resource (RES-005) ------------------------------------
+
+
+def test_removing_a_resource_deletes_its_rows_and_its_bytes(
+    client: TestClient, resource: dict, storage_root: Path, session: Session
+):
+    """RES-005 against a real database and a real directory.
+
+    The strongest evidence this feature works: real rows in PostgreSQL and real
+    files on disk, both gone, with no cascade in the schema doing it.
+    """
+    upload(client, resource["id"], filename="a.pdf")
+    upload(client, resource["id"], filename="b.pdf")
+    written = client.post(
+        f"{RESOURCES}/{resource['id']}/notes",
+        json={"title": "Deadlock conditions", "body": "Mutual exclusion."},
+    )
+    assert written.status_code == 201, written.text
+    assert len(list(storage_root.rglob("*.pdf"))) == 2
+
+    removed = client.delete(f"{RESOURCES}/{resource['id']}")
+
+    assert removed.status_code == 204, removed.text
+    assert removed.content == b""
+    # The bytes are gone from the real directory.
+    assert list(storage_root.rglob("*.pdf")) == []
+    # Every owned row is gone, and so is the resource.
+    assert session.scalar(select(func.count()).select_from(ResourceFile)) == 0
+    assert session.scalar(select(func.count()).select_from(ResourceNote)) == 0
+    assert session.scalar(select(func.count()).select_from(ResourceTopicLink)) == 0
+    assert session.scalar(select(func.count()).select_from(Resource)) == 0
+
+
+def test_the_foreign_keys_are_still_not_cascades(
+    client: TestClient, resource: dict, session: Session
+):
+    """The use case clears children itself. If it ever stops, the constraint is
+    what fails loudly rather than letting a delete widen silently."""
+    upload(client, resource["id"])
+
+    with pytest.raises(Exception):  # noqa: B017 - any IntegrityError shape will do
+        session.execute(text("DELETE FROM resources WHERE id = :id"), {"id": resource["id"]})
+        session.commit()
+    session.rollback()
+
+
+def test_removing_one_resource_leaves_another_resources_rows_and_bytes(
+    client: TestClient, resource: dict, storage_root: Path, session: Session
+):
+    other = client.post(
+        RESOURCES,
+        json={
+            "resource_type": "pdf",
+            "title": "Keep this",
+            "source_label": "Green binder",
+            "topic_ids": [],
+        },
+    )
+    assert other.status_code == 201, other.text
+    keep = other.json()["data"]
+    upload(client, keep["id"], filename="keep.pdf")
+    upload(client, resource["id"], filename="drop.pdf")
+
+    assert client.delete(f"{RESOURCES}/{resource['id']}").status_code == 204
+
+    assert len(list(storage_root.rglob("*.pdf"))) == 1
+    assert session.scalar(select(func.count()).select_from(Resource)) == 1
+    assert len(client.get(f"{RESOURCES}/{keep['id']}/files").json()["data"]) == 1
+
+
+def test_the_empty_shard_directories_survive_a_resource_removal(
+    client: TestClient, resource: dict, storage_root: Path
+):
+    """Pruning is how a delete routine grows into one that removes more than it
+    was asked to."""
+    upload(client, resource["id"])
+    shards = {path for path in storage_root.rglob("*") if path.is_dir()}
+    assert shards
+
+    client.delete(f"{RESOURCES}/{resource['id']}")
+
+    assert {path for path in storage_root.rglob("*") if path.is_dir()} == shards
+
+
+def test_a_failed_unlink_removes_no_row_and_no_byte(
+    client: TestClient,
+    resource: dict,
+    storage_root: Path,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Every row deletion is uncommitted while the bytes are unlinked, so one
+    failed unlink rolls the whole removal back and the learner keeps everything.
+    """
+    upload(client, resource["id"], filename="a.pdf")
+    upload(client, resource["id"], filename="b.pdf")
+
+    def refuse(self: LocalResourceFileStorage, storage_key: str) -> None:
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(LocalResourceFileStorage, "remove", refuse)
+
+    with pytest.raises(OSError):
+        client.delete(f"{RESOURCES}/{resource['id']}")
+
+    session.rollback()
+    assert session.scalar(select(func.count()).select_from(Resource)) == 1
+    assert session.scalar(select(func.count()).select_from(ResourceFile)) == 2
+    assert len(list(storage_root.rglob("*.pdf"))) == 2
 
 
 # -- what the table itself enforces ------------------------------------------

@@ -97,6 +97,17 @@ class SqlAlchemyResourceRepository:
         row.external_reference = record.external_reference
         row.status = record.status
 
+    def delete_resource(self, resource_id: uuid.UUID) -> None:
+        """Remove the resource row. A row that is not there is already gone.
+
+        Only the row: the use case has already cleared what hangs off it, and the
+        foreign keys are not cascades, so this fails loudly rather than quietly
+        widening if a child was missed.
+        """
+        row = self._session.get(ResourceRow, resource_id)
+        if row is not None:
+            self._session.delete(row)
+
     def replace_topic_links(
         self, *, resource_id: uuid.UUID, topic_ids: Sequence[uuid.UUID]
     ) -> None:

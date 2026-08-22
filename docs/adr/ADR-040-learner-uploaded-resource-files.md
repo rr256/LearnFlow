@@ -15,6 +15,7 @@ related:
   - ADR-038-local-topic-note-retrieval.md
   - ADR-039-source-grounded-study-answers.md
   - ADR-041-removing-a-stored-file-or-note.md
+  - ADR-042-removing-a-whole-resource.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../architecture/dependency-rules.md
@@ -229,6 +230,20 @@ fetched from the web, and no path on their machine is stored.
 no retrieval, note, or mentor behaviour changes.
 
 ## Implementation status
+
+**2026-08-22 — removing a resource now removes its stored files and their bytes.**
+
+[ADR-042](ADR-042-removing-a-whole-resource.md) implements **RES-005**. Where RES-018 removes one
+file the learner named, this removes every file a resource holds together with the resource — and so
+clears more bytes from the volume at once than anything else in the product.
+
+**The ordering this record established is reused and extended.** The storage keys are read *before*
+any row is deleted, because once the rows are gone nothing can name the files; the bytes are unlinked
+last; a failed unlink rolls the whole removal back; and a commit failing after one leaves the
+row-with-no-bytes state this record already documented as a handled `404`. **An archived file is
+removed with its resource** like any other, because a shelved file still occupies the volume.
+
+**Every other decision in this record stands**, and its decision body is not rewritten.
 
 **2026-08-21 — a stored file can now be removed permanently, and "the lifecycle keeps every byte" is
 narrowed.**

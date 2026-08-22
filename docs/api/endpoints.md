@@ -41,6 +41,7 @@ related:
   - ../adr/ADR-036-topic-material-on-the-plan-screens.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
   - ../adr/ADR-041-removing-a-stored-file-or-note.md
+  - ../adr/ADR-042-removing-a-whole-resource.md
 ---
 
 # LearnFlow API Endpoint Catalog
@@ -1064,7 +1065,7 @@ complete, and supplies the **resource half** of
 | RES-002 | `GET /api/v1/resources` | List the learner's material, filterable by topic, type, and status. | Resource collection. | Implemented |
 | RES-003 | `GET /api/v1/resources/{resource_id}` | Read one resource and its topic links. | Resource details. | Implemented |
 | RES-004 | `PATCH /api/v1/resources/{resource_id}` | Update title, resource type, source label, link, topic links, or status. | Updated resource. | Implemented |
-| RES-005 | `DELETE /api/v1/resources/{resource_id}` | Request safe removal of a resource and related derived artifacts. | `204` or accepted cleanup operation. | Not implemented |
+| RES-005 | `DELETE /api/v1/resources/{resource_id}` | Remove a resource and everything it owns, permanently. | `204`, no body. | Implemented |
 | RES-006 | `POST /api/v1/resources/{resource_id}/ingestions` | Start/retry text extraction and indexing. | `202` + ingestion reference. | Not implemented |
 | RES-007 | `GET /api/v1/resources/{resource_id}/ingestions` | List ingestion attempts/statuses. | Ingestion collection. | Not implemented |
 | RES-008 | `GET /api/v1/resource-ingestions/{ingestion_id}` | Read a single ingestion status/failure message. | Ingestion details. | Not implemented |
@@ -1105,19 +1106,24 @@ themselves**: still nothing uploaded, still nothing fetched, still no location o
 still nothing extracted, chunked, embedded, or indexed into a vector store. Searching those notes arrives with [RES-013](#res-013-get-apiv1resource-notessearch) below. See
 [ADR-037](../adr/ADR-037-learner-written-resource-notes.md).
 
-**Two endpoints delete, and they are the only ones in LearnFlow that do.** RES-018 removes one
+**Three endpoints delete, and they are the only ones in LearnFlow that do.** RES-018 removes one
 stored file — row and bytes together — and RES-019 removes one note. They exist because **archiving
 is not an undo**: a stored file's bytes cannot be corrected in place, and a note written against the
 wrong material should not exist rather than be rewritten. Both are permanent, neither is recoverable,
 and the screen offers *put aside* first. See
 [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md).
 
+**RES-005 removes a whole resource, and is the widest destruction in the product.** Where RES-018
+and RES-019 each name one record and cascade nothing, RES-005 takes the resource **and everything it
+owns**: its topic links, every note kept against it, every stored-file record, and the bytes those
+records named. It exists so material registered by mistake never needs a database client. See
+[ADR-042](../adr/ADR-042-removing-a-whole-resource.md).
+
 **Everything else still destroys nothing.** Putting material aside with `status: archived` through
 RES-004, or a single file aside through RES-017, stays reversible — the position
-[ADR-022](../adr/ADR-022-plan-adaptation.md) took for a superseded plan. **RES-005 is still not
-implemented**, so a whole resource cannot be deleted through the product, and it remains **the
-most-needed next change in this area**: it must decide what happens to a resource's files, notes, and
-topic links together, where RES-018 and RES-019 each name one record and cascade nothing.
+[ADR-022](../adr/ADR-022-plan-adaptation.md) took for a superseded plan, and still what the screen
+offers first. **There is no bulk removal**: no endpoint removes several resources, and none clears a
+resource's files or notes while keeping the resource.
 
 **Nothing is recommended, ranked, or counted.** A topic's material is the material the learner linked
 to it, in the order this API returns it. No resource is suggested for a topic, promoted above
@@ -1372,6 +1378,60 @@ Related entities: [resource note](../domain/entities.md#resource-note) and
 [learning resource](../domain/entities.md#learning-resource). Related table:
 [`resource_notes`](../database/schema.md#resource_notes).
 
+### RES-005 — `DELETE /api/v1/resources/{resource_id}`
+
+`resource_id` is a UUID. No request body and no query parameters. Returns `204` with **no body**.
+
+**Permanent, irreversible, and the widest destruction in LearnFlow.** Removing a resource removes
+**everything it owns**:
+
+| Removed | Where |
+| --- | --- |
+| The resource itself | `resources` |
+| Its topic links | `resource_topic_links` |
+| Every note kept against it | `resource_notes` |
+| Every stored-file record | `resource_files` |
+| The bytes those records named | the `resource_files` volume |
+
+LearnFlow keeps no copy: there is no soft delete, no grace period, and no recycle bin. It exists so a
+resource registered by mistake can be taken back without a database client.
+
+**Nothing outside the resource is touched** — no other resource, no curriculum topic, no learning
+stage, no plan, no plan item, no revision, and no quiz.
+
+**Putting the material aside with [RES-004](#res-004-patch-apiv1resourcesresource_id) is the
+reversible alternative**, and it is what the `/resources` screen offers first.
+
+**A resource's own status is not consulted.** An `archived` resource is as removable as a
+`registered` one. This is the one place archived material is **not** read-only, deliberately:
+refusing here would strand a learner who shelved something precisely because they wanted it gone, and
+requiring an archive first would turn the shelf into a deletion queue.
+
+**No database cascade does this.** The foreign keys into `resources` stay `NO ACTION`; the use case
+clears each owned table in dependency order inside one transaction, so a missed child fails loudly
+rather than disappearing quietly. See [schema.md](../database/schema.md#resources).
+
+**The rows and the bytes cannot be removed atomically**, because a filesystem does not join a
+database transaction. The storage keys are read **before** any row is deleted — once the rows are
+gone nothing can name the files — and the bytes are unlinked last:
+
+- **An unlink fails** — the request errors, the transaction rolls back, and **nothing is deleted**.
+  Every row and every byte survives, and the learner asks again.
+- **The commit fails after unlinking** — rows survive with some bytes gone.
+  [RES-016](#res-016-get-apiv1resource-filesfile_idcontent) already reports that as `404`, and asking
+  again clears it.
+
+Repeating the request on a resource that is already gone is **`404`** — and that is also what a
+second browser tab acting on a stale list receives; it re-renders without the resource. There is no
+optimistic locking and no version token.
+
+Errors: `404` `not_found` when the resource is not the learner's or no longer exists; `409`
+`conflict` when more than one learner is stored.
+
+Related entity: [learning resource](../domain/entities.md#learning-resource). Related tables:
+[`resources`](../database/schema.md#resources), [`resource_notes`](../database/schema.md#resource_notes),
+[`resource_files`](../database/schema.md#resource_files).
+
 ### RES-014 — `POST /api/v1/resources/{resource_id}/files`
 
 `multipart/form-data` with exactly one part, `file`. Returns `201` with the stored file under `data`.
@@ -1461,7 +1521,7 @@ turn the shelf into a deletion queue.
 
 **Only the named file goes.** Its resource, that resource's topic links, its notes, and every other
 file against it are untouched. There is no bulk removal and no cascade; a caller who wants two files
-gone asks twice. **RES-005 — removing a whole resource — stays unimplemented.**
+gone asks twice. **Removing the whole resource is [RES-005](#res-005-delete-apiv1resourcesresource_id)**, which takes every file with it.
 
 **A row and its bytes cannot be removed atomically**, because a filesystem does not join a database
 transaction. The row is deleted first and the bytes second, both within the request, and each failure
@@ -1604,7 +1664,7 @@ RES-017 change the reasoning behind the first verdict without changing the verdi
 PDF is now a stored file rather than a description of one, and the path half stays unmet.
 **RES-018 and RES-019 leave all four verdicts and the count unchanged too**, and add no criterion of
 their own: being able to take back a mistake is not registering, linking, describing, or finding
-material. They remove a papercut, not a gap in a requirement. RES-013 searches
+material. They remove a papercut, not a gap in a requirement. **RES-005 leaves them unchanged for the same reason**, though it completes the catalogue's lifecycle: a learner can now register material, correct it, put it aside, bring it back, and remove it entirely. RES-013 searches
 material FR-007 already covers rather than adding a way to register, link, describe, or find it; what
 it advances is FR-008, below.
 
@@ -1995,7 +2055,7 @@ Implement in an order that enables one working learner flow:
    third criterion — is **now built too**, over PLN-006, so **all three of FR-004's acceptance
    criteria are met**.
 5. Revision reads/updates. **Done** — REV-001 to REV-004, per [ADR-028](../adr/ADR-028-revision-workflow.md).
-6. Resource registration and ingestion status. **Partly done** — RES-009 to RES-012 keep the learner's own written notes against a piece of material, which is storage alone; RES-001 to RES-004 catalogue the learner's own study material and link it to topics, contracted by [ADR-032](../adr/ADR-032-learning-resource-catalogue.md), with migration `20260816_01` creating `resources` and `resource_topic_links`. RES-006 to RES-008 wait on an extractor, which does not exist. **RES-005 now waits only on the cascade it implies** — what becomes of a resource's files, notes, and topic links together — since [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md) settled the reason to delete and built the two leaf removals it will need, RES-018 and RES-019.
+6. Resource registration and ingestion status. **Partly done** — RES-009 to RES-012 keep the learner's own written notes against a piece of material, which is storage alone; RES-001 to RES-004 catalogue the learner's own study material and link it to topics, contracted by [ADR-032](../adr/ADR-032-learning-resource-catalogue.md), with migration `20260816_01` creating `resources` and `resource_topic_links`. RES-006 to RES-008 wait on an extractor, which does not exist. **RES-005 is implemented**, contracted by [ADR-042](../adr/ADR-042-removing-a-whole-resource.md): it removes a resource and everything it owns, building on the two leaf removals [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md) added.
 7. Mentor questions and grounded retrieval. **Partly done** — MNT-001 implemented narrowly (answer
    and source references, not suggested next actions); MNT-002 unimplemented. See
    [ADR-039](../adr/ADR-039-source-grounded-study-answers.md).
@@ -2032,7 +2092,8 @@ Implement in an order that enables one working learner flow:
 - [ADR-029: Show the progress overview as a reading of what is stored, counting nothing of its own](../adr/ADR-029-progress-overview.md) — the screen that gathered six of these contracts and added none, and why PRG-001 stays unimplemented
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the seventh and eighth contracts that screen reads, PRG-002 and CUR-003, and why neither gains a filter or a field
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the panel that added no read and no contract, and what PRG-001 waits on now
-- [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the four resource contracts above, why the other four stay unimplemented, and what a resource may point at
+- [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the four resource contracts above, and why the ingestion contracts stay unimplemented
+- [ADR-042: Remove a whole resource and everything it owns](../adr/ADR-042-removing-a-whole-resource.md) — RES-005, the cascade it performs, and why the foreign keys stay non-cascading, and what a resource may point at
 - [ADR-037: Store the learner's own written notes against a learning resource](../adr/ADR-037-learner-written-resource-notes.md) — RES-009 to RES-012, and the boundary around what they store
 - [ADR-038: Retrieve passages from a learner's own notes locally, when they ask](../adr/ADR-038-local-topic-note-retrieval.md) — RES-013, and why it sits in the resource family rather than the mentor one
 - [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — why the history reads QZ-006 unchanged, and why `pagination.total` is never read

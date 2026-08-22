@@ -1078,6 +1078,22 @@ export async function deleteResourceNote(noteId: string): Promise<void> {
 }
 
 /**
+ * RES-005 -- remove a resource and everything kept against it, permanently.
+ *
+ * **Irreversible, and the widest destruction in LearnFlow.** The resource, its
+ * topic links, every note, every stored-file row, and the bytes those rows
+ * named all go. LearnFlow keeps no copy. Putting the material aside is the
+ * reversible alternative.
+ *
+ * @throws ApiError with `isNotFound` when the resource is not the learner's or
+ *   is already gone -- which is also what a second browser tab acting on a
+ *   stale list receives.
+ */
+export async function deleteResource(resourceId: string): Promise<void> {
+  await requestNoContent(`/api/v1/resources/${encodeURIComponent(resourceId)}`);
+}
+
+/**
  * Send a `DELETE` that answers `204` with no body.
  *
  * `requestJson` cannot be reused: it parses a body, and a `204` has none. A

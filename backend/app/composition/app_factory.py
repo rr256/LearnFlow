@@ -136,7 +136,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     setattr(app.state, STUDY_GOALS_PROVIDER, build_study_goals_provider(session_factory))
     setattr(app.state, STUDY_PLANS_PROVIDER, build_study_plans_provider(session_factory))
     setattr(app.state, REVISIONS_PROVIDER, build_revisions_provider(session_factory))
-    setattr(app.state, RESOURCES_PROVIDER, build_resources_provider(session_factory))
+    # Built once and shared: the stored-file use case writes and reads bytes
+    # through it, and RES-005 unlinks them through the same adapter. It holds a
+    # directory and no per-request state.
+    file_storage = _select_file_storage(settings)
+    setattr(
+        app.state,
+        RESOURCES_PROVIDER,
+        build_resources_provider(session_factory, storage=file_storage),
+    )
     setattr(app.state, RESOURCE_NOTES_PROVIDER, build_resource_notes_provider(session_factory))
     setattr(
         app.state,
@@ -148,7 +156,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         RESOURCE_FILES_PROVIDER,
         build_resource_files_provider(
             session_factory,
-            storage=_select_file_storage(settings),
+            storage=file_storage,
             inspector=PyPdfDocumentInspector(),
         ),
     )

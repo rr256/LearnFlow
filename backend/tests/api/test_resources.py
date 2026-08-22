@@ -238,14 +238,55 @@ def test_an_archived_resource_is_still_stored_and_readable(resource_client):
     assert [item["id"] for item in body["data"]] == [registered["id"]]
 
 
-def test_there_is_no_way_to_delete_a_resource(resource_client):
-    """RES-005 stays unimplemented; a learner archives instead. See ADR-032."""
+def test_a_resource_can_be_removed_permanently(resource_client):
+    """RES-005 — the widest destruction in LearnFlow, and the reversal of this
+    module's former guard that no way to delete a resource existed. See ADR-042;
+    ADR-032's archiving decision is narrowed, not overturned."""
     registered = register(resource_client).json()["data"]
 
     response = resource_client.delete(f"{RESOURCES}/{registered['id']}")
 
-    assert response.status_code == 405
-    assert response.json()["error"]["code"] == "method_not_allowed"
+    assert response.status_code == 204, response.text
+    assert response.content == b""
+    assert resource_client.get(f"{RESOURCES}/{registered['id']}").status_code == 404
+
+
+def test_removing_a_resource_that_is_already_gone_is_not_found(resource_client):
+    """Asking twice is 204 then 404 — and the same answer a second browser tab
+    acting on a stale list receives."""
+    registered = register(resource_client).json()["data"]
+    assert resource_client.delete(f"{RESOURCES}/{registered['id']}").status_code == 204
+
+    assert resource_client.delete(f"{RESOURCES}/{registered['id']}").status_code == 404
+
+
+def test_an_archived_resource_can_still_be_removed(resource_client):
+    """The one place archived material is not read-only. Shelving and removing
+    are different answers, and requiring an archive first would turn the shelf
+    into a deletion queue."""
+    registered = register(resource_client).json()["data"]
+    change(resource_client, registered["id"], status="archived")
+
+    assert resource_client.delete(f"{RESOURCES}/{registered['id']}").status_code == 204
+
+
+def test_removing_one_resource_leaves_the_others(resource_client):
+    """No bulk removal: one request names one resource."""
+    register(resource_client, title="Keep")
+    drop = register(resource_client, title="Drop").json()["data"]
+
+    assert resource_client.delete(f"{RESOURCES}/{drop['id']}").status_code == 204
+
+    listed = resource_client.get(RESOURCES).json()["data"]
+    assert [r["title"] for r in listed] == ["Keep"]
+
+
+def test_another_learners_resource_cannot_be_removed(resource_client):
+    """Reported as missing rather than forbidden: existence is a disclosure."""
+    assert (
+        resource_client.delete(f"{RESOURCES}/00000000-0000-0000-0000-000000000001").status_code
+        == 404
+    )
 
 
 def test_supplying_topics_replaces_the_whole_set(resource_client, cataloguing):

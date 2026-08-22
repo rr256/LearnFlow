@@ -13,6 +13,7 @@ vi.mock("@/features/resources/actions", () => ({
   saveResourceNoteEdit: vi.fn(),
   saveResourceNoteStatus: vi.fn(),
   removeResourceNoteAction: vi.fn(async () => ({ message: null })),
+  removeResourceAction: vi.fn(),
 }));
 
 const { ResourceNotes } = await import("@/features/resources/ResourceNotes");

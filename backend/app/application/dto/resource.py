@@ -231,3 +231,21 @@ class ResourceTopicLinks:
 
     resource_id: uuid.UUID
     topic_ids: tuple[uuid.UUID, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True, slots=True)
+class RemovedResource:
+    """What removing one resource destroyed (RES-005).
+
+    Returned so the caller can state the loss in words without counting it a
+    second time. **These are not a measure of the learner** -- terminology's
+    no-counting rule is about progress and effort, and this describes what a
+    destructive action just destroyed. Nothing here is stored, totalled across
+    resources, or shown as progress.
+    """
+
+    resource_id: uuid.UUID
+    title: str
+    notes_removed: int
+    files_removed: int
+    bytes_unlinked: int

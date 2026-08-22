@@ -26,9 +26,10 @@ instead, which is reversible and destroys nothing. See ADR-032.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from starlette.status import (
     HTTP_201_CREATED,
+    HTTP_204_NO_CONTENT,
     HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
     HTTP_422_UNPROCESSABLE_CONTENT,
@@ -261,3 +262,49 @@ def update_resource(
     except AmbiguousLocalLearnerError as error:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
     return ResourceResponse(data=ResourceSchema.of(resource))
+
+
+@router.delete(
+    "/{resource_id}",
+    summary="Remove a resource and everything kept against it, permanently",
+    status_code=HTTP_204_NO_CONTENT,
+    responses=_NOT_FOUND_RESPONSE | _CONFLICT_RESPONSE,
+)
+def delete_resource(resource_id: uuid.UUID, cataloguer: Cataloguer) -> Response:
+    """Delete a resource and everything it owns (RES-005).
+
+    **Permanent and irreversible, and the widest destruction in LearnFlow.** The
+    resource's topic links, every note kept against it, every stored-file row,
+    and the bytes those rows named all go with it. Nothing is recoverable:
+    there is no soft delete, no grace period, and no copy kept anywhere. It
+    exists so a resource registered by mistake can be taken back without a
+    database client.
+
+    **Putting the resource aside with RES-004 is the reversible alternative**,
+    and it is what the `/resources` screen offers first.
+
+    **A resource's own status is not consulted.** An `archived` resource is as
+    removable as a `registered` one: requiring an archive first would turn the
+    shelf into a deletion queue. This is the one place archived material is not
+    read-only, deliberately, because refusing would strand a learner who shelved
+    something they wanted gone.
+
+    **No cascade in the database does this.** The foreign keys stay `NO ACTION`
+    and the use case clears each owned table in order, so a missed child fails
+    loudly rather than disappearing quietly.
+
+    Returns `204` with no body. Asking twice is `204` then `404`: the second
+    request names something that no longer exists, and a second browser tab
+    acting on a stale list gets the same answer and re-renders without it.
+
+    Raises:
+        HTTPException: `404` when the resource is not the learner's or is
+            already gone; `409` when more than one learner is stored.
+    """
+    try:
+        cataloguer.delete(resource_id)
+    except ResourceNotFoundError as error:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except AmbiguousLocalLearnerError as error:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
+    return Response(status_code=HTTP_204_NO_CONTENT)

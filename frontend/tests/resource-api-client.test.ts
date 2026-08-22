@@ -198,3 +198,39 @@ describe("updateResource", () => {
     });
   });
 });
+
+describe("deleteResource", () => {
+  it("sends DELETE to the documented path", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
+
+    const { deleteResource } = await import("@/lib/api-client");
+    await deleteResource("resource-1");
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/resources/resource-1");
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("reads no body, because a 204 has none", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
+
+    const { deleteResource } = await import("@/lib/api-client");
+    await expect(deleteResource("resource-1")).resolves.toBeUndefined();
+  });
+
+  it("reports material that is already gone", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ error: { code: "not_found", message: "No such material.", details: [] } }),
+            { status: 404 },
+          ),
+      ),
+    );
+
+    const { deleteResource } = await import("@/lib/api-client");
+    await expect(deleteResource("resource-1")).rejects.toMatchObject({ isNotFound: true });
+  });
+});

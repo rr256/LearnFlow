@@ -19,6 +19,8 @@ from app.application.dto.resource import (
     ResourceFilters,
     ResourceRecord,
 )
+from app.application.dto.resource_file import ResourceFileRecord
+from app.application.dto.resource_note import ResourceNoteRecord
 from app.application.use_cases.local_learner import AmbiguousLocalLearnerError
 from app.application.use_cases.manage_resources import (
     DuplicateTopicLinkError,
@@ -35,6 +37,11 @@ from app.application.use_cases.manage_resources import (
     UnsupportedReferenceSchemeError,
 )
 from tests.unit.fake_learner_repository import FakeLearnerRepository, learner
+from tests.unit.fake_resource_file_storage import (
+    FakeResourceFileRepository,
+    FakeResourceFileStorage,
+)
+from tests.unit.fake_resource_note_repository import FakeResourceNoteRepository
 from tests.unit.fake_resource_repository import FakeResourceRepository, resource_topic
 
 
@@ -50,11 +57,23 @@ def owner():
     return learner()
 
 
-def build(owner_record, topics=(), resources=(), links=None):
-    """A use case over one learner, some topics, and any stored resources."""
+def build(owner_record, topics=(), resources=(), links=None, notes=(), files=()):
+    """A use case over one learner, some topics, and any stored resources.
+
+    The note and file stores exist for RES-005, which removes what a resource
+    owns; every other operation here leaves them untouched, and most tests pass
+    none.
+    """
     repository = FakeResourceRepository(resources=resources, topics=topics, links=links)
+    note_repository = FakeResourceNoteRepository(notes=list(notes))
+    file_repository = FakeResourceFileRepository(records=list(files))
+    storage = FakeResourceFileStorage()
     use_case = ManageResources(
-        learners=FakeLearnerRepository((owner_record,)), resources=repository
+        learners=FakeLearnerRepository((owner_record,)),
+        resources=repository,
+        notes=note_repository,
+        files=file_repository,
+        storage=storage,
     )
     return use_case, repository
 
@@ -230,6 +249,9 @@ def test_registering_without_a_learner_is_refused(scheduling_topic):
     use_case = ManageResources(
         learners=FakeLearnerRepository(),
         resources=FakeResourceRepository(topics=[scheduling_topic]),
+        notes=FakeResourceNoteRepository(),
+        files=FakeResourceFileRepository(),
+        storage=FakeResourceFileStorage(),
     )
 
     with pytest.raises(LearnerNotSetUpError):
@@ -240,6 +262,9 @@ def test_more_than_one_learner_is_refused_rather_than_guessed(owner):
     use_case = ManageResources(
         learners=FakeLearnerRepository((owner, learner("Ravi"))),
         resources=FakeResourceRepository(),
+        notes=FakeResourceNoteRepository(),
+        files=FakeResourceFileRepository(),
+        storage=FakeResourceFileStorage(),
     )
 
     with pytest.raises(AmbiguousLocalLearnerError):
@@ -247,7 +272,13 @@ def test_more_than_one_learner_is_refused_rather_than_guessed(owner):
 
 
 def test_listing_before_setup_is_an_empty_page_rather_than_a_failure():
-    use_case = ManageResources(learners=FakeLearnerRepository(), resources=FakeResourceRepository())
+    use_case = ManageResources(
+        learners=FakeLearnerRepository(),
+        resources=FakeResourceRepository(),
+        notes=FakeResourceNoteRepository(),
+        files=FakeResourceFileRepository(),
+        storage=FakeResourceFileStorage(),
+    )
 
     page = use_case.list_resources(filters=ResourceFilters(), limit=25, offset=0)
 
@@ -477,3 +508,207 @@ def test_a_link_whose_topic_is_no_longer_stored_is_left_out_rather_than_failing(
     resource = use_case.read(stored.id)
 
     assert resource.topics == ()
+
+
+# -- removing a whole resource (RES-005) --------------------------------------
+
+
+def a_stored_file(resource_id, *, status="active"):
+    """One already-stored file row belonging to a resource."""
+    return ResourceFileRecord(
+        id=uuid.uuid4(),
+        resource_id=resource_id,
+        storage_key=f"ab/cd/{uuid.uuid4()}.pdf",
+        original_filename="chapter.pdf",
+        byte_size=1024,
+        page_count=12,
+        content_type="application/pdf",
+        checksum="0" * 64,
+        status=status,
+    )
+
+
+def a_written_note(resource_id, *, title="Round robin", status="active"):
+    """One note already kept against a resource."""
+    return ResourceNoteRecord(
+        id=uuid.uuid4(),
+        resource_id=resource_id,
+        title=title,
+        body="Quantum first, then the ready queue.",
+        status=status,
+    )
+
+
+def removable(owner_record, *, notes=(), files=()):
+    """A use case over one registered resource with the owned rows supplied."""
+    stored = ResourceRecord(
+        id=uuid.uuid4(),
+        owner_learner_id=owner_record.id,
+        resource_type="pdf",
+        title="Operating Systems notes",
+        source_label="Blue binder",
+        external_reference=None,
+        status=REGISTERED,
+    )
+    note_records = [a_written_note(stored.id, title=title) for title in notes]
+    file_records = [a_stored_file(stored.id) for _ in range(files)] if files else []
+    repository = FakeResourceRepository(resources=[stored], topics=[], links=None)
+    note_repository = FakeResourceNoteRepository(notes=note_records)
+    file_repository = FakeResourceFileRepository(records=file_records)
+    storage = FakeResourceFileStorage()
+    for record in file_records:
+        storage.written[record.storage_key] = b"%PDF-1.4 bytes"
+    use_case = ManageResources(
+        learners=FakeLearnerRepository((owner_record,)),
+        resources=repository,
+        notes=note_repository,
+        files=file_repository,
+        storage=storage,
+    )
+    return use_case, stored, repository, note_repository, file_repository, storage
+
+
+def test_removing_a_resource_takes_everything_it_owns(owner):
+    """RES-005 -- the widest destruction in LearnFlow."""
+    use_case, stored, resources, notes, files, storage = removable(
+        owner, notes=("First", "Second"), files=2
+    )
+
+    removed = use_case.delete(stored.id)
+
+    assert resources.resources == []
+    assert notes.notes == []
+    assert files.records == []
+    assert storage.written == {}
+    assert removed.title == "Operating Systems notes"
+    assert (removed.notes_removed, removed.files_removed, removed.bytes_unlinked) == (2, 2, 2)
+
+
+def test_a_removed_resource_cannot_be_read_back(owner):
+    use_case, stored, _, _, _, _ = removable(owner)
+
+    use_case.delete(stored.id)
+
+    with pytest.raises(ResourceNotFoundError):
+        use_case.read(stored.id)
+
+
+def test_removing_a_resource_with_nothing_kept_against_it_reports_nothing_lost(owner):
+    use_case, stored, _, _, _, _ = removable(owner)
+
+    removed = use_case.delete(stored.id)
+
+    assert (removed.notes_removed, removed.files_removed, removed.bytes_unlinked) == (0, 0, 0)
+
+
+def test_an_archived_resource_can_still_be_removed(owner):
+    """The one place archived material is not read-only: requiring an archive
+    first would turn the shelf into a deletion queue."""
+    use_case, stored, resources, _, _, _ = removable(owner)
+    use_case.update(stored.id, ResourceChanges(status="archived"))
+
+    use_case.delete(stored.id)
+
+    assert resources.resources == []
+
+
+def test_removing_one_resource_leaves_another_learners_material(owner):
+    stranger = learner("Ravi")
+    theirs = ResourceRecord(
+        id=uuid.uuid4(),
+        owner_learner_id=stranger.id,
+        resource_type="note",
+        title="Not yours",
+        source_label="Shelf",
+        external_reference=None,
+        status=REGISTERED,
+    )
+    use_case, stored, resources, _, _, _ = removable(owner)
+    resources.resources.append(theirs)
+
+    use_case.delete(stored.id)
+
+    assert [r.title for r in resources.resources] == ["Not yours"]
+
+
+def test_another_learners_resource_cannot_be_removed(owner):
+    """Reported as missing rather than forbidden: existence is a disclosure."""
+    stranger = learner("Ravi")
+    theirs = ResourceRecord(
+        id=uuid.uuid4(),
+        owner_learner_id=stranger.id,
+        resource_type="note",
+        title="Not yours",
+        source_label="Shelf",
+        external_reference=None,
+        status=REGISTERED,
+    )
+    use_case, _, resources, _, _, _ = removable(owner)
+    resources.resources.append(theirs)
+
+    with pytest.raises(ResourceNotFoundError):
+        use_case.delete(theirs.id)
+
+    assert any(r.id == theirs.id for r in resources.resources)
+
+
+def test_removing_a_resource_that_is_not_there_is_refused(owner):
+    use_case, _, _, _, _, _ = removable(owner)
+
+    with pytest.raises(ResourceNotFoundError):
+        use_case.delete(uuid.uuid4())
+
+
+def test_the_storage_keys_are_read_before_any_row_is_deleted(owner):
+    """The only workable order: once the rows are gone nothing names the bytes."""
+    use_case, stored, _, _, files, storage = removable(owner, files=2)
+    rows_when_unlinked = []
+    unlink = storage.remove
+
+    def watch(storage_key):
+        rows_when_unlinked.append(len(files.records))
+        unlink(storage_key)
+
+    storage.remove = watch
+
+    use_case.delete(stored.id)
+
+    # Every unlink ran after the rows had gone, from keys captured beforehand.
+    assert rows_when_unlinked == [0, 0]
+    assert storage.written == {}
+
+
+def test_a_failed_unlink_is_raised_so_the_whole_removal_rolls_back(owner):
+    """Nothing is caught here on purpose: the exception is what undoes every row
+    deletion, so a learner keeps material LearnFlow could not fully remove."""
+    use_case, stored, _, _, _, storage = removable(owner, notes=("First",), files=1)
+
+    def refuse(storage_key):
+        raise OSError("read-only file system")
+
+    storage.remove = refuse
+
+    with pytest.raises(OSError):
+        use_case.delete(stored.id)
+
+
+def test_a_resource_whose_bytes_are_already_gone_is_still_removed(owner):
+    """What a commit failing after an unlink, or an older volume restore, leaves.
+    Asking again clears it rather than reporting a fault."""
+    use_case, stored, resources, _, files, storage = removable(owner, files=2)
+    storage.written.clear()
+
+    use_case.delete(stored.id)
+
+    assert resources.resources == []
+    assert files.records == []
+
+
+def test_removing_a_resource_writes_no_stage_plan_or_revision(owner):
+    """A resource says where material is, never that a topic is understood."""
+    use_case, stored, _, _, _, _ = removable(owner, notes=("First",), files=1)
+
+    removed = use_case.delete(stored.id)
+
+    assert not hasattr(removed, "learning_stage")
+    assert not hasattr(removed, "plan_item_id")
