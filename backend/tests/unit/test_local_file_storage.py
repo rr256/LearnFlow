@@ -145,11 +145,85 @@ def test_nothing_outside_the_root_is_readable(storage: LocalResourceFileStorage,
         assert storage.read(attempt) is None
 
 
-def test_the_adapter_offers_no_way_to_delete(storage: LocalResourceFileStorage):
-    """The port has no removal method, and neither does this."""
-    assert not hasattr(storage, "delete")
-    assert not hasattr(storage, "remove")
-    assert not hasattr(storage, "unlink")
+# -- removal, the one destructive capability ---------------------------------
+
+
+def test_removing_a_stored_file_deletes_its_bytes(storage: LocalResourceFileStorage):
+    key = storage.store(content=a_pdf())
+
+    storage.remove(key)
+
+    assert storage.read(key) is None
+
+
+def test_removing_the_same_file_twice_is_not_an_error(storage: LocalResourceFileStorage):
+    """Deletion must be safe to repeat.
+
+    The row is already gone by the time this runs, so raising on a second attempt
+    would strand a file nothing can name.
+    """
+    key = storage.store(content=a_pdf())
+
+    storage.remove(key)
+    storage.remove(key)
+
+    assert storage.read(key) is None
+
+
+def test_removing_a_key_that_was_never_stored_is_not_an_error(
+    storage: LocalResourceFileStorage,
+):
+    storage.remove("ab/cd/00000000-0000-4000-8000-000000000000.pdf")
+
+
+def test_removing_one_file_leaves_the_others(storage: LocalResourceFileStorage):
+    keep, remove = storage.store(content=a_pdf()), storage.store(content=a_pdf(pages=3))
+
+    storage.remove(remove)
+
+    assert storage.read(keep) is not None
+    assert storage.read(remove) is None
+
+
+@pytest.mark.parametrize(
+    "crafted",
+    [
+        "../../../../etc/passwd",
+        "/etc/passwd",
+        "ab/cd/../../../../secret.pdf",
+        r"C:\Windows\win.ini",
+        "",
+        "ab/cd/not-a-uuid.pdf",
+    ],
+)
+def test_a_crafted_key_removes_nothing(
+    storage: LocalResourceFileStorage, tmp_path: Path, crafted: str
+):
+    """The guard that matters most: `remove` is the destructive one.
+
+    `read` and `remove` share one path check for exactly this reason -- a second
+    copy is a second place for it to drift, and drift here deletes files.
+    """
+    outsider = tmp_path / "outside.pdf"
+    outsider.write_bytes(b"%PDF-do-not-touch")
+    kept = storage.store(content=a_pdf())
+
+    storage.remove(crafted)
+
+    assert outsider.read_bytes() == b"%PDF-do-not-touch"
+    assert storage.read(kept) is not None
+
+
+def test_removal_leaves_the_shard_directories_alone(
+    storage: LocalResourceFileStorage, tmp_path: Path
+):
+    """Pruning is how a delete routine grows into one that removes too much."""
+    key = storage.store(content=a_pdf())
+    shard = (tmp_path / "resources" / key).parent
+
+    storage.remove(key)
+
+    assert shard.is_dir()
 
 
 # -- inspecting a PDF ---------------------------------------------------------

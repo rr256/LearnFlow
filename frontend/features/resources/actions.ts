@@ -23,6 +23,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { RemoveState } from "@/features/resources/RemoveControl";
+
 import {
   readEditNoteSubmission,
   readNoteStatusSubmission,
@@ -39,6 +41,7 @@ import {
 } from "@/features/resources/submission";
 import {
   ApiError,
+  deleteResourceNote,
   registerResource,
   updateResource,
   updateResourceNote,
@@ -276,5 +279,40 @@ export async function saveResourceNoteStatus(
       return { status: "error", message: error.message };
     }
     throw error;
+  }
+}
+
+/**
+ * RES-019 — remove a note permanently.
+ *
+ * **Irreversible.** Nothing derived from a note is stored, so the row is all
+ * there is. The screen puts this behind a disclosure the learner opens first, so
+ * it takes two deliberate actions rather than one stray click.
+ *
+ * Correcting a note in place is usually the better answer, and setting one aside
+ * stays the reversible option; both remain on the same line.
+ */
+export async function removeResourceNoteAction(
+  _previous: RemoveState,
+  form: FormData,
+): Promise<RemoveState> {
+  const noteId = form.get("note_id");
+  if (typeof noteId !== "string" || !noteId.trim()) {
+    return { message: "That note could not be identified. Reload the page and try again." };
+  }
+
+  try {
+    await deleteResourceNote(noteId.trim());
+    revalidateEverywhereMaterialAppears();
+    return { message: null };
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    return {
+      message: error.isNotFound
+        ? "That note is no longer there. Reload the page."
+        : error.message,
+    };
   }
 }

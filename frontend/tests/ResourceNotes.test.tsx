@@ -12,6 +12,7 @@ vi.mock("@/features/resources/actions", () => ({
   writeResourceNoteAction: vi.fn(),
   saveResourceNoteEdit: vi.fn(),
   saveResourceNoteStatus: vi.fn(),
+  removeResourceNoteAction: vi.fn(async () => ({ message: null })),
 }));
 
 const { ResourceNotes } = await import("@/features/resources/ResourceNotes");
@@ -51,7 +52,10 @@ describe("ResourceNotes", () => {
       <ResourceNotes notes={[note()]} resourceId="resource-1" writable />,
     );
 
-    expect(screen.getByText("Deadlock conditions")).toBeDefined();
+    // The title now appears twice: as the note's own heading, and inside the
+    // removal warning that names what would be lost. Both are wanted.
+    expect(screen.getAllByText("Deadlock conditions").length).toBeGreaterThan(0);
+    expect(container.querySelector("summary")?.textContent).toContain("Deadlock conditions");
     expect(
       displayedBody(container, "Mutual exclusion, hold and wait, no pre-emption, circular wait."),
     ).toBeDefined();
@@ -106,8 +110,8 @@ describe("ResourceNotes", () => {
     );
 
     expect(screen.getByText("Notes you have put aside")).toBeDefined();
-    expect(screen.getByText("In use")).toBeDefined();
-    expect(screen.getByText("Set down")).toBeDefined();
+    expect(screen.getAllByText("In use").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Set down").length).toBeGreaterThan(0);
   });
 
   it("says nothing about how many notes there are", () => {
@@ -162,12 +166,40 @@ describe("ResourceNotes", () => {
     expect(screen.getByText("Still here.")).toBeDefined();
   });
 
-  it("offers no way to delete a note", () => {
+  it("offers removal, behind a disclosure and after the two options that keep it", () => {
+    // RES-019. Correcting the note and setting it aside both come first on the
+    // line; removing is last and closed by default.
     const { container } = render(
       <ResourceNotes notes={[note()]} resourceId="resource-1" writable />,
     );
 
-    expect(container.textContent).not.toMatch(/delete|remove|erase/i);
+    const summaries = [...container.querySelectorAll("summary")].map((s) => s.textContent ?? "");
+    const correct = summaries.findIndex((text) => text.includes("Correct this note"));
+    const remove = summaries.findIndex((text) => text.includes("Remove this note"));
+
+    expect(correct).toBeGreaterThanOrEqual(0);
+    expect(remove).toBeGreaterThan(correct);
+    expect(
+      [...container.querySelectorAll("summary")][remove]?.closest("details")?.hasAttribute("open"),
+    ).toBe(false);
+  });
+
+  it("says what removal costs and names the reversible option", () => {
+    const { container } = render(
+      <ResourceNotes notes={[note()]} resourceId="resource-1" writable />,
+    );
+
+    expect(container.textContent).toMatch(/permanent/i);
+    expect(container.textContent).toMatch(/cannot be undone/i);
+    expect(container.textContent).toMatch(/set it aside instead/i);
+  });
+
+  it("offers no removal on material that is put aside", () => {
+    const { container } = render(
+      <ResourceNotes notes={[note()]} resourceId="resource-1" writable={false} />,
+    );
+
+    expect(container.textContent).not.toMatch(/remove this note/i);
   });
 
   it("offers no search control of its own", () => {

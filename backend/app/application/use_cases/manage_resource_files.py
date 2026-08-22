@@ -20,10 +20,16 @@ and the bytes arrive; LearnFlow never learns where it sat on their machine, and
 never reveals where it put it. `storage_key` stays inside this layer and its
 adapters.
 
-**Nothing is deleted.** A file is set aside with `archived` and comes back
-unchanged; there is no removal method on either port, so this use case could not
-delete a byte if asked. Permanent deletion is RES-005, and it must coordinate
-bytes and rows together.
+**One thing is destroyed, and only on the learner's explicit instruction.**
+RES-018 removes a stored file permanently — the narrow exception
+[ADR-041](../../../../docs/adr/ADR-041-removing-a-stored-file-or-note.md) argues
+for, so a learner who uploads the wrong document is not stuck with it forever.
+Setting a file aside with `archived` remains the reversible option and stays what
+the product suggests first.
+
+**A row is transactional and bytes are not**, so removing both can be sequenced
+and never made atomic. `delete_file` states exactly what each failure leaves
+behind, and both leave a state the learner can act on.
 
 **Ownership is the resource's.** A file is reached through the resource it
 belongs to, and that resource must belong to the effective learner — the rule
@@ -225,6 +231,46 @@ class ManageResourceFiles:
                 f"The stored file {file_id} is recorded but its content is not in storage."
             )
         return ResourceFileContent(record=record, content=content)
+
+    def delete_file(self, file_id: uuid.UUID) -> None:
+        """Remove a stored file permanently (RES-018).
+
+        **This destroys a learner's data, and it is the only thing here that
+        does.** It exists because a stored file is bytes on a volume that cannot
+        be corrected in place: a learner who chooses the wrong document would
+        otherwise carry it forever, and it would count against their file
+        ceiling. Archiving stays the reversible option.
+
+        **Both steps run in one request, and the commit comes after both.** The
+        row is marked deleted first and the bytes are unlinked second, but the
+        provider commits when its block exits — *after* this returns — so the
+        unlink runs while the row deletion is still uncommitted. That gives two
+        failure modes, and neither loses the learner's file silently:
+
+        - **The unlink fails.** The exception propagates, the provider rolls
+          back, and **nothing is deleted** — row and bytes both survive. The
+          learner asks again.
+        - **The commit fails after the unlink.** The row survives with its bytes
+          gone. `read_file` already reports that as a missing file rather than a
+          fault, and asking again removes the row, so the state clears itself.
+
+        Making the two atomic is not possible: a filesystem does not join a
+        database transaction. The guarantee is that every failure leaves a state
+        the learner can act on, not that no failure leaves one.
+
+        Refused on archived material, because archived material is read-only
+        everywhere in LearnFlow.
+
+        Raises:
+            LearnerNotSetUpError: No learner is stored yet.
+            UnknownResourceFileError: The file is not this learner's.
+            ResourceNotWritableError: Its resource is archived.
+        """
+        record = self._owned_file(file_id)
+        self._writable_resource(record.resource_id)
+
+        self._files.delete_file(record.id)
+        self._storage.remove(record.storage_key)
 
     def set_file_status(self, *, file_id: uuid.UUID, status: str) -> ResourceFileRecord:
         """Set a file aside, or bring it back (RES-017).

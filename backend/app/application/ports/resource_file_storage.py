@@ -17,10 +17,18 @@ reads them back, and nothing else: no text extraction, no OCR, no thumbnail, no
 preview, and no scanning. `DocumentInspector` reads a document's **structure** —
 how many pages, and whether it is encrypted — and returns no content at all.
 
-**Nothing here deletes.** There is deliberately no removal method on either port:
-a learner sets a file aside reversibly, and safe permanent deletion is a separate
-feature (RES-005) that must coordinate bytes and rows together
-([ADR-040](../../../../docs/adr/ADR-040-learner-uploaded-resource-files.md)).
+**Removal exists, and it is the only destructive capability in LearnFlow.**
+RES-018 and RES-019 let a learner permanently remove a stored file or a note they
+added by mistake — the narrow exception
+[ADR-041](../../../../docs/adr/ADR-041-removing-a-stored-file-or-note.md) argues
+for, against LearnFlow's otherwise exceptionless rule that nothing is destroyed.
+Setting something aside stays the reversible option, and is still what the product
+recommends.
+
+**Neither port owns the ordering, and the two cannot be made atomic.** A row is
+transactional and bytes are not, so removing both can only be sequenced — a
+filesystem does not join a database transaction. What each failure leaves behind
+is the use case's to state, and `ManageResourceFiles.delete_file` states it.
 """
 
 import uuid
@@ -47,6 +55,19 @@ class ResourceFileStorage(Protocol):
 
         Returns:
             An opaque key. Never a path, and never anything a caller may parse.
+        """
+        ...
+
+    def remove(self, storage_key: str) -> None:
+        """Delete the bytes behind a key. **Permanent.**
+
+        **A key that names nothing is not an error.** Deletion has to be safe to
+        repeat: a retry after a partial failure, and a row whose bytes a restore
+        already lost, both have to end in the same place rather than raising.
+
+        **Any other failure must raise.** The caller's transaction is still open
+        when this runs, so an exception is what rolls the row deletion back and
+        leaves the learner's file intact.
         """
         ...
 
@@ -115,4 +136,12 @@ class ResourceFileRepository(Protocol):
 
     def update_file(self, record: ResourceFileRecord) -> None:
         """Save a changed status. Nothing else about a stored file may move."""
+        ...
+
+    def delete_file(self, file_id: uuid.UUID) -> None:
+        """Remove the row describing a stored file. **Permanent.**
+
+        Deleting a row this does not hold is not an error, for the reason
+        `ResourceFileStorage.remove` gives: the operation must be safe to repeat.
+        """
         ...

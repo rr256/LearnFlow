@@ -2,7 +2,7 @@
 title: LearnFlow Repository and Folder Structure
 status: approved
 owner: architecture-and-development
-last_updated: 2026-08-20
+last_updated: 2026-08-22
 related:
   - ../00-project-context.md
   - tech-stack.md
@@ -37,6 +37,7 @@ related:
   - ../adr/ADR-036-topic-material-on-the-plan-screens.md
   - ../domain/terminology.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
+  - ../adr/ADR-041-removing-a-stored-file-or-note.md
 ---
 
 # LearnFlow Repository and Folder Structure
@@ -188,7 +189,7 @@ Contains concrete technology adapters.
 | --- | --- |
 | `persistence/` | SQLAlchemy models, repository implementations, database/session setup. |
 | `providers/` | Ollama, embeddings, ChromaDB/retrieval adapters, future cloud adapters. |
-| `storage/` | Local filesystem storage adapter and future cloud storage adapters. |
+| `storage/` | Local filesystem storage adapter and future cloud storage adapters. Its `remove` unlinks one file within the storage root and **never a directory**, because a routine that prunes directories is one that can delete more than it was asked to. |
 | `rag/` | PDF extraction, chunking, indexing, and retrieval implementation details. |
 
 One module sits at the root of `infrastructure/` rather than in a subfolder: `clock.py`, the system
@@ -391,7 +392,7 @@ quizzes/
 external-tests/
 ```
 
-Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, `resources/`, `practice/`, and `mentor/` exist today. `resources/` also holds the **stored-file** controls (RES-014 to RES-017) and their server actions.
+Each feature owns its screens, view models, feature-specific components, and API interactions while using shared components/types where appropriate. `home/`, `curriculum/`, `onboarding/`, `planner/`, `progress/`, `revision/`, `resources/`, `practice/`, and `mentor/` exist today. `resources/` also holds the **stored-file** controls (RES-014 to RES-018) and their server actions, and the one control in LearnFlow that destroys something.
 
 `practice/` holds **checkpoint practice**: `QuestionForm.tsx` serving both writing and **correcting** — one component, as `ResourceForm` is for a resource, since both ask for the same five fields and differ only in whether they start filled and which endpoint they reach — `QuestionBank.tsx` and `QuestionStatusControl.tsx` for reading them back, correcting one behind a `<details>` disclosure, and setting one aside,
 `StartQuizForm.tsx` for choosing topics, `QuizForm.tsx` for answering a quiz in one form post,
@@ -410,18 +411,30 @@ and `pagination.total` is never read. See
 [ADR-034](../adr/ADR-034-checkpoint-practice-history.md), and
 [ADR-035](../adr/ADR-035-practice-question-correction.md).
 
-`resources/` holds the **learning-resource catalogue**, which supports **add, edit, and archive**:
-`ResourceCatalogue.tsx` for the screen and `ResourceForm.tsx` for both the add and the edit form —
-one component, since both ask for the same six fields and differ only in whether they start filled
-and which endpoint they reach — `ResourceStatusControl.tsx` for putting material aside and back,
-`TopicResources.tsx` for the read-only list shown beside a topic by the curriculum view, the
+`resources/` holds the **learning-resource catalogue**, which supports **add, edit, archive, and
+remove**: `ResourceCatalogue.tsx` for the screen and `ResourceForm.tsx` for both the add and the edit
+form — one component, since both ask for the same six fields and differ only in whether they start
+filled and which endpoint they reach — `ResourceStatusControl.tsx` for putting material aside and
+back, `TopicResources.tsx` for the read-only list shown beside a topic by the curriculum view, the
 revision screen, `/plan`, and `/plan/today` — called from five components across four screens, so
 the rules about ordering, archived material, and recommending nothing are enforced once rather than
-restated in each — `by-topic.ts` and `topic-options.ts` for the joins and the topic picker, `actions.ts` for the
-three writes, and `submission.ts` for the form state, which lives apart from the actions because a
-`"use server"` module may export only async functions. See
-[ADR-032](../adr/ADR-032-learning-resource-catalogue.md) and
-[ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md).
+restated in each — `by-topic.ts` and `topic-options.ts` for the joins and the topic picker,
+`actions.ts` for the note and resource writes, and `submission.ts` for the form state, which lives
+apart from the actions because a `"use server"` module may export only async functions.
+
+**`RemoveControl.tsx` is the one component in LearnFlow that destroys something**, and it serves both
+removals (RES-018 and RES-019) rather than each screen writing its own. Its confirm button sits
+inside a **closed `<details>` disclosure**, so removing takes two deliberate actions; that disclosure
+*is* the confirmation step, chosen over a `window.confirm` which does not exist with JavaScript
+switched off and cannot be styled. It is a client component because the pending state needs
+hydration, so the two removals it is handed must be genuine server actions, one from `actions.ts` and
+one from `file-actions.ts`. Its markup and copy are **server-rendered** and its form **posts
+natively**, and with JavaScript enabled it works like every other control here; how much of
+`/resources` survives scripting being **disabled** is a separate, **pre-existing, page-wide** question
+that [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md) records. See
+[ADR-032](../adr/ADR-032-learning-resource-catalogue.md),
+[ADR-036](../adr/ADR-036-topic-material-on-the-plan-screens.md), and
+[ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md).
 
 `onboarding/` holds the **learner setup** capability's screen. The module keeps the narrower name
 because a module directory names a UI flow, which is the one use

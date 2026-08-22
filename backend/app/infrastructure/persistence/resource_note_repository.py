@@ -89,6 +89,20 @@ class SqlAlchemyResourceNoteRepository:
             )
         )
 
+    def delete_note(self, note_id: uuid.UUID) -> None:
+        """Remove a note permanently.
+
+        Unlike a stored file there is no second thing to clean up: nothing
+        derived from a note is stored, so the row is all there is.
+
+        A note that is not there is already in the wanted state, so this does not
+        raise -- deletion has to be safe to repeat, which is where it differs
+        from ``update_note`` above.
+        """
+        row = self._session.get(ResourceNoteRow, note_id)
+        if row is not None:
+            self._session.delete(row)
+
     def update_note(self, record: ResourceNoteRecord) -> None:
         """Store a changed note.
 

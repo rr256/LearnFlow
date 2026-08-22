@@ -2,7 +2,7 @@
 title: LearnFlow Docker Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-20
+last_updated: 2026-08-21
 related:
   - ../00-project-context.md
   - environments.md
@@ -17,6 +17,7 @@ related:
   - ../database/schema.md
   - ../api/endpoints.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
+  - ../adr/ADR-041-removing-a-stored-file-or-note.md
 ---
 
 # LearnFlow Docker Strategy
@@ -288,7 +289,8 @@ database and the files be backed up and restored independently.
 
 - **`docker compose down -v` deletes `resource_files` and `postgres_data` together.** That is why it
   is not a routine stop command. A learner's uploaded PDFs are gone with it, and LearnFlow has no
-  copy anywhere else.
+  copy anywhere else. This destroys **every** file at once, where RES-018 removes one the learner
+  named — the difference between an accident and a decision.
 
 ### Backup is now two things
 
@@ -305,6 +307,27 @@ listed, rather than deleting the record.
 
 A complete backup therefore copies the volume as well, for example with a throwaway container that
 mounts it read-only and writes a tar to the host. Verify a restore before relying on it.
+
+### A backup is not an undo for a removed file
+
+Since [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md) a learner can **remove** one stored
+file (RES-018) or one note (RES-019) permanently. LearnFlow keeps **no copy**: there is no soft
+delete, no grace period, and no recycle bin, and nothing in the product can bring either back.
+
+**A backup the learner took themselves is the only recovery, and it is partial.** The two halves have
+to be restored *together* to give back a working file:
+
+- Restoring the **volume alone** returns the bytes with **no row**. Nothing in LearnFlow can reach
+  them — RES-018 deletes the bytes a row *names*, and an orphan has no row — so they occupy space and
+  appear nowhere. Clearing an orphan is a volume operation, not an API call.
+- Restoring the **database alone** returns the row with no bytes, which is the state described above:
+  a `404` on download, and the row still listed.
+
+**Restoring either half also un-removes everything else** the learner deleted since that backup was
+taken, which is rarely what they want. Treat a backup as protection against loss, not as an undo.
+
+**Removing a note needs no volume consideration at all**: nothing derived from a note is stored, so
+the row is all there is and a `pg_dump` captures it whole.
 
 **The backend image creates the storage directory and owns it.** A named volume is initialised from
 the image's directory at the mount point, ownership included; without that step a fresh volume is

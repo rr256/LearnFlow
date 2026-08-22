@@ -8,8 +8,10 @@ file, how big it is, how many pages it has, and the opaque key that finds it.
 carries the owner, so the use case checks ownership there. Duplicating it on this
 table would create two places for it to disagree.
 
-**Nothing here deletes.** The port has no removal method and neither does this
-adapter, so a learner setting a file aside moves a status and nothing more.
+**Removal deletes the row and nothing else.** The bytes are the storage
+adapter's, unlinked by the use case in the same request once this row is marked
+deleted — and before the commit, which is why a failed unlink takes this row's
+deletion down with it.
 """
 
 import uuid
@@ -84,6 +86,12 @@ class SqlAlchemyResourceFileRepository:
         if row is None:
             return
         row.status = record.status
+
+    def delete_file(self, file_id: uuid.UUID) -> None:
+        """Remove the row. A row that is not there is already in the wanted state."""
+        row = self._session.get(ResourceFile, file_id)
+        if row is not None:
+            self._session.delete(row)
 
 
 def _record(row: ResourceFile) -> ResourceFileRecord:

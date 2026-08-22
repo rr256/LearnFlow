@@ -26,7 +26,10 @@ to count pages and detect encryption, and returns neither text nor any part of
 it. There is no extraction, no OCR, no rendering, and no thumbnail: this feature
 stores files and reads them back.
 
-**Nothing here deletes.** There is no removal method, because the port has none.
+**Removal is the one destructive thing here**, and it unlinks a single file
+within the storage root. It never removes a directory: an empty shard costs
+nothing, and a routine that prunes directories is a routine that can delete more
+than it was asked to.
 """
 
 import re
@@ -84,6 +87,29 @@ class LocalResourceFileStorage:
         destination.write_bytes(content)
         return key
 
+    def remove(self, storage_key: str) -> None:
+        """Delete the bytes behind a key, if they are there.
+
+        The key is validated against the shape this module issues **before** it is
+        joined to the root, exactly as `read` does, so a crafted value cannot
+        reach outside the storage directory. Anything failing that check is
+        ignored rather than acted on.
+
+        **A missing file is success, not an error.** Deletion must be safe to
+        repeat: a retry after a partial failure, and a row whose bytes a restore
+        already lost, both have to end in the same place. Every other failure —
+        a permission error, a read-only mount — is raised, which is what rolls
+        the caller's still-open transaction back.
+
+        The containing directories are deliberately left behind. An empty shard
+        costs nothing, and pruning is how a delete routine grows into one that
+        removes more than it was asked to.
+        """
+        located = self._within_root(storage_key)
+        if located is None:
+            return
+        located.unlink(missing_ok=True)
+
     def read(self, storage_key: str) -> bytes | None:
         """The bytes behind a key, or `None` when nothing is there.
 
@@ -92,6 +118,18 @@ class LocalResourceFileStorage:
         directory. A missing file is `None`: a volume restored from a backup
         older than the database would look exactly like that, and it is a state
         the caller reports rather than a fault.
+        """
+        located = self._within_root(storage_key)
+        if located is None or not located.is_file():
+            return None
+        return located.read_bytes()
+
+    def _within_root(self, storage_key: str) -> Path | None:
+        """The real path a key names, or `None` when it names nothing legitimate.
+
+        Shared by `read` and `remove` so both are guarded identically -- a second
+        copy of this check is a second place for it to drift, and `remove` is the
+        one that would be destructive if it did.
         """
         if not _KEY_PATTERN.match(storage_key):
             return None
@@ -102,9 +140,7 @@ class LocalResourceFileStorage:
             location.resolve().relative_to(self._root.resolve())
         except ValueError:
             return None
-        if not location.is_file():
-            return None
-        return location.read_bytes()
+        return location
 
 
 class PyPdfDocumentInspector:

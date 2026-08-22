@@ -2,10 +2,11 @@
 title: LearnFlow Database Migrations
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-20
+last_updated: 2026-08-21
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-041-removing-a-stored-file-or-note.md
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
@@ -168,6 +169,12 @@ The following usually do not require a migration:
 - Pure application validation that has no schema impact.
 - Query or repository refactoring that leaves schema behavior unchanged.
 - Documentation-only clarifications.
+- **Deleting rows from a table that already exists.** RES-018 and RES-019 —
+  [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md) — let a learner permanently remove one
+  stored file or one note, and needed **no migration, no column, and no table**: there is deliberately
+  no `deleted_at`, no soft-delete flag, and no tombstone, because nothing is recoverable and a column
+  recording that would be a copy LearnFlow promised not to keep. The **bytes** a removed file leaves
+  are not a schema concern either; see [the Docker strategy](../deployment/docker.md).
 
 ## Schema-Change Rules
 

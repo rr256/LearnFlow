@@ -1052,6 +1052,65 @@ export async function updateResourceFile(
 }
 
 /**
+ * RES-018 -- remove a stored PDF permanently.
+ *
+ * **Irreversible.** The row and the bytes both go, and LearnFlow keeps no copy.
+ * Setting a file aside is the reversible alternative.
+ *
+ * @throws ApiError with `isNotFound` when the file is not the learner's or is
+ *   already gone, and `isConflict` when its resource is archived.
+ */
+export async function deleteResourceFile(fileId: string): Promise<void> {
+  await requestNoContent(`/api/v1/resource-files/${encodeURIComponent(fileId)}`);
+}
+
+/**
+ * RES-019 -- remove a note permanently.
+ *
+ * **Irreversible.** Nothing derived from a note is stored, so the row is all
+ * there is. Correcting a note in place is usually the better answer.
+ *
+ * @throws ApiError with `isNotFound` when the note is not the learner's or is
+ *   already gone, and `isConflict` when its resource is archived.
+ */
+export async function deleteResourceNote(noteId: string): Promise<void> {
+  await requestNoContent(`/api/v1/resource-notes/${encodeURIComponent(noteId)}`);
+}
+
+/**
+ * Send a `DELETE` that answers `204` with no body.
+ *
+ * `requestJson` cannot be reused: it parses a body, and a `204` has none. A
+ * failure still carries the documented error envelope, so that is read here.
+ */
+async function requestNoContent(path: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${resolveApiBaseUrl()}${path}`, {
+      method: "DELETE",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+  } catch {
+    throw new ApiError(
+      "api_unreachable",
+      "The LearnFlow API could not be reached. Check that the backend is running.",
+      null,
+    );
+  }
+
+  if (!response.ok) {
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+    throw toApiError(response.status, body);
+  }
+}
+
+/**
  * RES-016 -- one stored PDF's bytes, for the learner who owns them.
  *
  * Returns the raw `Response` rather than a parsed body, so the route handler

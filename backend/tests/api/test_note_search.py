@@ -289,9 +289,17 @@ def test_searching_writes_nothing(resource_client, cataloguing):
 
 
 def test_the_search_is_read_only_over_http(resource_client, cataloguing):
-    """No verb but GET reaches it."""
-    for method in (resource_client.post, resource_client.put, resource_client.delete):
+    """No verb but GET reaches it, and none of them can remove anything.
+
+    `DELETE` no longer answers `405`: RES-019 added
+    `DELETE /resource-notes/{note_id}`, and `search` is matched against that path
+    parameter before it is validated. It is refused as a malformed identifier, so
+    the search path still cannot be written to or deleted through — the outcome
+    this test exists for.
+    """
+    for method in (resource_client.post, resource_client.put):
         assert method(SEARCH).status_code == 405
+    assert resource_client.delete(SEARCH).status_code == 422
 
 
 def test_retrieval_itself_still_answers_nothing(resource_client, cataloguing):

@@ -2,7 +2,7 @@
 title: "ADR-040: Store a Learner's Own PDF Files in a Local Volume, Beside Their Metadata"
 status: accepted
 owner: architecture-and-ai
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 related:
   - ../00-project-context.md
   - ADR-002-provider-pattern.md
@@ -14,6 +14,7 @@ related:
   - ADR-037-learner-written-resource-notes.md
   - ADR-038-local-topic-note-retrieval.md
   - ADR-039-source-grounded-study-answers.md
+  - ADR-041-removing-a-stored-file-or-note.md
   - ../api/conventions.md
   - ../api/endpoints.md
   - ../architecture/dependency-rules.md
@@ -226,6 +227,43 @@ fetched from the web, and no path on their machine is stored.
 
 **`resource_ingestions` stays absent**, RES-006 to RES-008 stay unimplemented, and
 no retrieval, note, or mentor behaviour changes.
+
+## Implementation status
+
+**2026-08-21 — a stored file can now be removed permanently, and "the lifecycle keeps every byte" is
+narrowed.**
+
+[ADR-041](ADR-041-removing-a-stored-file-or-note.md) adds **RES-018**: a learner may permanently
+remove one stored file, row and bytes together. It is irreversible, LearnFlow keeps no copy, and
+there is no soft delete.
+
+**Two statements in this record are narrowed, and neither is rewritten.** Its `## Status` section
+closes with **"Nothing is deleted."** — a file may now be removed permanently — and *Consequences* above
+says "Nothing is deleted, and that has a cost… **RES-005 — safe permanent deletion — is recorded as
+the next feature this area needs**." The cost was met in the first week of real use, and what shipped is
+narrower than RES-005: two **leaf** removals, one per record, with no cascade. **RES-005 itself stays
+unimplemented**, and now waits only on the cascade it implies rather than on a reason to delete.
+
+**Archiving keeps its meaning.** Setting a file aside is still reversible, still leaves the bytes in
+the volume, and is still what the screen offers first. A file's own status is not consulted when
+removing, because shelving and removing are different answers to the same mistake — but archived
+**material** refuses removal with `409`, exactly as it refuses every other write here.
+
+**The row-with-no-bytes state this record documented is now load-bearing.** *Consequences* above
+already recorded that a volume restored from an older backup leaves rows naming files that are not
+there, and that LearnFlow reports it honestly with a `404`. That handled state is what makes the one
+imperfect removal failure recoverable: a commit failing after an unlink leaves exactly it, and asking
+again clears the row.
+
+**Backup guidance gains a limit.** A backup was already necessary; it is now explicitly **not an
+undo**, because restoring the volume alone returns bytes with no row that nothing in the product can
+reach. See [the Docker strategy](../deployment/docker.md).
+
+**Everything else this record decided is unchanged**: what is accepted, the volume, the ownership
+checks, the proxied download, the two dependencies, and the absence of extraction, OCR, scanning, and
+`resource_ingestions`. It needed **no migration**, and `20260821_01` is unaltered.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
 
 ## Implementation status
 

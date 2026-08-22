@@ -56,6 +56,9 @@ class FakeResourceNoteRepository:
             raise AssertionError(f"Note {record.id} is already stored.")
         self.notes.append(record)
 
+    def delete_note(self, note_id: uuid.UUID) -> None:
+        self.notes = [note for note in self.notes if note.id != note_id]
+
     def update_note(self, record: ResourceNoteRecord) -> None:
         self._require_storable(record)
         for index, stored in enumerate(self.notes):

@@ -2,7 +2,7 @@
 title: LearnFlow Delivery Milestones
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 related:
   - ../00-project-context.md
   - roadmap.md
@@ -41,6 +41,7 @@ related:
   - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-039-source-grounded-study-answers.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
+  - ../adr/ADR-041-removing-a-stored-file-or-note.md
 ---
 
 # LearnFlow Delivery Milestones
@@ -524,11 +525,12 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
 
 - [ ] Learner can register/link supported local resources to topics. **Registering and linking are
   done**: RES-001 to RES-004 record a title, a kind, where the material is, and the topics it covers,
-  and `/resources` supports **add, edit, and archive** while the curriculum view, `/revisions`,
+  and `/resources` supports **add, edit, archive, and remove** — a stored file or a note, never the
+  resource itself — while the curriculum view, `/revisions`,
   `/plan`, and `/plan/today` show a topic's material read-only and link there for every change.
   `/plan/month` deliberately does not, because the month's value is its shape. Material put aside is read-only until it is put back. A resource may cover **any** topic, including a heading that groups subtopics, which is
   where this differs from the learning-stage control. **Nothing is recommended, ranked, or counted**,
-  and **nothing is deleted** — material is put aside reversibly, so RES-005 stays unimplemented.
+  and **no resource is deleted** — material is put aside reversibly, so RES-005 stays unimplemented.
   **The item stays open on the word *local***: `external_reference` accepts an `http` or `https`
   address alone, because [endpoints.md](../api/endpoints.md#resource-and-ingestion-endpoints)
   forbids a resource endpoint returning an absolute local filesystem path, and material that is not
@@ -547,7 +549,7 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
   **narrows** [ADR-032](../adr/ADR-032-learning-resource-catalogue.md)'s *metadata, never the
   material* rule on one point and leaves the rest standing: no file, no fetched page, and no location
   on the learner's own machine. Text is stored **exactly as written**, rendered as **plain text**, and
-  **never deleted**. It adds a table beyond the approved schema, `resource_notes`, for the reason
+  **never deleted by a status change** *(narrowed by the RES-018/RES-019 item below: a note may now be removed permanently, on a separate deliberate request)*. It adds a table beyond the approved schema, `resource_notes`, for the reason
   [the area review](../database/schema.md#resources-and-rag-metadata-area-second-partial-review-2026-08-19)
   records. **FR-007's four criteria are unchanged**; FR-008's count has since moved and is carried by
   [endpoints.md](../api/endpoints.md#fr-008-acceptance-criteria). Contracted by
@@ -579,10 +581,23 @@ plan-screens-untouched sentence and needs no migration, endpoint, or backend cha
 - [x] A learner can upload PDFs against a piece of catalogued material, and LearnFlow **stores the
   bytes**. **Done**: RES-014 to RES-017. Bytes live in a Docker named volume mounted into the backend alone;
   metadata lives in `resource_files`. Only PDFs, validated by extension, signature, parse, and not
-  being encrypted; 25 MB, 1500 pages, 20 files per resource. **Nothing is deleted** — a file is set
-  aside reversibly — and **nothing is read inside it**. Migration `20260821_01`. **FR-007's first
-  criterion is now met for PDFs**; video references remain words, so FR-007 is still not met in full.
-  Contracted by [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md).
+  being encrypted; 25 MB, 1500 pages, 20 files per resource. **Nothing is read inside it.** Migration
+  `20260821_01`. **FR-007's first criterion is now met for PDFs**; video references remain words, so
+  FR-007 is still not met in full. Contracted by
+  [ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md).
+- [x] A learner can **permanently remove** one stored file or one note they added by mistake.
+  **Done**: RES-018 and RES-019 — the **first capability in LearnFlow that destroys a learner's
+  record**, and deliberately the only one. It exists because **archiving is not an undo**: a file's
+  bytes cannot be corrected in place, and a note written against the wrong material should not exist
+  rather than be rewritten. Two deliberate actions behind a closed disclosure, server-rendered and
+  posting natively, and working like every other control in an ordinary JavaScript-enabled browser —
+  though **not** proof that `/resources` is usable with scripting *disabled*, which ADR-041 records
+  as a **pre-existing, page-wide** limit. **Irreversible, with no copy kept**; *put aside* stays the
+  reversible answer and is
+  offered first. Active and archived alike may be removed, while archived **material** refuses with
+  `409`. **No migration, no column, and no table**, and **no requirement's verdict moves**.
+  **RES-005 — removing a whole resource — stays unimplemented** and is this area's most-needed next
+  change. Contracted by [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md).
 - [ ] Supported text-based PDF can be extracted and indexed. **Still unbuilt.** Storing a file is not
   extracting one: there is no extractor, no chunking policy, no embedding provider, and no vector
   store, and none of the four exists. What ADR-040 added is the file storage such a step would read
@@ -766,6 +781,7 @@ LearnFlow does.
 - [ADR-030: Gather the recorded learning stages by subject, listing them rather than counting them](../adr/ADR-030-learning-stages-by-subject-panel.md) — the first of those two counts, now met, and why the second stayed open
 - [ADR-031: Draw priority focus from facts backend rules already decided, ranking nothing](../adr/ADR-031-priority-focus-panel.md) — the second count, now partly met, and the evidence the item still waits on
 - [ADR-032: Catalogue learner-owned study material as metadata, linked to topics](../adr/ADR-032-learning-resource-catalogue.md) — the Milestone 4 item this opens, and the reasons the rest of that milestone stays closed
+- [ADR-041: Let a learner permanently remove a stored file or a note](../adr/ADR-041-removing-a-stored-file-or-note.md) — the Milestone 4 item above, and why RES-005 is still the area's next change
 - [ADR-036: Show a topic's material beside the plan items that name it, read-only](../adr/ADR-036-topic-material-on-the-plan-screens.md) — the two plan screens that now show catalogued material, and the one deliberately left without it
 - [ADR-033: Assemble checkpoint practice from the learner's own questions, and report outcomes rather than a score](../adr/ADR-033-checkpoint-practice-workflow.md) — the two Milestone 5 items this opens, and the reasons the rest of that milestone stays closed
 - [ADR-034: Show the checkpoint-practice history as a paged reading of stored attempts, counting nothing](../adr/ADR-034-checkpoint-practice-history.md) — the history screen over those two items, which checks no further box here

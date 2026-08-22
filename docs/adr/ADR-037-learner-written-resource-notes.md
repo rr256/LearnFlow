@@ -2,7 +2,7 @@
 title: "ADR-037: Store the Learner's Own Written Notes Against a Learning Resource"
 status: accepted
 owner: architecture-and-data
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 related:
   - ../00-project-context.md
   - ADR-011-sqlalchemy-persistence-implementation.md
@@ -32,6 +32,7 @@ related:
   - ../roadmap/milestones.md
   - ADR-039-source-grounded-study-answers.md
   - ADR-040-learner-uploaded-resource-files.md
+  - ADR-041-removing-a-stored-file-or-note.md
   - ../architecture/decisions.md
 ---
 
@@ -58,6 +59,43 @@ no existing endpoint, no existing table, and no existing screen apart from `/res
 adds a capability beside them rather than completing one. **FR-008 is not met at all** and this
 record does not claim otherwise — every one of its criteria needs retrieval and a mentor, neither of
 which exists. Do not write that either requirement is complete.
+
+## Implementation status
+
+**2026-08-21 — a note can now be removed permanently, and "nothing is deleted" is narrowed.**
+
+[ADR-041](ADR-041-removing-a-stored-file-or-note.md) adds **RES-019**: a learner may permanently
+remove one note they added by mistake. It is irreversible, LearnFlow keeps no copy, and there is no
+soft delete.
+
+**This record's archiving decision stands.** *Put aside* is still reversible, still keeps the text
+stored, and is still what the screen offers first; removing is a separate, deliberate request behind
+a closed disclosure and never a consequence of a status change.
+
+**Three statements below are narrowed, and each is named here rather than rewritten in place.** The
+`### Nothing is deleted` section is the first. The second is its claim that *"There is no `DELETE`
+endpoint and **no removal method on the repository port**, so none can be reached by mistake"* —
+RES-019 adds both, deliberately: `ResourceNoteRepository.delete_note` exists, and the safeguard is
+now the two-step control and the ownership check rather than the absence of a method.
+
+The third is the rejected alternative **"Offer a real delete"**, which this record set aside because
+"nothing implemented in LearnFlow deletes a learner's record" and told the reader to **revisit it with
+RES-005**. [ADR-041](ADR-041-removing-a-stored-file-or-note.md) revisited it **earlier and on
+narrower terms**: two *leaf* removals with no cascade, rather than the resource-wide deletion RES-005
+still describes. The precedent concern that argued for waiting is answered by the narrowness — a note
+and a file are the two records that cannot be corrected in place — not withdrawn.
+
+**This record's correction argument is untouched, and RES-019 depends on it.** Nothing derived from a
+note is stored — no chunk, no embedding, no cached extract, no search history — which is why a note
+stays correctable in place, and equally why removing one leaves nothing orphaned: the row is all there
+is. **Correcting remains the better answer** for a note that merely says the wrong thing; removal is
+for one that should not exist.
+
+**Everything else this record decided is unchanged.** A note is still text the learner typed or
+pasted themselves, still stored as written, still rendered as plain text, still bounded at 20,000
+characters and 200 a resource, and still inherits its resource's topics. It needed **no migration**.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
 
 ## Implementation status
 

@@ -2,7 +2,7 @@
 title: LearnFlow Domain Entities
 status: approved
 owner: product-and-architecture
-last_updated: 2026-08-20
+last_updated: 2026-08-22
 related:
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-039-source-grounded-study-answers.md
@@ -25,6 +25,7 @@ related:
   - ../adr/ADR-033-checkpoint-practice-workflow.md
   - ../adr/ADR-035-practice-question-correction.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
+  - ../adr/ADR-041-removing-a-stored-file-or-note.md
 ---
 
 # LearnFlow Domain Entities
@@ -122,8 +123,11 @@ search*, and — through MNT-001 — a locally running AI model, which is given 
 selected and **never a whole note**. **Nothing derived from a note is stored** — no chunk, no embedding, no cached
 extract, no search history, and nothing beyond the full-text index PostgreSQL maintains for itself — which is why a note is corrected in place as often as the learner likes:
 there is no record that could be made to disagree with a correction. It is put aside rather than
-deleted, and notes on material that is put aside are read-only and stay readable. See
-[ADR-037](../adr/ADR-037-learner-written-resource-notes.md) and [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md).
+deleted by any status change, and notes on material that is put aside are read-only and stay
+readable. A note **may be removed permanently** by RES-019 — a separate, deliberate request, and
+one of only two destructive capabilities in the product; *put aside* stays the reversible answer,
+and correcting a note in place is usually the better one. See
+[ADR-037](../adr/ADR-037-learner-written-resource-notes.md), [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md), and [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md).
 
 ### Examination Schedule
 

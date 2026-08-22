@@ -335,12 +335,58 @@ def test_archived_material_still_lists_its_files(resource_files_client, catalogu
 # -- what does not exist ------------------------------------------------------
 
 
-def test_no_endpoint_deletes_a_stored_file(resource_files_client, cataloguing):
-    """RES-005 stays unimplemented: nothing removes a learner's file."""
+def test_a_stored_file_can_be_removed_permanently(resource_files_client, cataloguing, file_storage):
+    """RES-018 — the one endpoint in LearnFlow that destroys learner data."""
     resource = register(resource_files_client, [cataloguing.topic.id])
     created = upload(resource_files_client, resource["id"]).json()["data"]
 
-    assert resource_files_client.delete(f"{FILES}/{created['id']}").status_code == 405
+    removed = resource_files_client.delete(f"{FILES}/{created['id']}")
+
+    assert removed.status_code == 204, removed.text
+    assert removed.content == b""
+    assert stored(resource_files_client, resource["id"]) == []
+    assert file_storage.written == {}
+
+
+def test_removing_the_same_file_twice_is_a_404(resource_files_client, cataloguing):
+    """The learner is naming something that no longer exists."""
+    resource = register(resource_files_client, [cataloguing.topic.id])
+    created = upload(resource_files_client, resource["id"]).json()["data"]
+
+    assert resource_files_client.delete(f"{FILES}/{created['id']}").status_code == 204
+    assert resource_files_client.delete(f"{FILES}/{created['id']}").status_code == 404
+
+
+def test_removing_an_unknown_file_is_a_404(resource_files_client):
+    assert resource_files_client.delete(f"{FILES}/{uuid.uuid4()}").status_code == 404
+
+
+def test_a_file_on_archived_material_cannot_be_removed(resource_files_client, cataloguing):
+    """Archived material is read-only, and deletion is no exception."""
+    resource = register(resource_files_client, [cataloguing.topic.id])
+    created = upload(resource_files_client, resource["id"]).json()["data"]
+    resource_files_client.patch(f"{RESOURCES}/{resource['id']}", json={"status": "archived"})
+
+    assert resource_files_client.delete(f"{FILES}/{created['id']}").status_code == 409
+
+
+def test_an_archived_file_on_live_material_can_be_removed(
+    resource_files_client, cataloguing, file_storage
+):
+    """Shelving and removing are different answers to the same mistake."""
+    resource = register(resource_files_client, [cataloguing.topic.id])
+    created = upload(resource_files_client, resource["id"]).json()["data"]
+    resource_files_client.patch(f"{FILES}/{created['id']}", json={"status": "archived"})
+
+    assert resource_files_client.delete(f"{FILES}/{created['id']}").status_code == 204
+    assert file_storage.written == {}
+
+
+def test_no_endpoint_removes_a_whole_resource(resource_files_client, cataloguing):
+    """RES-005 stays unimplemented: only a single file can be removed."""
+    resource = register(resource_files_client, [cataloguing.topic.id])
+
+    assert resource_files_client.delete(f"{RESOURCES}/{resource['id']}").status_code == 405
     assert resource_files_client.delete(f"{RESOURCES}/{resource['id']}/files").status_code == 405
 
 
