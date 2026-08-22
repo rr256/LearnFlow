@@ -459,10 +459,10 @@ def test_a_file_on_archived_material_may_not_be_moved(owner):
 # -- what does not happen -----------------------------------------------------
 
 
-def test_the_use_case_binds_no_provider_and_no_deleter(owner):
-    """Five collaborators, none of which can reach a network or remove a file."""
+def test_the_use_case_binds_no_provider(owner):
+    """Five collaborators, none of which can reach a network."""
     resource = a_resource(owner)
-    use_case, storage, repository, _ = build(owner, resource)
+    use_case, _, _, _ = build(owner, resource)
 
     assert set(vars(use_case)) == {
         "_learners",
@@ -471,10 +471,149 @@ def test_the_use_case_binds_no_provider_and_no_deleter(owner):
         "_storage",
         "_inspector",
     }
-    # Neither port offers a way to delete anything.
-    assert not hasattr(storage, "delete")
-    assert not hasattr(storage, "remove")
-    assert not hasattr(repository, "delete_file")
+
+
+# -- removing a stored file --------------------------------------------------
+
+
+def test_removing_a_file_deletes_both_the_row_and_the_bytes(owner):
+    """RES-018 — the narrow exception to "nothing is destroyed"."""
+    resource = a_resource(owner)
+    use_case, storage, repository, _ = build(owner, resource)
+    record = use_case.store_file(resource_id=resource.id, filename="wrong.pdf", content=MINIMAL_PDF)
+
+    use_case.delete_file(record.id)
+
+    assert repository.records == []
+    assert storage.written == {}
+
+
+def test_removing_one_file_leaves_the_others_untouched(owner):
+    resource = a_resource(owner)
+    use_case, storage, repository, _ = build(owner, resource)
+    keep = use_case.store_file(resource_id=resource.id, filename="keep.pdf", content=MINIMAL_PDF)
+    drop = use_case.store_file(resource_id=resource.id, filename="drop.pdf", content=MINIMAL_PDF)
+
+    use_case.delete_file(drop.id)
+
+    assert [r.id for r in repository.records] == [keep.id]
+    assert list(storage.written) == [keep.storage_key]
+
+
+def test_a_removed_file_frees_a_place_against_the_ceiling(owner):
+    resource = a_resource(owner)
+    existing = [a_file(resource.id) for _ in range(MAX_FILES_PER_RESOURCE)]
+    use_case, _, _, _ = build(owner, resource, files=existing)
+
+    use_case.delete_file(existing[0].id)
+    stored = use_case.store_file(resource_id=resource.id, filename="new.pdf", content=MINIMAL_PDF)
+
+    assert stored.original_filename == "new.pdf"
+
+
+def test_a_removed_file_cannot_be_read_back(owner):
+    resource = a_resource(owner)
+    use_case, _, _, _ = build(owner, resource)
+    record = use_case.store_file(resource_id=resource.id, filename="a.pdf", content=MINIMAL_PDF)
+
+    use_case.delete_file(record.id)
+
+    with pytest.raises(UnknownResourceFileError):
+        use_case.read_file(record.id)
+
+
+def test_another_learners_file_cannot_be_removed(owner):
+    stranger = learner()
+    resource = a_resource(stranger)
+    use_case, _, repository, _ = build(owner, resource, files=[a_file(resource.id)])
+    theirs = repository.records[0]
+
+    with pytest.raises(UnknownResourceFileError):
+        use_case.delete_file(theirs.id)
+
+    assert len(repository.records) == 1
+
+
+def test_a_file_on_archived_material_cannot_be_removed(owner):
+    """Archived material is read-only everywhere, and deletion is no exception."""
+    resource = a_resource(owner, status="archived")
+    use_case, _, repository, _ = build(owner, resource, files=[a_file(resource.id)])
+
+    with pytest.raises(ResourceNotWritableError):
+        use_case.delete_file(repository.records[0].id)
+
+    assert len(repository.records) == 1
+
+
+def test_an_archived_file_can_still_be_removed(owner):
+    """Setting aside and removing are different answers to the same mistake."""
+    resource = a_resource(owner)
+    use_case, storage, repository, _ = build(owner, resource)
+    record = use_case.store_file(resource_id=resource.id, filename="a.pdf", content=MINIMAL_PDF)
+    use_case.set_file_status(file_id=record.id, status="archived")
+
+    use_case.delete_file(record.id)
+
+    assert repository.records == []
+    assert storage.written == {}
+
+
+def test_removing_a_file_that_is_not_there_is_refused(owner):
+    resource = a_resource(owner)
+    use_case, _, _, _ = build(owner, resource)
+
+    with pytest.raises(UnknownResourceFileError):
+        use_case.delete_file(uuid.uuid4())
+
+
+def test_the_row_is_removed_before_the_bytes_are_unlinked(owner):
+    """The order is what makes a failed unlink safe: the row deletion is still
+    uncommitted when it runs, so raising undoes it."""
+    resource = a_resource(owner)
+    use_case, storage, repository, _ = build(owner, resource)
+    record = use_case.store_file(resource_id=resource.id, filename="a.pdf", content=MINIMAL_PDF)
+    rows_when_unlinked: list[int] = []
+    unlink = storage.remove
+
+    def watch(storage_key: str) -> None:
+        rows_when_unlinked.append(len(repository.records))
+        unlink(storage_key)
+
+    storage.remove = watch
+
+    use_case.delete_file(record.id)
+
+    assert rows_when_unlinked == [0]
+
+
+def test_a_failed_unlink_is_raised_rather_than_swallowed(owner):
+    """Nothing catches it here on purpose. The exception is what rolls the row
+    deletion back, so a learner keeps a file LearnFlow could not delete."""
+    resource = a_resource(owner)
+    use_case, storage, _, _ = build(owner, resource)
+    record = use_case.store_file(resource_id=resource.id, filename="a.pdf", content=MINIMAL_PDF)
+
+    def refuse(storage_key: str) -> None:
+        raise OSError("read-only file system")
+
+    storage.remove = refuse
+
+    with pytest.raises(OSError):
+        use_case.delete_file(record.id)
+
+
+def test_a_file_whose_bytes_are_already_gone_is_still_removed(owner):
+    """The state a commit failing after an unlink would leave behind, and the
+    state a volume restored from an older backup produces. Asking again clears
+    it rather than reporting a fault."""
+    resource = a_resource(owner)
+    use_case, storage, repository, _ = build(owner, resource)
+    record = use_case.store_file(resource_id=resource.id, filename="a.pdf", content=MINIMAL_PDF)
+    storage.written.clear()
+
+    use_case.delete_file(record.id)
+
+    assert repository.records == []
 
 
 def test_nothing_extracts_text_from_a_stored_file(owner):

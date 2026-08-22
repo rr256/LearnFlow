@@ -290,12 +290,39 @@ def test_putting_a_note_aside_is_reversible(resource_client):
     assert back["body"] == "Worth keeping."
 
 
-def test_there_is_no_way_to_delete_a_note(resource_client):
-    """Nothing in LearnFlow deletes a learner's record, and a note is no exception."""
+def test_a_note_can_be_removed_permanently(resource_client):
+    """RES-019 — the deliberate exception to "nothing is destroyed"."""
     resource = register(resource_client)
     written = write_note(resource_client, resource["id"]).json()["data"]
 
-    assert resource_client.delete(f"{NOTES}/{written['id']}").status_code == 405
+    removed = resource_client.delete(f"{NOTES}/{written['id']}")
+
+    assert removed.status_code == 204, removed.text
+    assert removed.content == b""
+    assert resource_client.get(f"{NOTES}/{written['id']}").status_code == 404
+
+
+def test_removing_the_same_note_twice_is_a_404(resource_client):
+    resource = register(resource_client)
+    written = write_note(resource_client, resource["id"]).json()["data"]
+
+    assert resource_client.delete(f"{NOTES}/{written['id']}").status_code == 204
+    assert resource_client.delete(f"{NOTES}/{written['id']}").status_code == 404
+
+
+def test_a_note_on_archived_material_cannot_be_removed(resource_client):
+    """Archived material is read-only, and deletion is no exception."""
+    resource = register(resource_client)
+    written = write_note(resource_client, resource["id"]).json()["data"]
+    resource_client.patch(f"{RESOURCES}/{resource['id']}", json={"status": "archived"})
+
+    assert resource_client.delete(f"{NOTES}/{written['id']}").status_code == 409
+
+
+def test_no_endpoint_removes_every_note_at_once(resource_client):
+    """One note at a time: there is no bulk delete."""
+    resource = register(resource_client)
+
     assert resource_client.delete(f"{RESOURCES}/{resource['id']}/notes").status_code == 405
 
 

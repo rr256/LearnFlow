@@ -2,10 +2,11 @@
 title: LearnFlow Database Schema
 status: approved
 owner: architecture-and-data
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 related:
   - ../adr/ADR-028-revision-workflow.md
   - ../adr/ADR-032-learning-resource-catalogue.md
+  - ../adr/ADR-041-removing-a-stored-file-or-note.md
   - ../adr/ADR-037-learner-written-resource-notes.md
   - ../adr/ADR-038-local-topic-note-retrieval.md
   - ../adr/ADR-033-checkpoint-practice-workflow.md
@@ -733,6 +734,20 @@ resource — so raising either is a use-case change rather than a migration, the
 [ADR-020](../adr/ADR-020-initial-study-plan-generation.md) made for `plan_items.status`. What the
 table enforces is only that a note is not empty.
 
+**A row here can be deleted, and it is the second of the only two in the database that can.** RES-019
+removes one note permanently, contracted by
+[ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md). It is irreversible: no soft-delete
+column, no `deleted_at`, and no copy kept. **No migration was needed.**
+
+**The row is all there is.** Nothing derived from a note is stored — no chunk, no embedding, no cached
+extract, no search history — so unlike `resource_files` there is no second thing to clean up, no
+ordering to get right, and nothing that can be left orphaned. The full-text index PostgreSQL maintains
+for itself is updated by the `DELETE` like any other index. That is also why a note stays
+**correctable in place**, which is usually the better answer.
+
+**Deleting a note touches nothing else**: not `resources`, not `resource_topic_links`, not
+`resource_files`, and not another row in this table.
+
 **This is study material, not a pointer to it**, and deliberately the only kind LearnFlow stores.
 Nothing uploads a file, fetches an address, downloads a page, extracts text, or runs OCR to fill it:
 `resources.storage_key`, `resources.metadata`, and `resource_ingestions` all stay absent, and no
@@ -744,9 +759,11 @@ from this table.
 resource covers, so a learner correcting what a resource covers moves its notes with it and the two
 can never disagree.
 
-**Nothing deletes a note.** A learner puts one aside by moving `status` to `archived`, which is
-reversible — the position `resources.status` takes, and `questions.status` with `retired`. A note on
-**archived material is read-only** until the material is put back, and stays readable throughout.
+**Neither status deletes a note.** A learner puts one aside by moving `status` to `archived`, which
+is reversible — the position `resources.status` takes, and `questions.status` with `retired`. A note
+on **archived material is read-only** until the material is put back, and stays readable throughout.
+Removing a note permanently is RES-019, a separate request and never a consequence of a status
+change; the lifecycle note above in this section says what that leaves behind.
 
 **A note's text is searchable through a GIN index over an expression**, added by migration
 `20260820_01` for RES-013: `to_tsvector('english', title || ' ' || body)`. It is deliberately **an
@@ -772,14 +789,14 @@ every dump and every backup, and the two halves are better backed up by their ow
 | Column | Type | Notes | State |
 | --- | --- | --- | --- |
 | `id` | uuid PK | Stored-file identifier. | Implemented |
-| `resource_id` | uuid FK | References `resources.id`. Not a cascade — nothing deletes a resource. | Implemented |
+| `resource_id` | uuid FK | References `resources.id`. Not a cascade — RES-005 stays unimplemented, so nothing deletes a resource. RES-018 deletes a **file** row directly and never through this key. | Implemented |
 | `storage_key` | text | Opaque reference the storage adapter issued. **Never returned by any endpoint.** | Implemented |
 | `original_filename` | text | What the learner called the file. **Metadata, never a path.** | Implemented |
 | `byte_size` | bigint | How large the file is. `bigint` so a size column can never overflow. | Implemented |
 | `page_count` | integer | How many pages the PDF has. | Implemented |
 | `content_type` | varchar(128) | Always `application/pdf` today, decided from what was validated. | Implemented |
 | `checksum` | varchar(64) | SHA-256 of the bytes, so corruption is detectable. | Implemented |
-| `status` | varchar(32) | `active` or `archived`. Both reversible; **neither deletes anything**. | Implemented |
+| `status` | varchar(32) | `active` or `archived`. Both reversible, and **neither status deletes anything**; the row is deleted only by RES-018, which is a separate request. | Implemented |
 | `created_at`, `updated_at` | timestamptz | Audit timestamps. | Implemented |
 
 **Constraints:** `status` is constrained to the two values above; `byte_size > 0`; `page_count >= 0`;
@@ -794,6 +811,22 @@ disagree.
 
 **Nothing derived is stored.** No extracted text, no chunk, no embedding, and no thumbnail: this
 table records a file, and `resource_ingestions` below remains absent.
+
+**A row here can be deleted, and it is one of only two in the database that can.** RES-018 removes one
+file permanently — this row and the bytes the `storage_key` names — contracted by
+[ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md). It is irreversible: no soft-delete
+column, no `deleted_at`, no grace period, and no copy kept. **No migration was needed**, because
+deleting a row is a `DELETE` against a table that already exists.
+
+**The row and its bytes cannot be removed atomically.** A filesystem does not join a database
+transaction, so the row is deleted first and the bytes second, both inside one request. A failed
+unlink rolls the row deletion back and deletes nothing; a commit failing after the unlink leaves a row
+whose bytes are gone — the same state a volume restored from an older backup produces, which
+[RES-016](../api/endpoints.md#res-016-get-apiv1resource-filesfile_idcontent) already reports as `404`
+rather than as a fault, and which asking again clears.
+
+**Deleting a file row touches nothing else**: not `resources`, not `resource_topic_links`, not
+`resource_notes`, and not another row in this table.
 
 Migration `20260821_01` creates it, additively — one table and one index, altering nothing. Its
 downgrade drops both and **leaves the bytes in the volume**, which is the honest asymmetry: a

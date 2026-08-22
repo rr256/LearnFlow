@@ -275,6 +275,54 @@ def test_writing_a_note_writes_nothing_else(client: TestClient, resource: dict, 
     assert session.scalar(select(Resource.updated_at)) == before
 
 
+def test_removing_a_note_deletes_that_row_and_only_that_row(
+    client: TestClient, resource: dict, session: Session
+):
+    """RES-019 against a real database."""
+    keep = write(client, resource["id"], title="Keep", body="Worth keeping.")
+    drop = write(client, resource["id"], title="Drop", body="Added by mistake.")
+
+    removed = client.delete(f"{NOTES}/{drop['id']}")
+
+    assert removed.status_code == 204, removed.text
+    assert removed.content == b""
+    assert session.scalars(select(ResourceNote.title)).all() == ["Keep"]
+    assert client.get(f"{NOTES}/{keep['id']}").json()["data"]["body"] == "Worth keeping."
+
+
+def test_removing_a_note_leaves_its_material_standing(
+    client: TestClient, resource: dict, session: Session
+):
+    """A note is the learner's text about material, not the material itself.
+    RES-005 -- removing a whole resource -- stays unimplemented."""
+    note = write(client, resource["id"], title="Round robin", body="Quantum first.")
+
+    client.delete(f"{NOTES}/{note['id']}")
+
+    assert client.get(f"{RESOURCES}/{resource['id']}").status_code == 200
+    assert session.scalar(select(func.count()).select_from(Resource)) == 1
+
+
+def test_a_removed_note_leaves_the_listing_the_read_and_a_retry(client: TestClient, resource: dict):
+    note = write(client, resource["id"], title="Gone", body="Not needed.")
+
+    client.delete(f"{NOTES}/{note['id']}")
+
+    assert client.get(f"{RESOURCES}/{resource['id']}/notes").json()["data"] == []
+    assert client.get(f"{NOTES}/{note['id']}").status_code == 404
+    # A second attempt names something that no longer exists.
+    assert client.delete(f"{NOTES}/{note['id']}").status_code == 404
+
+
+def test_a_note_on_material_put_aside_cannot_be_removed(client: TestClient, resource: dict):
+    """Archived material is read-only everywhere, and deletion is no exception."""
+    note = write(client, resource["id"], body="Still here.")
+    client.patch(f"{RESOURCES}/{resource['id']}", json={"status": "archived"})
+
+    assert client.delete(f"{NOTES}/{note['id']}").status_code == 409
+    assert client.get(f"{NOTES}/{note['id']}").json()["data"]["body"] == "Still here."
+
+
 def test_a_note_against_unknown_material_is_not_found(
     client: TestClient, learner: dict, session: Session
 ):

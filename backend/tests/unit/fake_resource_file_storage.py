@@ -31,6 +31,10 @@ class FakeResourceFileStorage:
         self.written[key] = content
         return key
 
+    def remove(self, storage_key: str) -> None:
+        # Missing is success: deletion has to be safe to repeat.
+        self.written.pop(storage_key, None)
+
     def read(self, storage_key: str) -> bytes | None:
         return self.written.get(storage_key)
 
@@ -85,6 +89,9 @@ class FakeResourceFileRepository:
 
     def add_file(self, record: ResourceFileRecord) -> None:
         self.records.append(record)
+
+    def delete_file(self, file_id: uuid.UUID) -> None:
+        self.records = [r for r in self.records if r.id != file_id]
 
     def update_file(self, record: ResourceFileRecord) -> None:
         for index, existing in enumerate(self.records):

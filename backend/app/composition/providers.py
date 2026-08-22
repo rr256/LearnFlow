@@ -315,9 +315,12 @@ def build_resource_files_provider(
     row is transactional. A commit that failed after the storage adapter wrote
     would leave a file in the volume that no row names — bytes nothing can reach,
     rather than a row pointing at nothing. That is the safer of the two failures:
-    LearnFlow never loses a learner's file, and an orphan is reclaimable by the
-    permanent-deletion feature (RES-005) when it arrives. The reverse ordering
-    would risk a row whose file was never written.
+    LearnFlow never loses a learner's file.
+
+    **RES-018 does not reclaim such an orphan.** It deletes the bytes a row names,
+    and an orphan has no row, so clearing one is a volume operation rather than an
+    API call — see docs/deployment/docker.md. The reverse ordering would risk a
+    row whose file was never written.
 
     The storage adapter and the inspector are built **once at startup and
     shared**, unlike the repositories beside them: each holds a directory or

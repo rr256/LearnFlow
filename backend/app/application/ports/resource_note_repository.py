@@ -64,6 +64,19 @@ class ResourceNoteRepository(Protocol):
         """Store a new note. The caller owns the transaction."""
         ...
 
+    def delete_note(self, note_id: uuid.UUID) -> None:
+        """Remove a note. **Permanent, and the row is all there is.**
+
+        Nothing derived from a note is stored -- no chunk, no embedding, no
+        cached extract -- so unlike a stored file there is no second thing to
+        clean up, and deleting one cannot leave anything orphaned. See
+        [ADR-041](../../../../docs/adr/ADR-041-removing-a-stored-file-or-note.md).
+
+        Deleting a note this does not hold is not an error: the operation must be
+        safe to repeat.
+        """
+        ...
+
     def update_note(self, record: ResourceNoteRecord) -> None:
         """Store a changed note. The caller owns the transaction."""
         ...

@@ -1,0 +1,42 @@
+/*
+ * The removal control. Closed by default, so the destructive option is present
+ * without being the first thing a learner's eye or cursor lands on.
+ */
+.disclosure {
+  margin: var(--space-3) 0 0;
+}
+
+.disclosure summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--colour-text-muted);
+}
+
+.body {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) 0 0;
+  max-width: var(--measure);
+}
+
+/*
+ * States what is lost. Not styled as an alarm: the learner opened this
+ * deliberately, and shouting at them for it would be unkind.
+ */
+.warning {
+  margin: 0;
+}
+
+.instead {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.confirm {
+  justify-self: start;
+}
+
+.error {
+  margin: 0;
+}

@@ -32,6 +32,7 @@ related:
   - ../development/folder-structure.md
   - ../roadmap/milestones.md
   - ADR-040-learner-uploaded-resource-files.md
+  - ADR-041-removing-a-stored-file-or-note.md
   - ../architecture/decisions.md
 ---
 
@@ -74,6 +75,34 @@ half still waits on FR-009**, which does not exist. **FR-006 is still not met in
 
 It needs **one migration**: `20260816_01`, two `CREATE TABLE`s and two indexes. Nothing existing is
 altered.
+
+## Implementation status
+
+**2026-08-21 — LearnFlow now has a destructive endpoint, and two claims in this record are narrowed.**
+
+[ADR-041](ADR-041-removing-a-stored-file-or-note.md) adds **RES-018 and RES-019**: a learner may
+permanently remove **one stored file** or **one resource note**. Two statements below no longer hold
+without qualification, and both are corrected here rather than rewritten in place:
+
+- *Consequences* says **"Nothing is deleted, so nothing can be lost. The product still has no
+  destructive endpoint."** It now has exactly two, each naming exactly one record.
+- The dated note beneath this one says **"Nothing is deleted"** of a stored file. A file may now be
+  removed, row and bytes together.
+
+**This record's own decision is untouched, and that is the point.** *Nothing is deleted; material is
+put aside* was written about a **resource**, and a resource still cannot be deleted: **RES-005 stays
+unimplemented**, there is still no `DELETE` for one, and archiving through RES-004 is still the
+reversible answer the catalogue offers. What RES-018 and RES-019 remove are the **file** and the
+**note** kept *against* material — never the material itself.
+
+**Archiving keeps its meaning throughout.** Removal sits beside it rather than replacing it, is
+offered second, and is named *remove* rather than *archive* so the two cannot be confused.
+
+**RES-005 is now the most-needed change in this area for a different reason.** It no longer waits on
+a reason to delete — ADR-041 settled that — but on the **cascade** it implies: what becomes of a
+resource's files, notes, and topic links together.
+
+**The decision below is not rewritten**, and none of its reasoning is withdrawn.
 
 ## Implementation status
 

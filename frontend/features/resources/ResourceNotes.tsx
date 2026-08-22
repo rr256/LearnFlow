@@ -1,5 +1,7 @@
 import styles from "@/features/resources/ResourceNotes.module.css";
 import { ResourceNoteForm } from "@/features/resources/ResourceNoteForm";
+import { removeResourceNoteAction } from "@/features/resources/actions";
+import { RemoveControl } from "@/features/resources/RemoveControl";
 import { ResourceNoteStatusControl } from "@/features/resources/ResourceNoteStatusControl";
 import { isKeptNote, type ResourceNote } from "@/types/resource-note";
 
@@ -119,6 +121,22 @@ function NoteLine({ note, writable }: { note: ResourceNote; writable: boolean })
               noteId={note.id}
               status={note.status}
               title={note.title}
+            />
+
+            {/*
+              RES-019. Last on the line and behind a disclosure, after the two
+              answers that keep the note: correcting it, and setting it aside.
+              A note is text that can simply be rewritten, so removing it is
+              rarely the right move -- but a learner who added one by mistake
+              should be able to take it back.
+            */}
+            <RemoveControl
+              action={removeResourceNoteAction}
+              consequence="The note and everything written in it are deleted."
+              fieldName="note_id"
+              fieldValue={note.id}
+              kind="note"
+              label={note.title}
             />
           </>
         ) : null}

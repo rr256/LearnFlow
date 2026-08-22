@@ -2,7 +2,7 @@
 title: LearnFlow Provider Pattern
 status: approved
 owner: architecture
-last_updated: 2026-08-20
+last_updated: 2026-08-22
 related:
   - ../00-project-context.md
   - overview.md
@@ -11,6 +11,7 @@ related:
   - ../development/tech-stack.md
   - ../adr/ADR-039-source-grounded-study-answers.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
+  - ../adr/ADR-041-removing-a-stored-file-or-note.md
 ---
 
 # LearnFlow Provider Pattern
@@ -76,8 +77,11 @@ Provider selection must be configuration-driven. Provider names, endpoints, mode
 **Two providers exist.** `AIProvider` is fulfilled by Ollama, selected by `AI_PROVIDER` and used by
 MNT-001 alone ([ADR-039](../adr/ADR-039-source-grounded-study-answers.md)). `ResourceFileStorage` is
 fulfilled by a local-volume adapter, selected by `RESOURCE_STORAGE_PROVIDER` and used by RES-014 to
-RES-017 ([ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md)); it is the only code in the
-backend that touches a filesystem, and it speaks in opaque keys so no path crosses the port.
+**RES-018** ([ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md), extended by
+[ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md), which added its `remove`); it is the
+only code in the backend that touches a filesystem, and it speaks in opaque keys so no path crosses
+the port. **`remove` deletes one file within the storage root and never a directory**, sharing its
+traversal guard with `read` so the destructive path cannot drift from the safe one.
 
 The remaining ports are **unimplemented**: no embedding provider and no vector search provider, so
 `EMBEDDING_PROVIDER` and `CHROMA_URL` stay planned.

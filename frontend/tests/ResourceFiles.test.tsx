@@ -15,6 +15,7 @@ import {
 vi.mock("@/features/resources/file-actions", () => ({
   uploadResourceFileAction: vi.fn(async () => ({ stored: null, error: null })),
   setResourceFileStatusAction: vi.fn(async () => ({ error: null })),
+  removeResourceFileAction: vi.fn(async () => ({ message: null })),
 }));
 
 afterEach(() => {
@@ -275,14 +276,36 @@ describe("ResourceFiles", () => {
     );
   });
 
-  it("offers no way to delete anything", () => {
-    // Nothing in LearnFlow removes a stored file: there is no endpoint behind
-    // such a control, and RES-005 stays unimplemented.
+  it("offers removal, behind a disclosure rather than on the line", () => {
+    // RES-018. Present because a learner who chose the wrong document should be
+    // able to take it back -- but never the first thing their cursor meets.
     const { container } = render(
       <ResourceFiles files={[file()]} resourceId="resource-1" writable />,
     );
 
-    expect(container.textContent).not.toMatch(/delete|remove permanently|erase/i);
+    const remove = [...container.querySelectorAll("summary")].find((s) =>
+      s.textContent?.includes("Remove this PDF"),
+    );
+    expect(remove).toBeDefined();
+    expect(remove?.closest("details")?.hasAttribute("open")).toBe(false);
+  });
+
+  it("names what would be lost, and points at the reversible option", () => {
+    const { container } = render(
+      <ResourceFiles files={[file()]} resourceId="resource-1" writable />,
+    );
+
+    expect(container.textContent).toMatch(/permanent/i);
+    expect(container.textContent).toMatch(/cannot be undone/i);
+    expect(container.textContent).toMatch(/set it aside instead/i);
+  });
+
+  it("offers no removal on material that is put aside", () => {
+    const { container } = render(
+      <ResourceFiles files={[file()]} resourceId="resource-1" writable={false} />,
+    );
+
+    expect(container.textContent).not.toMatch(/remove this pdf/i);
   });
 
   // -- archived material is read-only ----------------------------------------

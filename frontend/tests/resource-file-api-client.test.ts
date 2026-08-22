@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiError,
+  deleteResourceFile,
   fetchResourceFileContent,
   listResourceFiles,
   updateResourceFile,
@@ -206,10 +207,48 @@ describe("fetchResourceFileContent", () => {
   });
 });
 
-describe("no client function deletes a stored file", () => {
-  it("there is no delete helper to import", async () => {
+describe("deleteResourceFile", () => {
+  it("sends DELETE to the documented path", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
+
+    await deleteResourceFile(FILE);
+
+    expect(requestUrl()).toContain(`/api/v1/resource-files/${FILE}`);
+    expect(requestInit()?.method).toBe("DELETE");
+  });
+
+  it("reads no body, because a 204 has none", async () => {
+    // `requestJson` cannot be reused here: it parses a body.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
+
+    await expect(deleteResourceFile(FILE)).resolves.toBeUndefined();
+  });
+
+  it("reports a file that is already gone", async () => {
+    respondWith({ error: { code: "not_found", message: "No such file.", details: [] } }, 404);
+
+    await expect(deleteResourceFile(FILE)).rejects.toMatchObject({ isNotFound: true });
+  });
+
+  it("reports archived material as a conflict", async () => {
+    respondWith(
+      { error: { code: "conflict", message: "This material is archived.", details: [] } },
+      409,
+    );
+
+    await expect(deleteResourceFile(FILE)).rejects.toMatchObject({ isConflict: true });
+  });
+});
+
+describe("the only removals in the client are these two", () => {
+  it("nothing else deletes anything", async () => {
+    // RES-005 -- removing a whole resource -- stays unimplemented, and no bulk
+    // removal exists.
     const client = await import("@/lib/api-client");
 
-    expect(Object.keys(client).filter((name) => /delete|remove/i.test(name))).toEqual([]);
+    expect(Object.keys(client).filter((name) => /delete|remove/i.test(name)).sort()).toEqual([
+      "deleteResourceFile",
+      "deleteResourceNote",
+    ]);
   });
 });

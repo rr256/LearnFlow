@@ -15,9 +15,10 @@
  * hold are all decided by the backend; these map a form onto one API call and
  * map the answer back into something a control can show.
  *
- * **Nothing here deletes.** There is no action that removes a stored file,
- * because there is no endpoint that does: a learner sets one aside with
- * `archived`, reversibly, and the bytes stay in the volume.
+ * **One action here destroys data.** `removeResourceFileAction` deletes a stored
+ * file and its bytes permanently (RES-018), for a learner who chose the wrong
+ * document. Setting a file aside stays the reversible option and is what the
+ * screen offers first.
  *
  * **This module exports async functions and nothing else.** A `"use server"`
  * file may export only async functions; the state shapes and their initial
@@ -26,13 +27,20 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { RemoveState } from "@/features/resources/RemoveControl";
+
 import {
   readResourceFileStatusSubmission,
   readResourceFileSubmission,
   type ResourceFileFormState,
   type ResourceFileStatusState,
 } from "@/features/resources/file-submission";
-import { ApiError, updateResourceFile, uploadResourceFile } from "@/lib/api-client";
+import {
+  ApiError,
+  deleteResourceFile,
+  updateResourceFile,
+  uploadResourceFile,
+} from "@/lib/api-client";
 
 /**
  * Everywhere a change to a resource's files is visible.
@@ -119,4 +127,32 @@ function messageFor(error: ApiError): string {
     return "That material is no longer in your catalogue. Reload the page and try again.";
   }
   return error.message;
+}
+
+/**
+ * RES-018 — remove a stored PDF permanently.
+ *
+ * **Irreversible.** The screen puts this behind a disclosure the learner has to
+ * open first, so it takes two deliberate actions and cannot be reached by one
+ * stray click on a list of files.
+ */
+export async function removeResourceFileAction(
+  _previous: RemoveState,
+  form: FormData,
+): Promise<RemoveState> {
+  const fileId = form.get("file_id");
+  if (typeof fileId !== "string" || !fileId.trim()) {
+    return { message: "That file could not be identified. Reload the page and try again." };
+  }
+
+  try {
+    await deleteResourceFile(fileId.trim());
+    revalidateWhereFilesAppear();
+    return { message: null };
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    return { message: messageFor(error) };
+  }
 }

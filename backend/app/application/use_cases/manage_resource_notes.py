@@ -35,7 +35,10 @@ names the field and says what the rule is; none quotes the value, per
 docs/api/conventions.md. That convention matters more here than anywhere else in
 the product, because the value being refused is the learner's own study material.
 
-**Nothing is deleted.** A note the learner is finished with is `archived`, and
+**Almost nothing is deleted.** RES-019 removes a note permanently on the
+learner's explicit instruction — the narrow exception ADR-041 argues for, so
+something added by mistake can be taken back. Everything else stands: a note the
+learner is finished with is `archived`, and
 archiving is reversible, which is ADR-032's position for a resource applied to
 the text kept against one.
 
@@ -256,6 +259,33 @@ class ManageResourceNotes:
         """
         record, _ = self._require_own_note(note_id)
         return _detail(record)
+
+    def delete(self, note_id: uuid.UUID) -> None:
+        """Remove a note permanently (RES-019).
+
+        **This destroys a learner's data**, which nothing else about a note does.
+        It is offered for the same reason RES-018 removes a stored file — a
+        learner should be able to take back something they added by mistake — and
+        follows the same rules, so the two controls behave identically on the
+        screen that shows both.
+
+        **A note has nothing derived from it**, so unlike a stored file there is
+        no second thing to clean up and no ordering to get right: the row is all
+        there is. That is also why *correcting* a note in place has always been
+        safe, and why correcting is usually the better answer — a note is text
+        that can simply be rewritten.
+
+        Putting a note aside remains the reversible option.
+
+        The caller owns the transaction.
+
+        Raises:
+            ResourceNoteNotFoundError: No such note, or it is not the learner's.
+            ArchivedResourceError: The material is put aside, so it is read-only.
+        """
+        note, resource = self._require_own_note(note_id)
+        _require_material_in_the_catalogue(resource)
+        self._notes.delete_note(note.id)
 
     def update(self, note_id: uuid.UUID, changes: ResourceNoteChanges) -> ResourceNoteDetail:
         """Correct what a note says, or put it aside.

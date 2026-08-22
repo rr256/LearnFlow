@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, func, select, text
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.manage_resource_files import ManageResourceFiles
@@ -36,6 +36,7 @@ from app.infrastructure.persistence.resource_file_repository import (
     SqlAlchemyResourceFileRepository,
 )
 from app.infrastructure.persistence.resource_repository import SqlAlchemyResourceRepository
+from app.infrastructure.persistence.resources import Resource, ResourceFile, ResourceNote
 from app.infrastructure.storage.local_file_storage import (
     LocalResourceFileStorage,
     PyPdfDocumentInspector,
@@ -278,6 +279,120 @@ def test_a_row_whose_bytes_were_removed_reports_missing_rather_than_failing(
     assert client.get(f"{FILES}/{created['id']}/content").status_code == 404
     # The row is still listed: LearnFlow does not quietly forget the record.
     assert len(client.get(f"{RESOURCES}/{resource['id']}/files").json()["data"]) == 1
+
+
+# -- removing a file, and what each failure leaves behind ---------------------
+
+
+def test_removing_a_file_deletes_the_row_and_the_bytes_together(
+    client: TestClient, resource: dict, storage_root: Path, session: Session
+):
+    """RES-018 against a real database and a real directory."""
+    created = upload(client, resource["id"]).json()["data"]
+    assert len(list(storage_root.rglob("*.pdf"))) == 1
+
+    removed = client.delete(f"{FILES}/{created['id']}")
+
+    assert removed.status_code == 204, removed.text
+    assert removed.content == b""
+    assert list(storage_root.rglob("*.pdf")) == []
+    assert session.scalar(select(func.count()).select_from(ResourceFile)) == 0
+
+
+def test_removing_one_file_leaves_the_others_bytes_on_disk(
+    client: TestClient, resource: dict, storage_root: Path
+):
+    keep = upload(client, resource["id"], filename="keep.pdf").json()["data"]
+    drop = upload(client, resource["id"], filename="drop.pdf").json()["data"]
+
+    assert client.delete(f"{FILES}/{drop['id']}").status_code == 204
+
+    assert len(list(storage_root.rglob("*.pdf"))) == 1
+    assert client.get(f"{FILES}/{keep['id']}/content").status_code == 200
+
+
+def test_a_removed_file_leaves_the_listing_the_download_and_a_retry(
+    client: TestClient, resource: dict
+):
+    created = upload(client, resource["id"]).json()["data"]
+
+    client.delete(f"{FILES}/{created['id']}")
+
+    assert client.get(f"{RESOURCES}/{resource['id']}/files").json()["data"] == []
+    assert client.get(f"{FILES}/{created['id']}/content").status_code == 404
+    # A second attempt names something that no longer exists.
+    assert client.delete(f"{FILES}/{created['id']}").status_code == 404
+
+
+def test_removing_a_file_leaves_its_resource_and_notes_alone(
+    client: TestClient, resource: dict, session: Session
+):
+    """Only the file named goes. RES-005 -- removing a whole resource -- stays
+    unimplemented, and nothing here approximates it."""
+    created = upload(client, resource["id"]).json()["data"]
+    written = client.post(
+        f"{RESOURCES}/{resource['id']}/notes",
+        json={"title": "Deadlock conditions", "body": "Mutual exclusion."},
+    )
+    assert written.status_code == 201, written.text
+
+    client.delete(f"{FILES}/{created['id']}")
+
+    assert client.get(f"{RESOURCES}/{resource['id']}").status_code == 200
+    assert session.scalar(select(func.count()).select_from(Resource)) == 1
+    assert session.scalar(select(func.count()).select_from(ResourceNote)) == 1
+
+
+def test_the_empty_shard_directories_are_left_behind(
+    client: TestClient, resource: dict, storage_root: Path
+):
+    """Pruning is how a delete routine grows into one that removes more than it
+    was asked to. An empty shard costs nothing."""
+    created = upload(client, resource["id"]).json()["data"]
+    shards = {path for path in storage_root.rglob("*") if path.is_dir()}
+    assert shards
+
+    client.delete(f"{FILES}/{created['id']}")
+
+    assert {path for path in storage_root.rglob("*") if path.is_dir()} == shards
+
+
+def test_a_file_whose_bytes_are_already_gone_can_still_be_removed(
+    client: TestClient, resource: dict, storage_root: Path, session: Session
+):
+    """What a commit failing after an unlink would leave. Asking again clears the
+    row instead of reporting a fault."""
+    created = upload(client, resource["id"]).json()["data"]
+    for stored_file in storage_root.rglob("*.pdf"):
+        stored_file.unlink()
+
+    assert client.delete(f"{FILES}/{created['id']}").status_code == 204
+    assert session.scalar(select(func.count()).select_from(ResourceFile)) == 0
+
+
+def test_a_failed_unlink_deletes_nothing_at_all(
+    client: TestClient,
+    resource: dict,
+    storage_root: Path,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The row deletion is uncommitted when the bytes are unlinked, so an unlink
+    that raises takes the row deletion down with it and the learner keeps their
+    file. This is the failure `ManageResourceFiles.delete_file` documents."""
+    created = upload(client, resource["id"]).json()["data"]
+
+    def refuse(self: LocalResourceFileStorage, storage_key: str) -> None:
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(LocalResourceFileStorage, "remove", refuse)
+
+    with pytest.raises(OSError):
+        client.delete(f"{FILES}/{created['id']}")
+
+    session.rollback()
+    assert session.scalar(select(func.count()).select_from(ResourceFile)) == 1
+    assert len(list(storage_root.rglob("*.pdf"))) == 1
 
 
 # -- what the table itself enforces ------------------------------------------

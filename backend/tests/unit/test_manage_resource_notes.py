@@ -387,11 +387,70 @@ def test_putting_a_note_aside_is_reversible_and_destroys_nothing(owner):
     assert len(repository.notes) == 1
 
 
-def test_nothing_deletes_a_note(owner):
-    """The port offers no removal, so neither can the use case."""
-    assert not hasattr(ManageResourceNotes, "delete")
-    assert not hasattr(FakeResourceNoteRepository, "delete_note")
-    assert not hasattr(FakeResourceNoteRepository, "remove_note")
+def test_a_note_can_be_removed_permanently(owner):
+    """RES-019 — the narrow exception to "nothing is destroyed"."""
+    resource = a_resource(owner)
+    note = a_note(resource.id, body="Added by mistake.")
+    use_case, repository = build(owner, resources=[resource], notes=[note])
+
+    use_case.delete(note.id)
+
+    assert repository.notes == []
+
+
+def test_removing_a_note_leaves_the_others(owner):
+    resource = a_resource(owner)
+    keep, remove = a_note(resource.id, title="Keep"), a_note(resource.id, title="Remove")
+    use_case, repository = build(owner, resources=[resource], notes=[keep, remove])
+
+    use_case.delete(remove.id)
+
+    assert [note.title for note in repository.notes] == ["Keep"]
+
+
+def test_a_removed_note_cannot_be_read_back(owner):
+    resource = a_resource(owner)
+    note = a_note(resource.id)
+    use_case, _ = build(owner, resources=[resource], notes=[note])
+
+    use_case.delete(note.id)
+
+    with pytest.raises(ResourceNoteNotFoundError):
+        use_case.read(note.id)
+
+
+def test_another_learners_note_cannot_be_removed(owner):
+    """Reported as missing, not as forbidden: existence is itself a disclosure."""
+    stranger = learner()
+    resource = a_resource(stranger)
+    note = a_note(resource.id)
+    use_case, repository = build(owner, resources=[resource], notes=[note])
+
+    with pytest.raises(ResourceNoteNotFoundError):
+        use_case.delete(note.id)
+
+    assert len(repository.notes) == 1
+
+
+def test_a_note_on_archived_material_cannot_be_removed(owner):
+    """Archived material is read-only everywhere, and deletion is no exception."""
+    resource = a_resource(owner, status="archived")
+    note = a_note(resource.id)
+    use_case, repository = build(owner, resources=[resource], notes=[note])
+
+    with pytest.raises(ArchivedResourceError):
+        use_case.delete(note.id)
+
+    assert len(repository.notes) == 1
+
+
+def test_removing_a_note_that_is_not_there_is_refused_rather_than_ignored(owner):
+    """The use case still checks ownership before the repository is asked."""
+    resource = a_resource(owner)
+    use_case, _ = build(owner, resources=[resource], notes=[])
+
+    with pytest.raises(ResourceNoteNotFoundError):
+        use_case.delete(uuid.uuid4())
 
 
 def test_an_update_naming_nothing_is_refused(owner):

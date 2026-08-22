@@ -4,9 +4,11 @@ import { useActionState, useId, useState } from "react";
 
 import styles from "@/features/resources/ResourceFiles.module.css";
 import {
+  removeResourceFileAction,
   setResourceFileStatusAction,
   uploadResourceFileAction,
 } from "@/features/resources/file-actions";
+import { RemoveControl } from "@/features/resources/RemoveControl";
 import {
   INITIAL_RESOURCE_FILE_FORM_STATE,
   INITIAL_RESOURCE_FILE_STATUS_STATE,
@@ -230,6 +232,22 @@ function StoredFile({ file, writable }: { file: ResourceFile; writable: boolean 
         <p className={styles.error} role="alert">
           {state.error}
         </p>
+      ) : null}
+
+      {/*
+        RES-018. Offered only where the material can be changed, and only behind
+        a disclosure: a learner who chose the wrong document should be able to
+        take it back, but removing is never the first thing on the line.
+      */}
+      {writable ? (
+        <RemoveControl
+          action={removeResourceFileAction}
+          consequence="The file and its contents are deleted from this computer."
+          fieldName="file_id"
+          fieldValue={file.id}
+          kind="PDF"
+          label={file.original_filename}
+        />
       ) : null}
     </li>
   );

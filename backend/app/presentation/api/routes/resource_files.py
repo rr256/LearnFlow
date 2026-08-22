@@ -15,9 +15,13 @@ machine. `storage_key` is internal and appears in no response schema, so
 docs/api/endpoints.md's rule that a resource endpoint never returns an absolute
 local path holds by construction.
 
-**Nothing is deleted.** RES-005 stays unimplemented: a learner sets a file aside
-with `status: archived`, reversibly, and the bytes stay in the volume. Permanent
-deletion must coordinate rows and bytes together, and is a separate feature.
+**One endpoint destroys data, and it is the only one in LearnFlow that does.**
+RES-018 removes a stored file permanently, because a learner who uploaded the
+wrong document cannot correct bytes in place the way they can correct a note.
+Setting a file aside with `status: archived` remains reversible and is still the
+first thing the screen offers. **RES-005 — removing a whole resource and its
+derived artifacts — stays unimplemented.** See
+[ADR-041](../../../../docs/adr/ADR-041-removing-a-stored-file-or-note.md).
 
 **A download is served as an attachment.** `Content-Disposition: attachment` and
 `X-Content-Type-Options: nosniff` mean the browser saves the PDF rather than
@@ -37,6 +41,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from starlette.status import (
     HTTP_201_CREATED,
+    HTTP_204_NO_CONTENT,
     HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
     HTTP_413_CONTENT_TOO_LARGE,
@@ -277,6 +282,50 @@ def download_resource_file(files: Files, file_id: uuid.UUID) -> Response:
             "Cache-Control": "private, no-store",
         },
     )
+
+
+@router.delete(
+    "/resource-files/{file_id}",
+    summary="Remove a stored PDF permanently",
+    status_code=HTTP_204_NO_CONTENT,
+    responses={
+        HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        HTTP_409_CONFLICT: {"model": ErrorResponse},
+    },
+)
+def delete_resource_file(files: Files, file_id: uuid.UUID) -> Response:
+    """Delete a stored file and its bytes (RES-018).
+
+    **Permanent and irreversible.** The row is removed and the bytes are deleted
+    from the volume; nothing is recoverable afterwards, and LearnFlow keeps no
+    copy anywhere else. It exists because a stored file cannot be corrected in
+    place the way a note can — a learner who chose the wrong document would
+    otherwise carry it forever, and it would count against their file ceiling.
+
+    **Setting a file aside is the reversible alternative** and is what the screen
+    offers first. This endpoint is the deliberate exception to LearnFlow's rule
+    that nothing is destroyed.
+
+    Refused with `409` on archived material, because archived material is
+    read-only everywhere. An **archived file** on live material may be removed:
+    shelving and removing are different answers to the same mistake.
+
+    Returns `204` with no body. Repeating it on a file that is already gone is a
+    `404`, because the learner is naming something that no longer exists.
+
+    Raises:
+        HTTPException: `404` when the file is not the learner's; `409` when its
+            resource is archived or no learner is set up.
+    """
+    try:
+        files.delete_file(file_id)
+    except UnknownResourceFileError as error:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except ResourceNotWritableError as error:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
+    except (LearnerNotSetUpError, AmbiguousLocalLearnerError) as error:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
+    return Response(status_code=HTTP_204_NO_CONTENT)
 
 
 @router.patch(

@@ -32,9 +32,10 @@ takes for a resource.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from starlette.status import (
     HTTP_201_CREATED,
+    HTTP_204_NO_CONTENT,
     HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
     HTTP_422_UNPROCESSABLE_CONTENT,
@@ -257,3 +258,51 @@ def update_resource_note(
     except AmbiguousLocalLearnerError as error:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
     return ResourceNoteResponse(data=ResourceNoteSchema.of(note))
+
+
+@router.delete(
+    "/resource-notes/{note_id}",
+    summary="Remove a note permanently",
+    status_code=HTTP_204_NO_CONTENT,
+    responses={
+        HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        HTTP_409_CONFLICT: {"model": ErrorResponse},
+    },
+)
+def delete_resource_note(keeper: Keeper, note_id: uuid.UUID) -> Response:
+    """Delete a note (RES-019).
+
+    **Permanent and irreversible.** Nothing derived from a note is stored, so the
+    row is all there is and removing it leaves nothing orphaned.
+
+    It is offered for the same reason RES-018 removes a stored file — a learner
+    should be able to take back something they added by mistake — and follows the
+    same rules, so the two controls behave identically on a screen showing both.
+
+    **Correcting a note in place is usually the better answer**, since a note is
+    text that can simply be rewritten, and putting one aside stays the reversible
+    option. This endpoint is a deliberate exception to LearnFlow's rule that
+    nothing is destroyed. See
+    [ADR-041](../../../../docs/adr/ADR-041-removing-a-stored-file-or-note.md).
+
+    Refused with `409` on archived material, which is read-only everywhere.
+
+    Returns `204` with no body.
+
+    A missing learner is reported as `404` rather than `409`, which is how every
+    other note endpoint answers it: a caller who may not read the note may not
+    learn that anything exists.
+
+    Raises:
+        HTTPException: `404` when the note is not the learner's; `409` when its
+            resource is archived, or when more than one learner is stored.
+    """
+    try:
+        keeper.delete(note_id)
+    except ResourceNoteNotFoundError as error:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except ArchivedResourceError as error:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
+    except AmbiguousLocalLearnerError as error:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(error)) from error
+    return Response(status_code=HTTP_204_NO_CONTENT)
