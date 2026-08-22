@@ -2,7 +2,7 @@
 title: LearnFlow Docker Strategy
 status: approved
 owner: development-and-operations
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 related:
   - ../00-project-context.md
   - environments.md
@@ -18,6 +18,7 @@ related:
   - ../api/endpoints.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
   - ../adr/ADR-041-removing-a-stored-file-or-note.md
+  - ../adr/ADR-042-removing-a-whole-resource.md
 ---
 
 # LearnFlow Docker Strategy
@@ -310,8 +311,7 @@ mounts it read-only and writes a tar to the host. Verify a restore before relyin
 
 ### A backup is not an undo for a removed file
 
-Since [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md) a learner can **remove** one stored
-file (RES-018) or one note (RES-019) permanently. LearnFlow keeps **no copy**: there is no soft
+Since [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md) a learner can **remove** one stored file (RES-018) or one note (RES-019) permanently, and since [ADR-042](../adr/ADR-042-removing-a-whole-resource.md) one whole **resource** (RES-005) — which takes every PDF kept against it, and so removes more bytes at once than anything else in the product. LearnFlow keeps **no copy**: there is no soft
 delete, no grace period, and no recycle bin, and nothing in the product can bring either back.
 
 **A backup the learner took themselves is the only recovery, and it is partial.** The two halves have

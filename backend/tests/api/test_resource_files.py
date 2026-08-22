@@ -382,12 +382,17 @@ def test_an_archived_file_on_live_material_can_be_removed(
     assert file_storage.written == {}
 
 
-def test_no_endpoint_removes_a_whole_resource(resource_files_client, cataloguing):
-    """RES-005 stays unimplemented: only a single file can be removed."""
+def test_no_endpoint_removes_every_file_at_once(resource_files_client, cataloguing):
+    """**Still no bulk removal.** RES-005 now removes a whole resource, and takes
+    its files with it -- but there is no endpoint that clears a resource's files
+    while keeping the resource, and none that removes several resources. See
+    ADR-042."""
     resource = register(resource_files_client, [cataloguing.topic.id])
 
-    assert resource_files_client.delete(f"{RESOURCES}/{resource['id']}").status_code == 405
+    # 405: the collection path exists for GET and POST, but not for DELETE.
     assert resource_files_client.delete(f"{RESOURCES}/{resource['id']}/files").status_code == 405
+    # 404: there is no such path at all -- only the single-file form.
+    assert resource_files_client.delete(FILES).status_code == 404
 
 
 def test_no_ingestion_endpoint_appeared(resource_files_client, cataloguing):
@@ -404,3 +409,65 @@ def test_no_response_carries_extracted_text(resource_files_client, cataloguing):
 
     for field in ("text", "extracted_text", "content", "chunks", "embedding"):
         assert field not in created.json()["data"]
+
+
+# -- removing the whole resource (RES-005) ------------------------------------
+
+
+def test_removing_a_resource_takes_its_files_and_their_bytes(
+    resource_files_client, cataloguing, file_storage
+):
+    """RES-005 across the file endpoints: the rows and the bytes both go."""
+    resource = register(resource_files_client, [cataloguing.topic.id])
+    assert upload(resource_files_client, resource["id"], filename="a.pdf").status_code == 201
+    assert upload(resource_files_client, resource["id"], filename="b.pdf").status_code == 201
+    assert len(file_storage.written) == 2
+
+    removed = resource_files_client.delete(f"{RESOURCES}/{resource['id']}")
+
+    assert removed.status_code == 204, removed.text
+    assert file_storage.written == {}
+    assert resource_files_client.get(f"{RESOURCES}/{resource['id']}").status_code == 404
+
+
+def test_a_removed_resources_file_cannot_be_downloaded(resource_files_client, cataloguing):
+    """Nothing survives that could still serve the bytes."""
+    resource = register(resource_files_client, [cataloguing.topic.id])
+    stored_file = upload(resource_files_client, resource["id"]).json()["data"]
+
+    resource_files_client.delete(f"{RESOURCES}/{resource['id']}")
+
+    assert resource_files_client.get(f"{FILES}/{stored_file['id']}/content").status_code == 404
+    assert (
+        resource_files_client.patch(
+            f"{FILES}/{stored_file['id']}", json={"status": "archived"}
+        ).status_code
+        == 404
+    )
+
+
+def test_an_archived_file_on_a_removed_resource_goes_too(
+    resource_files_client, cataloguing, file_storage
+):
+    """A shelved file still occupies the volume, so removal must clear it."""
+    resource = register(resource_files_client, [cataloguing.topic.id])
+    stored_file = upload(resource_files_client, resource["id"]).json()["data"]
+    resource_files_client.patch(f"{FILES}/{stored_file['id']}", json={"status": "archived"})
+
+    resource_files_client.delete(f"{RESOURCES}/{resource['id']}")
+
+    assert file_storage.written == {}
+
+
+def test_removing_one_resource_leaves_another_resources_bytes(
+    resource_files_client, cataloguing, file_storage
+):
+    keep = register(resource_files_client, [cataloguing.topic.id])
+    drop = register(resource_files_client, [cataloguing.topic.id])
+    upload(resource_files_client, keep["id"], filename="keep.pdf")
+    upload(resource_files_client, drop["id"], filename="drop.pdf")
+
+    resource_files_client.delete(f"{RESOURCES}/{drop['id']}")
+
+    assert len(file_storage.written) == 1
+    assert len(stored(resource_files_client, keep["id"])) == 1

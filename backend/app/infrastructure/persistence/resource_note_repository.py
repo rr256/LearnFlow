@@ -21,7 +21,7 @@ The session's transaction is owned by the caller. Nothing here commits.
 
 import uuid
 
-from sqlalchemy import ColumnElement, Select, func, select
+from sqlalchemy import ColumnElement, Select, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.application.dto.resource_note import ResourceNoteFilters, ResourceNoteRecord
@@ -102,6 +102,17 @@ class SqlAlchemyResourceNoteRepository:
         row = self._session.get(ResourceNoteRow, note_id)
         if row is not None:
             self._session.delete(row)
+
+    def delete_notes_for_resource(self, resource_id: uuid.UUID) -> int:
+        """Remove every note kept against one resource, returning how many went.
+
+        One statement rather than a row-by-row loop: a resource may hold up to
+        200 notes, and the count is what the caller reports as lost.
+        """
+        result = self._session.execute(
+            delete(ResourceNoteRow).where(ResourceNoteRow.resource_id == resource_id)
+        )
+        return result.rowcount or 0
 
     def update_note(self, record: ResourceNoteRecord) -> None:
         """Store a changed note.

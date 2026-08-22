@@ -38,6 +38,7 @@ related:
   - ../domain/terminology.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
   - ../adr/ADR-041-removing-a-stored-file-or-note.md
+  - ../adr/ADR-042-removing-a-whole-resource.md
 ---
 
 # LearnFlow Repository and Folder Structure
@@ -422,13 +423,11 @@ restated in each — `by-topic.ts` and `topic-options.ts` for the joins and the 
 `actions.ts` for the note and resource writes, and `submission.ts` for the form state, which lives
 apart from the actions because a `"use server"` module may export only async functions.
 
-**`RemoveControl.tsx` is the one component in LearnFlow that destroys something**, and it serves both
-removals (RES-018 and RES-019) rather than each screen writing its own. Its confirm button sits
+**`RemoveControl.tsx` is the one component in LearnFlow that destroys something**, and it serves all three removals — RES-018, RES-019, and RES-005 — rather than each screen writing its own. Two optional props let the resource control say what it must: a confirm label naming that everything inside goes, and the *put aside* wording terminology reserves for material. Its confirm button sits
 inside a **closed `<details>` disclosure**, so removing takes two deliberate actions; that disclosure
 *is* the confirmation step, chosen over a `window.confirm` which does not exist with JavaScript
 switched off and cannot be styled. It is a client component because the pending state needs
-hydration, so the two removals it is handed must be genuine server actions, one from `actions.ts` and
-one from `file-actions.ts`. Its markup and copy are **server-rendered** and its form **posts
+hydration, so the two removals it is handed must be genuine server actions — the note and resource removals from `actions.ts`, the file removal from `file-actions.ts`. Its markup and copy are **server-rendered** and its form **posts
 natively**, and with JavaScript enabled it works like every other control here; how much of
 `/resources` survives scripting being **disabled** is a separate, **pre-existing, page-wide** question
 that [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md) records. See

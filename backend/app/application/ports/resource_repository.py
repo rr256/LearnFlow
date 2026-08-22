@@ -52,6 +52,22 @@ class ResourceRepository(Protocol):
         """Store a changed resource. The caller owns the transaction."""
         ...
 
+    def delete_resource(self, resource_id: uuid.UUID) -> None:
+        """Remove the resource row itself. **Permanent.**
+
+        **This deletes the row and nothing else.** The rows that hang off it --
+        topic links, notes, stored-file records -- are removed by the use case
+        first, in dependency order, because the foreign keys are deliberately
+        **not** cascades: a delete path that fires silently is one nobody reads,
+        and the constraints are what fail loudly if the use case ever misses a
+        child. See
+        [ADR-042](../../../../docs/adr/ADR-042-removing-a-whole-resource.md).
+
+        Deleting a resource this does not hold is not an error: like every other
+        removal in this product, the operation must be safe to repeat.
+        """
+        ...
+
     def replace_topic_links(
         self, *, resource_id: uuid.UUID, topic_ids: Sequence[uuid.UUID]
     ) -> None:

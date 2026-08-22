@@ -41,6 +41,7 @@ import {
 } from "@/features/resources/submission";
 import {
   ApiError,
+  deleteResource,
   deleteResourceNote,
   registerResource,
   updateResource,
@@ -312,6 +313,43 @@ export async function removeResourceNoteAction(
     return {
       message: error.isNotFound
         ? "That note is no longer there. Reload the page."
+        : error.message,
+    };
+  }
+}
+
+/**
+ * RES-005 -- remove a resource and everything kept against it, permanently.
+ *
+ * **Irreversible, and wider than any other removal in the product**: the
+ * material, its topic links, its notes, its stored PDFs and their bytes all go
+ * together. The screen puts this behind a disclosure the learner opens first,
+ * so it takes two deliberate actions rather than one stray click, and offers
+ * *put aside* above it as the reversible answer.
+ *
+ * A resource that is already gone reports itself as such rather than failing
+ * silently -- which is what a second tab acting on a stale list will meet.
+ */
+export async function removeResourceAction(
+  _previous: RemoveState,
+  form: FormData,
+): Promise<RemoveState> {
+  const resourceId = form.get("resource_id");
+  if (typeof resourceId !== "string" || !resourceId.trim()) {
+    return { message: "That material could not be identified. Reload the page and try again." };
+  }
+
+  try {
+    await deleteResource(resourceId.trim());
+    revalidateEverywhereMaterialAppears();
+    return { message: null };
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    return {
+      message: error.isNotFound
+        ? "That material is no longer there. Reload the page."
         : error.message,
     };
   }

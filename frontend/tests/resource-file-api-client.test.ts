@@ -240,13 +240,15 @@ describe("deleteResourceFile", () => {
   });
 });
 
-describe("the only removals in the client are these two", () => {
+describe("the only removals in the client are these three", () => {
   it("nothing else deletes anything", async () => {
-    // RES-005 -- removing a whole resource -- stays unimplemented, and no bulk
-    // removal exists.
+    // RES-005 joined RES-018 and RES-019 when a whole resource became
+    // removable. **There is still no bulk removal** -- nothing removes several
+    // resources, and nothing clears a resource's files while keeping it.
     const client = await import("@/lib/api-client");
 
     expect(Object.keys(client).filter((name) => /delete|remove/i.test(name)).sort()).toEqual([
+      "deleteResource",
       "deleteResourceFile",
       "deleteResourceNote",
     ]);

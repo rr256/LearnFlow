@@ -16,7 +16,7 @@ deletion down with it.
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.application.dto.resource_file import ResourceFileFilters, ResourceFileRecord
@@ -92,6 +92,17 @@ class SqlAlchemyResourceFileRepository:
         row = self._session.get(ResourceFile, file_id)
         if row is not None:
             self._session.delete(row)
+
+    def delete_files_for_resource(self, resource_id: uuid.UUID) -> int:
+        """Remove every stored-file row of one resource, returning how many went.
+
+        **Rows only.** The bytes are the storage adapter's, and the use case
+        unlinks them from keys it read before this ran.
+        """
+        result = self._session.execute(
+            delete(ResourceFile).where(ResourceFile.resource_id == resource_id)
+        )
+        return result.rowcount or 0
 
 
 def _record(row: ResourceFile) -> ResourceFileRecord:

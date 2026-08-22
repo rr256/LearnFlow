@@ -33,6 +33,7 @@ related:
   - ADR-039-source-grounded-study-answers.md
   - ADR-040-learner-uploaded-resource-files.md
   - ADR-041-removing-a-stored-file-or-note.md
+  - ADR-042-removing-a-whole-resource.md
   - ../architecture/decisions.md
 ---
 
@@ -61,6 +62,19 @@ record does not claim otherwise — every one of its criteria needs retrieval an
 which exists. Do not write that either requirement is complete.
 
 ## Implementation status
+
+**2026-08-22 — removing a resource now removes its notes too.**
+
+[ADR-042](ADR-042-removing-a-whole-resource.md) implements **RES-005**, which deletes every note kept
+against a resource when that resource is removed. Where RES-019 removes one note the learner named,
+this removes them as part of the material they belong to.
+
+**This record's correction argument is untouched and still load-bearing.** Nothing derived from a
+note is stored, so removing a resource's notes leaves nothing orphaned — the same fact that keeps a
+note correctable in place. **Archiving is unchanged**: *put aside* stays reversible for a note and
+for its material.
+
+**Every other decision in this record stands**, and its decision body is not rewritten.
 
 **2026-08-21 — a note can now be removed permanently, and "nothing is deleted" is narrowed.**
 

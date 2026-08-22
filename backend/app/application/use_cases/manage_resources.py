@@ -43,6 +43,7 @@ from app.application.dto.resource import (
     RESOURCE_STATUSES,
     RESOURCE_TYPES,
     NewResource,
+    RemovedResource,
     ResourceChanges,
     ResourceDetail,
     ResourceFilters,
@@ -50,7 +51,13 @@ from app.application.dto.resource import (
     ResourceRecord,
     ResourceTopic,
 )
+from app.application.dto.resource_file import ResourceFileFilters
 from app.application.ports.learner_repository import LearnerRecord, LearnerRepository
+from app.application.ports.resource_file_storage import (
+    ResourceFileRepository,
+    ResourceFileStorage,
+)
+from app.application.ports.resource_note_repository import ResourceNoteRepository
 from app.application.ports.resource_repository import ResourceRepository
 from app.application.use_cases.local_learner import resolve_local_learner
 
@@ -131,10 +138,29 @@ class ManageResources:
     `ManageRevisions` serves the revision endpoints together.
     """
 
-    def __init__(self, *, learners: LearnerRepository, resources: ResourceRepository) -> None:
-        """Bind the use case to its ports."""
+    def __init__(
+        self,
+        *,
+        learners: LearnerRepository,
+        resources: ResourceRepository,
+        notes: ResourceNoteRepository,
+        files: ResourceFileRepository,
+        storage: ResourceFileStorage,
+    ) -> None:
+        """Bind the use case to its ports.
+
+        **Three of these exist only for RES-005.** Registering, reading and
+        changing a resource never touch a note, a stored-file row, or a byte;
+        removing a resource has to reach all three, because what it owns is what
+        it removes. Binding them here rather than in a use case of their own
+        keeps the rule deciding whether a resource is the learner's in **one**
+        place -- splitting it would put that check in two.
+        """
         self._learners = learners
         self._resources = resources
+        self._notes = notes
+        self._files = files
+        self._storage = storage
 
     def register(self, new_resource: NewResource) -> ResourceDetail:
         """Record where one piece of study material is, and what it covers.
@@ -299,6 +325,79 @@ class ManageResources:
         if topic_ids is not None:
             self._resources.replace_topic_links(resource_id=changed.id, topic_ids=topic_ids)
         return self._describe([changed])[0]
+
+    def delete(self, resource_id: uuid.UUID) -> RemovedResource:
+        """Remove a resource and everything it owns, permanently (RES-005).
+
+        **This destroys more of a learner's record than anything else in
+        LearnFlow**, and it is the only capability that removes something the
+        learner did not name one by one: the resource's topic links, every note
+        kept against it, every stored-file row, and the bytes those rows named
+        all go with it. It exists so a resource registered by mistake can be
+        taken back without a database client
+        ([ADR-042](../../../../docs/adr/ADR-042-removing-a-whole-resource.md)).
+
+        **Putting the resource aside stays the reversible option** and is what
+        the screen offers first.
+
+        **A resource's own status is not consulted.** An archived resource is as
+        removable as a registered one, for the reason ADR-041 gave for a file:
+        requiring an archive first would turn the shelf into a deletion queue.
+        This is the one place archived material is *not* read-only, and
+        deliberately so -- refusing here would leave a learner who shelved
+        something unable to be rid of it.
+
+        **Order matters, and it is the only safe one.** The storage keys are read
+        **first**, because once the rows are gone nothing can name the files.
+        Rows are then deleted innermost-first -- files, notes, topic links, the
+        resource -- because the foreign keys are not cascades, so a missed child
+        fails loudly instead of vanishing quietly. The bytes are unlinked
+        **last**, and the provider commits after this returns.
+
+        That gives two failure modes, and neither loses a learner's file
+        silently:
+
+        - **An unlink fails.** The exception propagates, the provider rolls back,
+          and **nothing is deleted** -- every row and every byte survives. The
+          learner asks again.
+        - **The commit fails after unlinking.** The rows survive with some bytes
+          gone: a download reports the file as missing, which `read_file` already
+          treats as a `404` rather than a fault, and asking again clears it.
+
+        A filesystem does not join a database transaction, so the two cannot be
+        made atomic. The guarantee is that every failure leaves a state the
+        learner can act on, not that no failure leaves one.
+
+        Raises:
+            LearnerNotSetUpError: No learner is stored yet.
+            ResourceNotFoundError: No such resource, or it is not this
+                learner's. Asking twice therefore gives `204` then `404`.
+        """
+        resource = self._require_own_resource(resource_id)
+
+        # Read the keys before anything is deleted: once the rows are gone,
+        # nothing names the bytes, and every status counts because an archived
+        # file still occupies the volume.
+        stored = self._files.list_files(
+            resource_id=resource.id, filters=ResourceFileFilters(statuses=())
+        )
+        keys = tuple(record.storage_key for record in stored)
+
+        files_removed = self._files.delete_files_for_resource(resource.id)
+        notes_removed = self._notes.delete_notes_for_resource(resource.id)
+        self._resources.replace_topic_links(resource_id=resource.id, topic_ids=[])
+        self._resources.delete_resource(resource.id)
+
+        for key in keys:
+            self._storage.remove(key)
+
+        return RemovedResource(
+            resource_id=resource.id,
+            title=resource.title,
+            notes_removed=notes_removed,
+            files_removed=files_removed,
+            bytes_unlinked=len(keys),
+        )
 
     def _require_learner(self) -> LearnerRecord:
         """The local learner, or a refusal naming what is missing."""

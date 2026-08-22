@@ -145,3 +145,20 @@ class ResourceFileRepository(Protocol):
         `ResourceFileStorage.remove` gives: the operation must be safe to repeat.
         """
         ...
+
+    def delete_files_for_resource(self, resource_id: uuid.UUID) -> int:
+        """Remove every stored-file row belonging to one resource. **Permanent.**
+
+        Used only by RES-005, which removes a whole resource
+        ([ADR-042](../../../../docs/adr/ADR-042-removing-a-whole-resource.md)).
+        **This is not bulk deletion**: it names one resource and clears what that
+        resource owns.
+
+        **It removes rows only.** The bytes those rows named are unlinked by the
+        use case afterwards, from keys it read *before* calling this -- once the
+        rows are gone nothing can name the files, so reading the keys first is
+        not an optimisation but the only order that works.
+
+        Returns how many rows were removed.
+        """
+        ...

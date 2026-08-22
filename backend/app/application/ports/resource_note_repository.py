@@ -77,6 +77,22 @@ class ResourceNoteRepository(Protocol):
         """
         ...
 
+    def delete_notes_for_resource(self, resource_id: uuid.UUID) -> int:
+        """Remove every note kept against one resource. **Permanent.**
+
+        Used only by RES-005, which removes a whole resource
+        ([ADR-042](../../../../docs/adr/ADR-042-removing-a-whole-resource.md)).
+        **This is not bulk deletion**: it names one resource and clears what that
+        resource owns, which is the cascade a resource removal implies. There is
+        deliberately no method here that removes the notes of several resources.
+
+        Returns how many notes were removed, so the use case can say what was
+        lost without counting them a second time.
+
+        A resource holding no notes is not an error, and returns zero.
+        """
+        ...
+
     def update_note(self, record: ResourceNoteRecord) -> None:
         """Store a changed note. The caller owns the transaction."""
         ...

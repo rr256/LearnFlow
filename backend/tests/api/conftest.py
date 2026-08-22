@@ -344,9 +344,21 @@ class Cataloguing:
         )
         self.resources = FakeResourceRepository(topics=[self.topic, self.heading])
         self.notes = FakeResourceNoteRepository()
+        # RES-005 removes what a resource owns, so the catalogue reaches the
+        # note and file stores and the byte storage. Shared with the note and
+        # file fixtures below, so a test can register material, keep a note and
+        # a file against it, remove the resource, and see all three go.
+        self.files = FakeResourceFileRepository()
+        self.file_storage = FakeResourceFileStorage()
 
     def cataloguer(self) -> ManageResources:
-        return ManageResources(learners=self.learners, resources=self.resources)
+        return ManageResources(
+            learners=self.learners,
+            resources=self.resources,
+            notes=self.notes,
+            files=self.files,
+            storage=self.file_storage,
+        )
 
     def note_keeper(self) -> ManageResourceNotes:
         return ManageResourceNotes(
@@ -412,9 +424,14 @@ def resource_client(cataloguing: Cataloguing) -> Iterator[TestClient]:
 
 
 @pytest.fixture
-def file_storage() -> FakeResourceFileStorage:
-    """Where uploaded bytes go under test. **Never a real filesystem.**"""
-    return FakeResourceFileStorage()
+def file_storage(cataloguing: Cataloguing) -> FakeResourceFileStorage:
+    """Where uploaded bytes go under test. **Never a real filesystem.**
+
+    The catalogue's own store, not a second one: RES-005 unlinks bytes when it
+    removes a resource, so a test that uploads through the file endpoints and
+    then removes the resource has to be looking at the same bytes both times.
+    """
+    return cataloguing.file_storage
 
 
 @pytest.fixture
@@ -439,7 +456,9 @@ def resource_files_client(
     any filesystem at all.
     """
     app = create_app()
-    files = FakeResourceFileRepository()
+    # The catalogue's own store, so removing a resource clears the very rows
+    # these endpoints wrote.
+    files = cataloguing.files
 
     @contextmanager
     def provide() -> Iterator[ManageResources]:

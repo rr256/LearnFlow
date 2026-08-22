@@ -12,6 +12,7 @@ related:
   - ADR-035-practice-question-correction.md
   - ADR-037-learner-written-resource-notes.md
   - ADR-040-learner-uploaded-resource-files.md
+  - ADR-042-removing-a-whole-resource.md
   - ../api/endpoints.md
   - ../architecture/decisions.md
   - ../architecture/provider-pattern.md
@@ -51,6 +52,23 @@ statement against tables that already exist.
 
 **It is two removals, not a general delete.** RES-005 — removing a whole
 resource — stays unimplemented, and nothing here approximates it.
+
+## Implementation status
+
+**2026-08-22 — a whole resource can now be removed, and RES-005 is no longer waiting.**
+
+[ADR-042](ADR-042-removing-a-whole-resource.md) implements **RES-005**, which this record named as
+the area's most-needed next change, waiting "only on the cascade it implies". That cascade is now
+decided: the use case clears each owned table in dependency order, and the foreign keys stay
+non-cascading so a missed child fails loudly.
+
+**This record's two leaf removals are unchanged** — RES-018 and RES-019 still name one record each
+and still cascade nothing. What RES-005 adds is the case they could not cover: the material itself.
+*What this deliberately leaves open* → "**RES-005** — removing a whole resource, and the cascade it
+implies" is now closed. Two further sentences below are **no longer true**, and are named here rather than rewritten: *Status*' "RES-005 — removing a whole resource — stays unimplemented, and nothing here approximates it", and *Consequences*' "RES-005 stays unimplemented, so a resource still cannot be deleted through the product". The `/resources` JavaScript-disabled limitation recorded there is **not**:
+it is unchanged, neither fixed nor worsened.
+
+**Every other decision in this record stands**, and its decision body is not rewritten.
 
 ## Context
 

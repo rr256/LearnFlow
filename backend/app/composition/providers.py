@@ -238,6 +238,8 @@ def build_revisions_provider(
 
 def build_resources_provider(
     session_factory: sessionmaker[Session],
+    *,
+    storage: ResourceFileStorage,
 ) -> ResourcesProvider:
     """Build the provider that hands the learning-resource use case to one request.
 
@@ -248,6 +250,12 @@ def build_resources_provider(
 
     It reads no clock and no configuration. Nothing about a resource depends on
     the date, so there is no timezone to resolve and no `Clock` port to bind.
+
+    **It binds the note and stored-file repositories and the byte storage for
+    RES-005 alone.** Removing a resource removes what it owns, so the use case
+    has to reach all three; nothing else it does touches a note or a file. The
+    storage adapter is the one built once at startup and shared, exactly as the
+    stored-file provider takes it.
     """
 
     @contextmanager
@@ -257,6 +265,9 @@ def build_resources_provider(
                 yield ManageResources(
                     learners=SqlAlchemyLearnerRepository(session),
                     resources=SqlAlchemyResourceRepository(session),
+                    notes=SqlAlchemyResourceNoteRepository(session),
+                    files=SqlAlchemyResourceFileRepository(session),
+                    storage=storage,
                 )
             except BaseException:
                 session.rollback()

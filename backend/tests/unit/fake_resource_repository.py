@@ -74,6 +74,11 @@ class FakeResourceRepository:
                 return
         raise LookupError(f"No learning resource is stored with identifier {record.id}.")
 
+    def delete_resource(self, resource_id: uuid.UUID) -> None:
+        # The row alone. The use case clears the links and the owned rows first,
+        # mirroring the real adapter, whose foreign keys are not cascades.
+        self.resources = [r for r in self.resources if r.id != resource_id]
+
     def replace_topic_links(
         self, *, resource_id: uuid.UUID, topic_ids: Sequence[uuid.UUID]
     ) -> None:

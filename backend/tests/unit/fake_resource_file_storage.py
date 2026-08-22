@@ -93,6 +93,13 @@ class FakeResourceFileRepository:
     def delete_file(self, file_id: uuid.UUID) -> None:
         self.records = [r for r in self.records if r.id != file_id]
 
+    def delete_files_for_resource(self, resource_id: uuid.UUID) -> int:
+        # Rows only; the bytes are the storage fake's, and RES-005 unlinks them
+        # from keys it read before this ran.
+        before = len(self.records)
+        self.records = [r for r in self.records if r.resource_id != resource_id]
+        return before - len(self.records)
+
     def update_file(self, record: ResourceFileRecord) -> None:
         for index, existing in enumerate(self.records):
             if existing.id == record.id:

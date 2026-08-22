@@ -26,6 +26,7 @@ related:
   - ../adr/ADR-035-practice-question-correction.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
   - ../adr/ADR-041-removing-a-stored-file-or-note.md
+  - ../adr/ADR-042-removing-a-whole-resource.md
 ---
 
 # LearnFlow Domain Entities
@@ -99,7 +100,7 @@ a learner's uploaded PDFs are kept as *stored files*, bytes in a local volume an
 stored, and nothing is extracted or indexed. The one thing stored *about* it rather than *pointing at* it is a
 [resource note](#resource-note), which the learner typed themselves. A source location is a web link, a *source label* in the learner's own words, or both, and a
 resource carries at least one of the two — **no location on the learner's own machine is stored**.
-A resource is put aside rather than deleted, and a topic's resources are the ones the learner linked
+A resource is put aside rather than deleted by any status change, and **may be removed permanently** by RES-005 — which takes its topic links, its notes, and its stored files and their bytes with it; see [ADR-042](../adr/ADR-042-removing-a-whole-resource.md). *Put aside* stays the reversible answer. A topic's resources are the ones the learner linked
 to it rather than any LearnFlow recommends. Subject-level links are not stored; a resource names
 topics and subtopics, which are the same record. See
 [ADR-032](../adr/ADR-032-learning-resource-catalogue.md).
@@ -125,7 +126,7 @@ extract, no search history, and nothing beyond the full-text index PostgreSQL ma
 there is no record that could be made to disagree with a correction. It is put aside rather than
 deleted by any status change, and notes on material that is put aside are read-only and stay
 readable. A note **may be removed permanently** by RES-019 — a separate, deliberate request, and
-one of only two destructive capabilities in the product; *put aside* stays the reversible answer,
+one of only three destructive capabilities in the product, beside RES-018 and RES-005; *put aside* stays the reversible answer,
 and correcting a note in place is usually the better one. See
 [ADR-037](../adr/ADR-037-learner-written-resource-notes.md), [ADR-038](../adr/ADR-038-local-topic-note-retrieval.md), and [ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md).
 

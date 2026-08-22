@@ -12,6 +12,7 @@ related:
   - ../adr/ADR-039-source-grounded-study-answers.md
   - ../adr/ADR-040-learner-uploaded-resource-files.md
   - ../adr/ADR-041-removing-a-stored-file-or-note.md
+  - ../adr/ADR-042-removing-a-whole-resource.md
 ---
 
 # LearnFlow Provider Pattern
@@ -76,9 +77,12 @@ Provider selection must be configuration-driven. Provider names, endpoints, mode
 
 **Two providers exist.** `AIProvider` is fulfilled by Ollama, selected by `AI_PROVIDER` and used by
 MNT-001 alone ([ADR-039](../adr/ADR-039-source-grounded-study-answers.md)). `ResourceFileStorage` is
-fulfilled by a local-volume adapter, selected by `RESOURCE_STORAGE_PROVIDER` and used by RES-014 to
-**RES-018** ([ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md), extended by
-[ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md), which added its `remove`); it is the
+fulfilled by a local-volume adapter, selected by `RESOURCE_STORAGE_PROVIDER` and used by **RES-005
+and RES-014 to RES-018** ([ADR-040](../adr/ADR-040-learner-uploaded-resource-files.md), extended by
+[ADR-041](../adr/ADR-041-removing-a-stored-file-or-note.md), which added its `remove`, and by
+[ADR-042](../adr/ADR-042-removing-a-whole-resource.md), which unlinks every file a resource holds
+through that same method); **one adapter is built at startup and shared by both use cases**, so a
+file written by one is the file the other removes; it is the
 only code in the backend that touches a filesystem, and it speaks in opaque keys so no path crosses
 the port. **`remove` deletes one file within the storage root and never a directory**, sharing its
 traversal guard with `read` so the destructive path cannot drift from the safe one.

@@ -395,3 +395,43 @@ def test_writing_a_note_leaves_the_resource_untouched(resource_client):
     write_note(resource_client, resource["id"])
 
     assert resource_client.get(f"{RESOURCES}/{resource['id']}").json()["data"] == resource
+
+
+# -- removing the whole resource (RES-005) ------------------------------------
+
+
+def test_removing_a_resource_takes_its_notes(resource_client):
+    """RES-005's cascade reaches notes as well as files. See ADR-042."""
+    resource = register(resource_client)
+    first = write_note(resource_client, resource["id"], title="First").json()["data"]
+    second = write_note(resource_client, resource["id"], title="Second").json()["data"]
+
+    removed = resource_client.delete(f"{RESOURCES}/{resource['id']}")
+
+    assert removed.status_code == 204, removed.text
+    assert resource_client.get(f"{NOTES}/{first['id']}").status_code == 404
+    assert resource_client.get(f"{NOTES}/{second['id']}").status_code == 404
+    assert resource_client.get(f"{RESOURCES}/{resource['id']}").status_code == 404
+
+
+def test_an_archived_note_on_a_removed_resource_goes_too(resource_client):
+    resource = register(resource_client)
+    note = write_note(resource_client, resource["id"]).json()["data"]
+    change_note(resource_client, note["id"], status="archived")
+
+    resource_client.delete(f"{RESOURCES}/{resource['id']}")
+
+    assert resource_client.get(f"{NOTES}/{note['id']}").status_code == 404
+
+
+def test_removing_one_resource_leaves_another_resources_notes(resource_client):
+    keep = register(resource_client, title="Keep")
+    drop = register(resource_client, title="Drop")
+    kept = write_note(resource_client, keep["id"], title="Kept note").json()["data"]
+    write_note(resource_client, drop["id"], title="Doomed note")
+
+    resource_client.delete(f"{RESOURCES}/{drop['id']}")
+
+    assert resource_client.get(f"{NOTES}/{kept['id']}").status_code == 200
+    listed = resource_client.get(f"{RESOURCES}/{keep['id']}/notes").json()["data"]
+    assert [n["title"] for n in listed] == ["Kept note"]

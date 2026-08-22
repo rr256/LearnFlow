@@ -22,8 +22,20 @@ interface RemoveControlProps {
   label: string;
   /** "PDF" or "note", so the copy names the thing rather than saying "item". */
   kind: string;
-  /** What is lost, said plainly. Differs between a file and a note. */
+  /** What is lost, said plainly. Differs between a file, a note and a resource. */
   consequence: string;
+  /**
+   * The confirm button's words, when "Yes, remove this {kind} permanently" is
+   * not what the learner should read. RES-005 removes more than the thing it
+   * names, and the button says so.
+   */
+  confirmLabel?: string;
+  /**
+   * The reversible alternative, when "set it aside" is the wrong verb. A
+   * *resource* is **put** aside -- terminology reserves that phrasing for
+   * material -- while a file is **set** aside.
+   */
+  instead?: string;
 }
 
 /**
@@ -60,6 +72,8 @@ export function RemoveControl({
   label,
   kind,
   consequence,
+  confirmLabel,
+  instead,
 }: RemoveControlProps) {
   const [state, removeAction, removing] = useActionState<RemoveState, FormData>(
     action,
@@ -75,12 +89,12 @@ export function RemoveControl({
           and this cannot be undone.
         </p>
         <p className={styles.instead}>
-          To keep it but stop using it, set it aside instead — that is reversible.
+          {instead ?? "To keep it but stop using it, set it aside instead — that is reversible."}
         </p>
         <form action={removeAction}>
           <input name={fieldName} type="hidden" value={fieldValue} />
           <button className={styles.confirm} disabled={removing} type="submit">
-            {removing ? "Removing…" : `Yes, remove this ${kind} permanently`}
+            {removing ? "Removing…" : (confirmLabel ?? `Yes, remove this ${kind} permanently`)}
           </button>
         </form>
         {state.message !== null ? (
